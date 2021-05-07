@@ -120,6 +120,10 @@ PETSC_EXTERN PetscErrorCode PetscViennaCLInit()
     }
   }
 
+#if defined(PETSC_HAVE_CUDA)
+  ierr = PetscCUDAInitializeCheck();CHKERRQ(ierr); /* For CUDA event timers */
+#endif
+
 #if defined(PETSC_HAVE_OPENCL)
   /* ViennaCL OpenCL device type configuration */
   ierr = PetscOptionsGetString(NULL,NULL,"-viennacl_opencl_device_type",string,sizeof(string),&flg);CHKERRQ(ierr);
@@ -1077,7 +1081,7 @@ PETSC_EXTERN PetscErrorCode  VecCreateSeqViennaCLWithArray(MPI_Comm comm,PetscIn
   ierr = VecCreate(comm,V);CHKERRQ(ierr);
   ierr = VecSetSizes(*V,n,n);CHKERRQ(ierr);
   ierr = VecSetBlockSize(*V,bs);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm,&size);CHKERRMPI(ierr);
   if (size > 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Cannot create VECSEQ on more than one process");
   ierr = VecCreate_SeqViennaCL_Private(*V,array);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -1120,7 +1124,7 @@ PetscErrorCode  VecCreateSeqViennaCLWithArrays(MPI_Comm comm,PetscInt bs,PetscIn
 
   PetscFunctionBegin;
 
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm,&size);CHKERRMPI(ierr);
   if (size > 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Cannot create VECSEQ on more than one process");
 
   // set V's viennaclvec to be viennaclvec, do not allocate memory on host yet.
@@ -1363,7 +1367,7 @@ PETSC_EXTERN PetscErrorCode VecCreate_SeqViennaCL(Vec V)
   PetscMPIInt    size;
 
   PetscFunctionBegin;
-  ierr = MPI_Comm_size(PetscObjectComm((PetscObject)V),&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(PetscObjectComm((PetscObject)V),&size);CHKERRMPI(ierr);
   if (size > 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Cannot create VECSEQVIENNACL on more than one process");
   ierr = VecCreate_Seq_Private(V,0);CHKERRQ(ierr);
   ierr = PetscObjectChangeTypeName((PetscObject)V,VECSEQVIENNACL);CHKERRQ(ierr);
@@ -1657,7 +1661,7 @@ PetscErrorCode VecCreate_SeqViennaCL_Private(Vec V,const ViennaCLVector *array)
   PetscMPIInt    size;
 
   PetscFunctionBegin;
-  ierr = MPI_Comm_size(PetscObjectComm((PetscObject)V),&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(PetscObjectComm((PetscObject)V),&size);CHKERRMPI(ierr);
   if (size > 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Cannot create VECSEQVIENNACL on more than one process");
   ierr = VecCreate_Seq_Private(V,0);CHKERRQ(ierr);
   ierr = PetscObjectChangeTypeName((PetscObject)V,VECSEQVIENNACL);CHKERRQ(ierr);

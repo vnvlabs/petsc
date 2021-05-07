@@ -490,6 +490,11 @@ cdef class DMPlex(DM):
         PetscCLEAR(self.obj); self.dm = dmOverlap
         return sf
 
+    def isDistributed(self):
+        cdef PetscBool flag = PETSC_FALSE
+        CHKERR( DMPlexIsDistributed(self.dm, &flag) )
+        return toBool(flag)
+
     def interpolate(self):
         cdef PetscDM newdm = NULL
         CHKERR( DMPlexInterpolate(self.dm, &newdm) )
@@ -633,12 +638,12 @@ cdef class DMPlex(DM):
     #
 
     def computeCellGeometryFVM(self, cell):
-        cdef PetscInt dim = 0
+        cdef PetscInt cdim = 0
         cdef PetscInt ccell = asInt(cell)
-        CHKERR( DMGetDimension(self.dm, &dim) )
+        CHKERR( DMGetCoordinateDim(self.dm, &cdim) )
         cdef PetscReal vol = 0, centroid[3], normal[3]
         CHKERR( DMPlexComputeCellGeometryFVM(self.dm, ccell, &vol, centroid, normal) )
-        return (toReal(vol), array_r(dim, centroid), array_r(dim, normal))
+        return (toReal(vol), array_r(cdim, centroid), array_r(cdim, normal))
 
     def constructGhostCells(self, labelName=None):
         cdef const char *cname = NULL
@@ -648,3 +653,16 @@ cdef class DMPlex(DM):
         CHKERR( DMPlexConstructGhostCells(self.dm, cname, &numGhostCells, &dmGhosted))
         PetscCLEAR(self.obj); self.dm = dmGhosted
         return toInt(numGhostCells)
+
+    # Load
+
+    def topologyLoad(self, Viewer viewer):
+        cdef SF sf = SF()
+        CHKERR( DMPlexTopologyLoad(self.dm, viewer.vwr, &sf.sf))
+        return sf
+
+    def coordinatesLoad(self, Viewer viewer):
+        CHKERR( DMPlexCoordinatesLoad(self.dm, viewer.vwr))
+
+    def labelsLoad(self, Viewer viewer):
+        CHKERR( DMPlexLabelsLoad(self.dm, viewer.vwr))

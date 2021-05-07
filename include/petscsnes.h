@@ -87,9 +87,11 @@ PETSC_EXTERN PetscErrorCode SNESGetSolutionUpdate(SNES,Vec*);
 PETSC_EXTERN PetscErrorCode SNESGetRhs(SNES,Vec*);
 PETSC_EXTERN PetscErrorCode SNESView(SNES,PetscViewer);
 PETSC_EXTERN PetscErrorCode SNESLoad(SNES,PetscViewer);
+PETSC_EXTERN PetscErrorCode SNESConvergedReasonViewSet(SNES,PetscErrorCode(*)(SNES,void*),void *,PetscErrorCode (*)(void**));
 PETSC_EXTERN PetscErrorCode SNESViewFromOptions(SNES,PetscObject,const char[]);
 PETSC_EXTERN PetscErrorCode SNESConvergedReasonView(SNES,PetscViewer);
 PETSC_EXTERN PetscErrorCode SNESConvergedReasonViewFromOptions(SNES);
+PETSC_EXTERN PetscErrorCode SNESConvergedReasonViewCancel(SNES);
 
 PETSC_DEPRECATED_FUNCTION("Use SNESConvergedReasonView() (since version 3.14)") PETSC_STATIC_INLINE PetscErrorCode SNESReasonView(SNES snes,PetscViewer v) {return SNESConvergedReasonView(snes,v);}
 PETSC_DEPRECATED_FUNCTION("Use SNESConvergedReasonViewFromOptions() (since version 3.14)") PETSC_STATIC_INLINE PetscErrorCode SNESReasonViewFromOptions(SNES snes) {return SNESConvergedReasonViewFromOptions(snes);}
@@ -123,10 +125,9 @@ PETSC_EXTERN PetscErrorCode SNESMonitorDefaultShort(SNES,PetscInt,PetscReal,Pets
 PETSC_EXTERN PetscErrorCode SNESMonitorDefaultField(SNES,PetscInt,PetscReal,PetscViewerAndFormat *);
 PETSC_EXTERN PetscErrorCode SNESMonitorJacUpdateSpectrum(SNES,PetscInt,PetscReal,PetscViewerAndFormat *);
 PETSC_EXTERN PetscErrorCode SNESMonitorFields(SNES,PetscInt,PetscReal,PetscViewerAndFormat *);
-PETSC_EXTERN PetscErrorCode KSPMonitorSNES(KSP,PetscInt,PetscReal,void*);
-PETSC_EXTERN PetscErrorCode KSPMonitorSNESLGResidualNormCreate(MPI_Comm,const char[],const char[],int,int,int,int,PetscObject**);
-PETSC_EXTERN PetscErrorCode KSPMonitorSNESLGResidualNorm(KSP,PetscInt,PetscReal,PetscObject*);
-PETSC_EXTERN PetscErrorCode KSPMonitorSNESLGResidualNormDestroy(PetscObject**);
+PETSC_EXTERN PetscErrorCode KSPMonitorSNESResidual(KSP,PetscInt,PetscReal,PetscViewerAndFormat*);
+PETSC_EXTERN PetscErrorCode KSPMonitorSNESResidualDrawLG(KSP,PetscInt,PetscReal,PetscViewerAndFormat*);
+PETSC_EXTERN PetscErrorCode KSPMonitorSNESResidualDrawLGCreate(PetscViewer,PetscViewerFormat,void*,PetscViewerAndFormat**);
 
 PETSC_EXTERN PetscErrorCode SNESSetTolerances(SNES,PetscReal,PetscReal,PetscReal,PetscInt,PetscInt);
 PETSC_EXTERN PetscErrorCode SNESSetDivergenceTolerance(SNES,PetscReal);
@@ -169,8 +170,6 @@ PETSC_EXTERN PetscErrorCode SNESKSPSetParametersEW(SNES,PetscInt,PetscReal,Petsc
 PETSC_EXTERN PetscErrorCode SNESKSPGetParametersEW(SNES,PetscInt*,PetscReal*,PetscReal*,PetscReal*,PetscReal*,PetscReal*,PetscReal*);
 
 #include <petscdrawtypes.h>
-PETSC_EXTERN PetscErrorCode SNESMonitorLGCreate(MPI_Comm,const char[],const char[],int,int,int,int,PetscDrawLG*);
-PETSC_EXTERN PetscErrorCode SNESMonitorLGResidualNorm(SNES,PetscInt,PetscReal,void*);
 PETSC_EXTERN PetscErrorCode SNESMonitorLGRange(SNES,PetscInt,PetscReal,void*);
 
 PETSC_EXTERN PetscErrorCode SNESSetApplicationContext(SNES,void *);
@@ -361,6 +360,7 @@ PETSC_EXTERN PetscErrorCode SNESConvergedDefault(SNES,PetscInt,PetscReal,PetscRe
 PETSC_EXTERN PetscErrorCode SNESConvergedSkip(SNES,PetscInt,PetscReal,PetscReal,PetscReal,SNESConvergedReason*,void*);
 PETSC_EXTERN PetscErrorCode SNESConvergedCorrectPressure(SNES,PetscInt,PetscReal,PetscReal,PetscReal,SNESConvergedReason*,void*);
 PETSC_EXTERN PetscErrorCode SNESGetConvergedReason(SNES,SNESConvergedReason*);
+PETSC_EXTERN PetscErrorCode SNESGetConvergedReasonString(SNES,const char**);
 PETSC_EXTERN PetscErrorCode SNESSetConvergedReason(SNES,SNESConvergedReason);
 
 PETSC_DEPRECATED_FUNCTION("Use SNESConvergedSkip() (since version 3.5)") PETSC_STATIC_INLINE void SNESSkipConverged(void) { /* never called */ }
@@ -891,6 +891,8 @@ PETSC_EXTERN PetscErrorCode SNESFASGetCoarseSolve(SNES, SNES*);
 PETSC_EXTERN PetscErrorCode SNESFASFullSetDownSweep(SNES,PetscBool);
 PETSC_EXTERN PetscErrorCode SNESFASCreateCoarseVec(SNES,Vec*);
 PETSC_EXTERN PetscErrorCode SNESFASRestrict(SNES,Vec,Vec);
+PETSC_EXTERN PetscErrorCode SNESFASFullSetTotal(SNES,PetscBool);
+PETSC_EXTERN PetscErrorCode SNESFASFullGetTotal(SNES,PetscBool*);
 
 PETSC_EXTERN PetscErrorCode DMSNESCheckDiscretization(SNES,DM,PetscReal,Vec,PetscReal,PetscReal[]);
 PETSC_EXTERN PetscErrorCode DMSNESCheckResidual(SNES,DM,Vec,PetscReal,PetscReal*);

@@ -133,9 +133,9 @@ PetscErrorCode VecSetRandom_Seq(Vec xin,PetscRandom r)
   PetscScalar    *xx;
 
   PetscFunctionBegin;
-  ierr = VecGetArray(xin,&xx);CHKERRQ(ierr);
+  ierr = VecGetArrayWrite(xin,&xx);CHKERRQ(ierr);
   for (i=0; i<n; i++) {ierr = PetscRandomGetValue(r,&xx[i]);CHKERRQ(ierr);}
-  ierr = VecRestoreArray(xin,&xx);CHKERRQ(ierr);
+  ierr = VecRestoreArrayWrite(xin,&xx);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -145,8 +145,6 @@ PetscErrorCode VecGetSize_Seq(Vec vin,PetscInt *size)
   *size = vin->map->n;
   PetscFunctionReturn(0);
 }
-
-
 
 PetscErrorCode VecConjugate_Seq(Vec xin)
 {
@@ -574,9 +572,6 @@ PETSC_EXTERN PetscErrorCode VecView_Seq(Vec xin,PetscViewer viewer)
 #if defined(PETSC_HAVE_ADIOS)
   PetscBool      isadios;
 #endif
-#if defined(PETSC_HAVE_ADIOS2)
-  PetscBool      isadios2;
-#endif
 
   PetscFunctionBegin;
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERDRAW,&isdraw);CHKERRQ(ierr);
@@ -596,9 +591,6 @@ PETSC_EXTERN PetscErrorCode VecView_Seq(Vec xin,PetscViewer viewer)
 #if defined(PETSC_HAVE_ADIOS)
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERADIOS,&isadios);CHKERRQ(ierr);
 #endif
-#if defined(PETSC_HAVE_ADIOS2)
-  ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERADIOS2,&isadios2);CHKERRQ(ierr);
-#endif
 
   if (isdraw) {
     ierr = VecView_Seq_Draw(xin,viewer);CHKERRQ(ierr);
@@ -617,10 +609,6 @@ PETSC_EXTERN PetscErrorCode VecView_Seq(Vec xin,PetscViewer viewer)
 #if defined(PETSC_HAVE_ADIOS)
   } else if (isadios) {
     ierr = VecView_MPI_ADIOS(xin,viewer);CHKERRQ(ierr); /* Reusing VecView_MPI_ADIOS ... don't want code duplication*/
-#endif
-#if defined(PETSC_HAVE_ADIOS2)
-  } else if (isadios2) {
-    ierr = VecView_MPI_ADIOS2(xin,viewer);CHKERRQ(ierr); /* Reusing VecView_MPI_ADIOS2 ... don't want code duplication*/
 #endif
 #if defined(PETSC_HAVE_MATLAB_ENGINE)
   } else if (ismatlab) {
@@ -821,6 +809,7 @@ static struct _VecOps DvOps = {VecDuplicate_Seq, /* 1 */
                                VecStrideSubSetGather_Default,
                                VecStrideSubSetScatter_Default,
                                NULL,
+                               NULL,
                                NULL
 };
 
@@ -891,7 +880,7 @@ PetscErrorCode  VecCreateSeqWithArray(MPI_Comm comm,PetscInt bs,PetscInt n,const
   ierr = VecCreate(comm,V);CHKERRQ(ierr);
   ierr = VecSetSizes(*V,n,n);CHKERRQ(ierr);
   ierr = VecSetBlockSize(*V,bs);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm,&size);CHKERRMPI(ierr);
   if (size > 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Cannot create VECSEQ on more than one process");
   ierr = VecCreate_Seq_Private(*V,array);CHKERRQ(ierr);
   PetscFunctionReturn(0);

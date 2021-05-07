@@ -3,7 +3,12 @@
 PetscBool PetscCUPMSynchronize     = PETSC_FALSE;
 PetscBool PetscCUPMInitialized     = PETSC_FALSE;
 
+cupmStream_t  PetscDefaultCupmStream = NULL;
+
 static PetscBool PetscNotUseCUPM   = PETSC_FALSE; /* Assert the code will not use this type of devices */
+
+cupmEvent_t petsc_gputimer_begin = NULL; /* The GPU event for begin */
+cupmEvent_t petsc_gputimer_end   = NULL; /* The GPU event for end */
 
 /* Device validation after it is lazily initialized */
 static PetscErrorCode PetscCUPMValidate(void)
@@ -71,19 +76,22 @@ PetscErrorCode PetscCUPMInitializeCheck(void)
   int                   devId,devCount;
   PetscMPIInt           rank;
   static PetscBool      cupmValdidateChecked = PETSC_FALSE;
+  PetscBool             useNull = PETSC_TRUE; /* use the default (NULL) stream as petsc's default stream */
 
   PetscFunctionBegin;
   if (PetscNotUseCUPM) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"You asserted the code wouldn't use devices with -device_set none, but now trying to create a device object. Remove this option or see manpage of PetscCUPMInitialize().");
   if (!PetscCUPMInitialized) {
-    cerr = cupmGetDeviceCount(&devCount);CHKERRCUPM(cerr);
-    if (devCount > 1) {
+    cerr = cupmGetDeviceCount(&devCount);
+    cupmGetLastError(); /* Reset the last error */
+    if (cerr != cupmSuccess) devCount = 0;
+    if (devCount > 0) {
       cerr = cupmSetDeviceFlags(cupmDeviceMapHost);
       cupmGetLastError(); /* Reset the last error */
       if (cerr == cupmSuccess) { /* It implies device runtime has not been initialized? */
-        ierr  = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRQ(ierr);
+        ierr  = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
         devId = rank % devCount;
         for (int i=0; i<3; i++) {
-          cerr  = cupmSetDevice(devId);
+          cerr = cupmSetDevice(devId);
           if (cerr == cupmSuccess) break;
           if (cerr != cupmErrorMemoryAllocation && cerr != cupmErrorLaunchOutOfResources) CHKERRCUPM(cerr);
           if (i < 2) {ierr = PetscSleep(3);CHKERRQ(ierr);}
@@ -93,11 +101,15 @@ PetscErrorCode PetscCUPMInitializeCheck(void)
         /* It implies user has initialized device runtime outside of petsc. We do nothing to respect the device choice. */
       }
     }
+    ierr = PetscOptionsGetBool(NULL,NULL,"-petsc_default_use_null_stream",&useNull,NULL);
+    if (!useNull) {cerr = cupmStreamCreate(&PetscDefaultCupmStream);CHKERRCUPM(cerr);}
     ierr = PetscCUPMBLASInitializeHandle();CHKERRQ(ierr);
     ierr = PetscCUPMSOLVERDnInitializeHandle();CHKERRQ(ierr);
     PetscCUPMInitialized = PETSC_TRUE;
+    /* Initialize CUDA event timers */
+    cerr = cupmEventCreate(&petsc_gputimer_begin);CHKERRCUPM(cerr);
+    cerr = cupmEventCreate(&petsc_gputimer_end);CHKERRCUPM(cerr);
   }
-
   if (!cupmValdidateChecked) {
     ierr = PetscCUPMValidate();CHKERRQ(ierr);
     cupmValdidateChecked = PETSC_TRUE;
@@ -125,6 +137,7 @@ PetscErrorCode PetscCUPMInitializeCheck(void)
 .  -cuda_view              - view information about the devices.
 .  -cuda_synchronize       - wait at the end of asynchronize device calls so that their time gets credited to the current event. With -log_view, the default is true, otherwise false.
 .  -log_view               - logging, however if alone or combined with `-cuda_device DEFAULT | DECIDE | >=0 int`, will init device; if combined with `-cuda_device none`, won't init device.
+.  -petsc_default_use_null_stream   - If true (default), petsc will use the default NULL stream to launch its kernels and call vendor libraries such as cuBLAS, cuSPARSE etc.
 -  -use_gpu_aware_mpi      - assume the MPI is device/GPU-aware when communicating data on devices. Default true.
 
   Level: beginner
@@ -182,7 +195,7 @@ PetscErrorCode PetscCUPMInitialize(MPI_Comm comm,PetscInt device)
       if (devCount > 0) { /* Allow no device as long as user does not use devices */
         /* Set the device flags so that it can map host memory */
         cerr  = cupmSetDeviceFlags(cupmDeviceMapHost);CHKERRCUPM(cerr);
-        ierr  = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
+        ierr  = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
         devId = rank % devCount;
         cerr  = cupmSetDevice(devId);CHKERRCUPM(cerr);
       }
@@ -194,10 +207,16 @@ PetscErrorCode PetscCUPMInitialize(MPI_Comm comm,PetscInt device)
 
     if (devCount > 0 && device != PETSC_NONE) {
       /* Do costly device handles initialization here to not to distort petsc logging later */
+      PetscBool useNull = PETSC_TRUE; /* use the default (NULL) stream as petsc's default stream */
+      ierr = PetscOptionsGetBool(NULL,NULL,"-petsc_default_use_null_stream",&useNull,NULL);
+      if (!useNull) {cerr = cupmStreamCreate(&PetscDefaultCupmStream);CHKERRCUPM(cerr);}
       ierr = PetscCUPMBLASInitializeHandle();CHKERRQ(ierr);
       ierr = PetscCUPMSOLVERDnInitializeHandle();CHKERRQ(ierr);
       PetscCUPMInitialized = PETSC_TRUE;
     }
+    /* Initialize CUDA event timers */
+    cerr = cupmEventCreate(&petsc_gputimer_begin);CHKERRCUPM(cerr);
+    cerr = cupmEventCreate(&petsc_gputimer_end);CHKERRCUPM(cerr);
   }
   PetscFunctionReturn(0);
 }
@@ -232,7 +251,7 @@ static PetscErrorCode PetscCUPMInitializeAndView(PetscBool initDevice,PetscInt d
         cerr = cupmSetDeviceFlags(cupmDeviceMapHost);
         cupmGetLastError(); /* Reset the last error */
         if (cerr == cupmSuccess) { /* It implies gpu runtime has not been initialized */
-          ierr  = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRQ(ierr);
+          ierr  = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
           devId = rank % devCount;
           cerr  = cupmSetDevice(devId);CHKERRCUPM(cerr);
         } else if (cerr == cupmErrorSetOnActiveProcess) {
@@ -249,7 +268,7 @@ static PetscErrorCode PetscCUPMInitializeAndView(PetscBool initDevice,PetscInt d
   }
 
   if (devView) {
-    ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
     cerr = cupmGetDeviceCount(&devCount);CHKERRCUPM(cerr);
     for (devId = 0; devId < devCount; ++devId) {
       cerr = cupmGetDeviceProperties(&prop,devId);CHKERRCUPM(cerr);
@@ -286,7 +305,7 @@ static PetscErrorCode PetscOptionsCheckCUPM(PetscBool logView)
     if (set) { /* If users have initialized Kokkos themselves, but also had e.g., -cuda_device XXX, for simplicity, make sure XXX is DEFAULT */
       ierr = PetscStrcasecmp("DEFAULT",devStr,&devDefault);CHKERRQ(ierr);
       if (!devDefault) {ierr = PetscStrcasecmp("PETSC_DEFAULT",devStr,&devDefault);CHKERRQ(ierr);}
-      if (!devDefault)  SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Kokkos was initialized before PetscInitialize(), but you have "cupmSetDeviceStr" %s. Remove the option or use "cupmSetDeviceStr" default.",devStr);
+      if (!devDefault) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Kokkos was initialized before PetscInitialize(), but you have %s %s. Remove the option or use %s default.",cupmSetDeviceStr,devStr,cupmSetDeviceStr);
     } else { /* If users did not have e.g., '-cuda_device XXX', insert one here so that petsc can continue its own device initialization */
       ierr = PetscOptionsSetValue(NULL,cupmSetDeviceStr,"DEFAULT");CHKERRQ(ierr);
     }

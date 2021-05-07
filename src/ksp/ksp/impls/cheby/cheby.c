@@ -77,6 +77,7 @@ static PetscErrorCode KSPSetUp_Chebyshev(KSP ksp)
       } else {
         PetscBool change;
 
+        if (!ksp->vec_rhs) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Chebyshev must use a noisy right hand side to estimate the eigenvalues when no right hand side is available");
         ierr = PCPreSolveChangeRHS(ksp->pc,&change);CHKERRQ(ierr);
         if (change) {
           B = ksp->work[1];
@@ -96,7 +97,7 @@ static PetscErrorCode KSPSetUp_Chebyshev(KSP ksp)
           PetscInt  sendbuf,recvbuf;
           ierr = PCGetFailedReasonRank(ksp->pc,&pcreason);CHKERRQ(ierr);
           sendbuf = (PetscInt)pcreason;
-          ierr = MPI_Allreduce(&sendbuf,&recvbuf,1,MPIU_INT,MPI_MAX,PetscObjectComm((PetscObject)ksp));CHKERRQ(ierr);
+          ierr = MPI_Allreduce(&sendbuf,&recvbuf,1,MPIU_INT,MPI_MAX,PetscObjectComm((PetscObject)ksp));CHKERRMPI(ierr);
           ierr = PCSetFailedReason(ksp->pc,(PCFailedReason) recvbuf);CHKERRQ(ierr);
         }
         ierr = PCGetFailedReason(ksp->pc,&pcreason);CHKERRQ(ierr);

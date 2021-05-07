@@ -741,14 +741,14 @@ static PetscErrorCode SetupBC(DM dm, AppCtx *user)
   if (label) {
     const PetscInt id = 1;
 
-    ierr = DMAddBoundary(dm, DM_BC_ESSENTIAL, "wall", "marker", 0, 0, NULL, (void (*)(void)) exactFuncs[0], NULL, 1, &id, user);CHKERRQ(ierr);
+    ierr = DMAddBoundary(dm, DM_BC_ESSENTIAL, "wall", label, 1, &id, 0, 0, NULL, (void (*)(void)) exactFuncs[0], NULL, user, NULL);CHKERRQ(ierr);
   }
   ierr = DMGetLabel(dm, "Face Sets", &label);CHKERRQ(ierr);
   if (label && user->useFV) {
     const PetscInt inflowids[] = {100,200,300}, outflowids[] = {101};
 
-    ierr = DMAddBoundary(dm, DM_BC_NATURAL_RIEMANN, "inflow",  "Face Sets", 1, 0, NULL, (void (*)(void)) advect_inflow, NULL,  ALEN(inflowids),  inflowids,  user);CHKERRQ(ierr);
-    ierr = DMAddBoundary(dm, DM_BC_NATURAL_RIEMANN, "outflow", "Face Sets", 1, 0, NULL, (void (*)(void)) advect_outflow, NULL, ALEN(outflowids), outflowids, user);CHKERRQ(ierr);
+    ierr = DMAddBoundary(dm, DM_BC_NATURAL_RIEMANN, "inflow",  label,  ALEN(inflowids),  inflowids, 1, 0, NULL, (void (*)(void)) advect_inflow, NULL, user, NULL);CHKERRQ(ierr);
+    ierr = DMAddBoundary(dm, DM_BC_NATURAL_RIEMANN, "outflow", label, ALEN(outflowids), outflowids, 1, 0, NULL, (void (*)(void)) advect_outflow, NULL, user, NULL);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
 }
@@ -1004,9 +1004,9 @@ static PetscErrorCode MonitorFunctionals(TS ts, PetscInt stepnum, PetscReal time
     }
     ierr = VecRestoreArrayRead(cellgeom, &cgeom);CHKERRQ(ierr);
     ierr = VecRestoreArrayRead(X, &x);CHKERRQ(ierr);
-    ierr = MPI_Allreduce(MPI_IN_PLACE, fmin, fcount, MPIU_REAL, MPIU_MIN, PetscObjectComm((PetscObject)ts));CHKERRQ(ierr);
-    ierr = MPI_Allreduce(MPI_IN_PLACE, fmax, fcount, MPIU_REAL, MPIU_MAX, PetscObjectComm((PetscObject)ts));CHKERRQ(ierr);
-    ierr = MPI_Allreduce(MPI_IN_PLACE, fint, fcount, MPIU_REAL, MPIU_SUM, PetscObjectComm((PetscObject)ts));CHKERRQ(ierr);
+    ierr = MPI_Allreduce(MPI_IN_PLACE, fmin, fcount, MPIU_REAL, MPIU_MIN, PetscObjectComm((PetscObject)ts));CHKERRMPI(ierr);
+    ierr = MPI_Allreduce(MPI_IN_PLACE, fmax, fcount, MPIU_REAL, MPIU_MAX, PetscObjectComm((PetscObject)ts));CHKERRMPI(ierr);
+    ierr = MPI_Allreduce(MPI_IN_PLACE, fint, fcount, MPIU_REAL, MPIU_SUM, PetscObjectComm((PetscObject)ts));CHKERRMPI(ierr);
     /* Output functional data */
     ftablealloc = fcount * 100;
     ftableused  = 0;

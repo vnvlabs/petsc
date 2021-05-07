@@ -274,6 +274,7 @@ static const char *PetscErrorStrings[] = {
   /*95 */ "Missing or incorrect user input ",
   /*96 */ "GPU resources unavailable ",
   /*97 */ "GPU error ",
+  /*98 */ "General MPI error "
 };
 
 /*@C
@@ -413,9 +414,9 @@ PetscErrorCode PetscError(MPI_Comm comm,int line,const char *func,const char *fi
   PetscStrncmp(func,"main",4,&ismain);
   if (ismain) {
     PetscMPIInt errcode;
-    errcode = (PetscMPIInt)(0 + line*1000 + ierr);
+    errcode = (PetscMPIInt)(0 + 0*line*1000 + ierr);
     if (petscwaitonerrorflg) {PetscSleep(1000);}
-    MPI_Abort(comm,errcode);
+    MPI_Abort(MPI_COMM_WORLD,errcode);
   }
 
 #if defined(PETSC_CLANGUAGE_CXX)
@@ -458,8 +459,8 @@ PetscErrorCode  PetscIntView(PetscInt N,const PetscInt idx[],PetscViewer viewer)
   PetscValidHeaderSpecific(viewer,PETSC_VIEWER_CLASSID,3);
   if (N) PetscValidIntPointer(idx,2);
   ierr = PetscObjectGetComm((PetscObject)viewer,&comm);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm,&size);CHKERRMPI(ierr);
+  ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
 
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERASCII,&iascii);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERBINARY,&isbinary);CHKERRQ(ierr);
@@ -495,11 +496,11 @@ PetscErrorCode  PetscIntView(PetscInt N,const PetscInt idx[],PetscViewer viewer)
 
     if (size > 1) {
       if (rank) {
-        ierr = MPI_Gather(&NN,1,MPI_INT,NULL,0,MPI_INT,0,comm);CHKERRQ(ierr);
-        ierr = MPI_Gatherv((void*)idx,NN,MPIU_INT,NULL,NULL,NULL,MPIU_INT,0,comm);CHKERRQ(ierr);
+        ierr = MPI_Gather(&NN,1,MPI_INT,NULL,0,MPI_INT,0,comm);CHKERRMPI(ierr);
+        ierr = MPI_Gatherv((void*)idx,NN,MPIU_INT,NULL,NULL,NULL,MPIU_INT,0,comm);CHKERRMPI(ierr);
       } else {
         ierr      = PetscMalloc1(size,&sizes);CHKERRQ(ierr);
-        ierr      = MPI_Gather(&NN,1,MPI_INT,sizes,1,MPI_INT,0,comm);CHKERRQ(ierr);
+        ierr      = MPI_Gather(&NN,1,MPI_INT,sizes,1,MPI_INT,0,comm);CHKERRMPI(ierr);
         Ntotal    = sizes[0];
         ierr      = PetscMalloc1(size,&displs);CHKERRQ(ierr);
         displs[0] = 0;
@@ -508,7 +509,7 @@ PetscErrorCode  PetscIntView(PetscInt N,const PetscInt idx[],PetscViewer viewer)
           displs[i] =  displs[i-1] + sizes[i-1];
         }
         ierr = PetscMalloc1(Ntotal,&array);CHKERRQ(ierr);
-        ierr = MPI_Gatherv((void*)idx,NN,MPIU_INT,array,sizes,displs,MPIU_INT,0,comm);CHKERRQ(ierr);
+        ierr = MPI_Gatherv((void*)idx,NN,MPIU_INT,array,sizes,displs,MPIU_INT,0,comm);CHKERRMPI(ierr);
         ierr = PetscViewerBinaryWrite(viewer,array,Ntotal,PETSC_INT);CHKERRQ(ierr);
         ierr = PetscFree(sizes);CHKERRQ(ierr);
         ierr = PetscFree(displs);CHKERRQ(ierr);
@@ -555,8 +556,8 @@ PetscErrorCode  PetscRealView(PetscInt N,const PetscReal idx[],PetscViewer viewe
   PetscValidHeaderSpecific(viewer,PETSC_VIEWER_CLASSID,3);
   PetscValidScalarPointer(idx,2);
   ierr = PetscObjectGetComm((PetscObject)viewer,&comm);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm,&size);CHKERRMPI(ierr);
+  ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
 
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERASCII,&iascii);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERBINARY,&isbinary);CHKERRQ(ierr);
@@ -600,11 +601,11 @@ PetscErrorCode  PetscRealView(PetscInt N,const PetscReal idx[],PetscViewer viewe
 
     if (size > 1) {
       if (rank) {
-        ierr = MPI_Gather(&NN,1,MPI_INT,NULL,0,MPI_INT,0,comm);CHKERRQ(ierr);
-        ierr = MPI_Gatherv((PetscReal*)idx,NN,MPIU_REAL,NULL,NULL,NULL,MPIU_REAL,0,comm);CHKERRQ(ierr);
+        ierr = MPI_Gather(&NN,1,MPI_INT,NULL,0,MPI_INT,0,comm);CHKERRMPI(ierr);
+        ierr = MPI_Gatherv((PetscReal*)idx,NN,MPIU_REAL,NULL,NULL,NULL,MPIU_REAL,0,comm);CHKERRMPI(ierr);
       } else {
         ierr      = PetscMalloc1(size,&sizes);CHKERRQ(ierr);
-        ierr      = MPI_Gather(&NN,1,MPI_INT,sizes,1,MPI_INT,0,comm);CHKERRQ(ierr);
+        ierr      = MPI_Gather(&NN,1,MPI_INT,sizes,1,MPI_INT,0,comm);CHKERRMPI(ierr);
         Ntotal    = sizes[0];
         ierr      = PetscMalloc1(size,&displs);CHKERRQ(ierr);
         displs[0] = 0;
@@ -613,7 +614,7 @@ PetscErrorCode  PetscRealView(PetscInt N,const PetscReal idx[],PetscViewer viewe
           displs[i] =  displs[i-1] + sizes[i-1];
         }
         ierr = PetscMalloc1(Ntotal,&array);CHKERRQ(ierr);
-        ierr = MPI_Gatherv((PetscReal*)idx,NN,MPIU_REAL,array,sizes,displs,MPIU_REAL,0,comm);CHKERRQ(ierr);
+        ierr = MPI_Gatherv((PetscReal*)idx,NN,MPIU_REAL,array,sizes,displs,MPIU_REAL,0,comm);CHKERRMPI(ierr);
         ierr = PetscViewerBinaryWrite(viewer,array,Ntotal,PETSC_REAL);CHKERRQ(ierr);
         ierr = PetscFree(sizes);CHKERRQ(ierr);
         ierr = PetscFree(displs);CHKERRQ(ierr);
@@ -660,8 +661,8 @@ PetscErrorCode  PetscScalarView(PetscInt N,const PetscScalar idx[],PetscViewer v
   PetscValidHeader(viewer,3);
   if (N) PetscValidScalarPointer(idx,2);
   ierr = PetscObjectGetComm((PetscObject)viewer,&comm);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm,&size);CHKERRMPI(ierr);
+  ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
 
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERASCII,&iascii);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERBINARY,&isbinary);CHKERRQ(ierr);
@@ -707,11 +708,11 @@ PetscErrorCode  PetscScalarView(PetscInt N,const PetscScalar idx[],PetscViewer v
 
     if (size > 1) {
       if (rank) {
-        ierr = MPI_Gather(&NN,1,MPI_INT,NULL,0,MPI_INT,0,comm);CHKERRQ(ierr);
-        ierr = MPI_Gatherv((void*)idx,NN,MPIU_SCALAR,NULL,NULL,NULL,MPIU_SCALAR,0,comm);CHKERRQ(ierr);
+        ierr = MPI_Gather(&NN,1,MPI_INT,NULL,0,MPI_INT,0,comm);CHKERRMPI(ierr);
+        ierr = MPI_Gatherv((void*)idx,NN,MPIU_SCALAR,NULL,NULL,NULL,MPIU_SCALAR,0,comm);CHKERRMPI(ierr);
       } else {
         ierr      = PetscMalloc1(size,&sizes);CHKERRQ(ierr);
-        ierr      = MPI_Gather(&NN,1,MPI_INT,sizes,1,MPI_INT,0,comm);CHKERRQ(ierr);
+        ierr      = MPI_Gather(&NN,1,MPI_INT,sizes,1,MPI_INT,0,comm);CHKERRMPI(ierr);
         Ntotal    = sizes[0];
         ierr      = PetscMalloc1(size,&displs);CHKERRQ(ierr);
         displs[0] = 0;
@@ -720,7 +721,7 @@ PetscErrorCode  PetscScalarView(PetscInt N,const PetscScalar idx[],PetscViewer v
           displs[i] =  displs[i-1] + sizes[i-1];
         }
         ierr = PetscMalloc1(Ntotal,&array);CHKERRQ(ierr);
-        ierr = MPI_Gatherv((void*)idx,NN,MPIU_SCALAR,array,sizes,displs,MPIU_SCALAR,0,comm);CHKERRQ(ierr);
+        ierr = MPI_Gatherv((void*)idx,NN,MPIU_SCALAR,array,sizes,displs,MPIU_SCALAR,0,comm);CHKERRMPI(ierr);
         ierr = PetscViewerBinaryWrite(viewer,array,Ntotal,PETSC_SCALAR);CHKERRQ(ierr);
         ierr = PetscFree(sizes);CHKERRQ(ierr);
         ierr = PetscFree(displs);CHKERRQ(ierr);
@@ -753,6 +754,19 @@ PETSC_EXTERN const char* PetscCUBLASGetErrorName(cublasStatus_t status)
     case CUBLAS_STATUS_INTERNAL_ERROR:   return "CUBLAS_STATUS_INTERNAL_ERROR";
     case CUBLAS_STATUS_NOT_SUPPORTED:    return "CUBLAS_STATUS_NOT_SUPPORTED";
     case CUBLAS_STATUS_LICENSE_ERROR:    return "CUBLAS_STATUS_LICENSE_ERROR";
+#endif
+    default:                             return "unknown error";
+  }
+}
+PETSC_EXTERN const char* PetscCUSolverGetErrorName(cusolverStatus_t status)
+{
+  switch(status) {
+#if (CUDART_VERSION >= 8000) /* At least CUDA 8.0 of Sep. 2016 had these */
+    case CUSOLVER_STATUS_SUCCESS:          return "CUSOLVER_STATUS_SUCCESS";
+    case CUSOLVER_STATUS_NOT_INITIALIZED:  return "CUSOLVER_STATUS_NOT_INITIALIZED";
+    case CUSOLVER_STATUS_INVALID_VALUE:    return "CUSOLVER_STATUS_INVALID_VALUE";
+    case CUSOLVER_STATUS_ARCH_MISMATCH:    return "CUSOLVER_STATUS_ARCH_MISMATCH";
+    case CUSOLVER_STATUS_INTERNAL_ERROR:   return "CUSOLVER_STATUS_INTERNAL_ERROR";
 #endif
     default:                             return "unknown error";
   }

@@ -36,8 +36,8 @@ int main(int argc,char **args)
 #endif
 
   ierr = PetscInitialize(&argc,&args,(char*)0,help);if (ierr) return ierr;
-  ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
+  ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
   ierr = PetscOptionsGetInt(NULL,NULL,"-m",&m,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetInt(NULL,NULL,"-n",&n,NULL);CHKERRQ(ierr);
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -154,7 +154,7 @@ int main(int argc,char **args)
   /*
     Example of how to use external package MUMPS
     Note: runtime options
-          '-ksp_type preonly -pc_type lu -pc_factor_mat_solver_type mumps -mat_mumps_icntl_7 2 -mat_mumps_icntl_1 0.0'
+          '-ksp_type preonly -pc_type lu -pc_factor_mat_solver_type mumps -mat_mumps_icntl_7 3 -mat_mumps_icntl_1 0.0'
           are equivalent to these procedural calls
   */
 #if defined(PETSC_HAVE_MUMPS)
@@ -264,7 +264,7 @@ int main(int argc,char **args)
       ierr = PCSetType(pc,PCILU);CHKERRQ(ierr);
     }
 #if !defined(PETSC_HAVE_STRUMPACK)
-    SETERRQ(PETSC_COMM_WORLD,PETSC_,"This test requires STRUMPACK");
+    SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"This test requires STRUMPACK");
 #endif
     ierr = PCFactorSetMatSolverType(pc,MATSOLVERSTRUMPACK);CHKERRQ(ierr);
     ierr = PCFactorSetUpMatSolverType(pc);CHKERRQ(ierr); /* call MatGetFactor() to create F */

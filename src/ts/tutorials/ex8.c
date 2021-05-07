@@ -337,7 +337,7 @@ int main(int argc,char **argv)
      Initialize program
      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);if (ierr) return ierr;
-  ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
   if (size > 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_WRONG_MPI_SIZE,"Only for sequential runs");
 
   /* Register the available problems */
@@ -365,7 +365,7 @@ int main(int argc,char **argv)
     PetscErrorCode (*pcreate)(Problem);
 
     ierr = PetscFunctionListFind(plist,pname,&pcreate);CHKERRQ(ierr);
-    if (!pcreate) SETERRQ1(PETSC_COMM_SELF,1,"No problem '%s'",pname);
+    if (!pcreate) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_UNKNOWN_TYPE,"No problem '%s'",pname);
     ierr = (*pcreate)(problem);CHKERRQ(ierr);
   }
 

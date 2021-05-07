@@ -1,7 +1,7 @@
-#include <petscconf.h>
+#include <petscvec_kokkos.hpp>
 #include <../src/mat/impls/aij/mpi/mpiaij.h>
 #include <../src/mat/impls/aij/seq/kokkos/aijkokkosimpl.hpp>
-#include <petscveckokkos.hpp>
+
 
 PetscErrorCode MatAssemblyEnd_MPIAIJKokkos(Mat A,MatAssemblyType mode)
 {
@@ -21,39 +21,55 @@ PetscErrorCode MatAssemblyEnd_MPIAIJKokkos(Mat A,MatAssemblyType mode)
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode  MatMPIAIJSetPreallocation_MPIAIJKokkos(Mat mat,PetscInt d_nz,const PetscInt d_nnz[],PetscInt o_nz,const PetscInt o_nnz[])
+PetscErrorCode MatMPIAIJSetPreallocation_MPIAIJKokkos(Mat mat,PetscInt d_nz,const PetscInt d_nnz[],PetscInt o_nz,const PetscInt o_nnz[])
 {
-  PetscErrorCode     ierr;
-  PetscInt           i;
-  Mat_MPIAIJ         *mpiaij = (Mat_MPIAIJ*)mat->data;
+  PetscErrorCode ierr;
+  Mat_MPIAIJ     *mpiaij = (Mat_MPIAIJ*)mat->data;
 
   PetscFunctionBegin;
   ierr = PetscLayoutSetUp(mat->rmap);CHKERRQ(ierr);
   ierr = PetscLayoutSetUp(mat->cmap);CHKERRQ(ierr);
+#if defined(PETSC_USE_DEBUG)
   if (d_nnz) {
+    PetscInt i;
     for (i=0; i<mat->rmap->n; i++) {
       if (d_nnz[i] < 0) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"d_nnz cannot be less than 0: local row %D value %D",i,d_nnz[i]);
     }
   }
   if (o_nnz) {
+    PetscInt i;
     for (i=0; i<mat->rmap->n; i++) {
       if (o_nnz[i] < 0) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"o_nnz cannot be less than 0: local row %D value %D",i,o_nnz[i]);
     }
   }
-  if (!mat->preallocated) {
-    /* Explicitly create 2 MATSEQAIJKOKKOS matrices. */
+#endif
+#if defined(PETSC_USE_CTABLE)
+  ierr = PetscTableDestroy(&mpiaij->colmap);CHKERRQ(ierr);
+#else
+  ierr = PetscFree(mpiaij->colmap);CHKERRQ(ierr);
+#endif
+  ierr = PetscFree(mpiaij->garray);CHKERRQ(ierr);
+  ierr = VecDestroy(&mpiaij->lvec);CHKERRQ(ierr);
+  ierr = VecScatterDestroy(&mpiaij->Mvctx);CHKERRQ(ierr);
+  /* Because the B will have been resized we simply destroy it and create a new one each time */
+  ierr = MatDestroy(&mpiaij->B);CHKERRQ(ierr);
+
+  if (!mpiaij->A) {
     ierr = MatCreate(PETSC_COMM_SELF,&mpiaij->A);CHKERRQ(ierr);
     ierr = MatSetSizes(mpiaij->A,mat->rmap->n,mat->cmap->n,mat->rmap->n,mat->cmap->n);CHKERRQ(ierr);
-    ierr = MatSetType(mpiaij->A,MATSEQAIJKOKKOS);CHKERRQ(ierr);
     ierr = PetscLogObjectParent((PetscObject)mat,(PetscObject)mpiaij->A);CHKERRQ(ierr);
+  }
+  if (!mpiaij->B) {
+    PetscMPIInt size;
+    ierr = MPI_Comm_size(PetscObjectComm((PetscObject)mat),&size);CHKERRMPI(ierr);
     ierr = MatCreate(PETSC_COMM_SELF,&mpiaij->B);CHKERRQ(ierr);
-    ierr = MatSetSizes(mpiaij->B,mat->rmap->n,mat->cmap->N,mat->rmap->n,mat->cmap->N);CHKERRQ(ierr);
-    ierr = MatSetType(mpiaij->B,MATSEQAIJKOKKOS);CHKERRQ(ierr);
+    ierr = MatSetSizes(mpiaij->B,mat->rmap->n,size > 1 ? mat->cmap->N : 0,mat->rmap->n,size > 1 ? mat->cmap->N : 0);CHKERRQ(ierr);
     ierr = PetscLogObjectParent((PetscObject)mat,(PetscObject)mpiaij->B);CHKERRQ(ierr);
   }
+  ierr = MatSetType(mpiaij->A,MATSEQAIJKOKKOS);CHKERRQ(ierr);
+  ierr = MatSetType(mpiaij->B,MATSEQAIJKOKKOS);CHKERRQ(ierr);
   ierr = MatSeqAIJSetPreallocation(mpiaij->A,d_nz,d_nnz);CHKERRQ(ierr);
   ierr = MatSeqAIJSetPreallocation(mpiaij->B,o_nz,o_nnz);CHKERRQ(ierr);
-
   mat->preallocated = PETSC_TRUE;
   PetscFunctionReturn(0);
 }
@@ -119,14 +135,17 @@ PETSC_INTERN PetscErrorCode MatConvert_MPIAIJ_MPIAIJKokkos(Mat A, MatType mtype,
   }
   B = *newmat;
 
+  B->boundtocpu = PETSC_FALSE;
   ierr = PetscFree(B->defaultvectype);CHKERRQ(ierr);
   ierr = PetscStrallocpy(VECKOKKOS,&B->defaultvectype);CHKERRQ(ierr);
   ierr = PetscObjectChangeTypeName((PetscObject)B,MATMPIAIJKOKKOS);CHKERRQ(ierr);
 
-  B->ops->assemblyend    = MatAssemblyEnd_MPIAIJKokkos;
-  B->ops->mult           = MatMult_MPIAIJKokkos;
-  B->ops->multadd        = MatMultAdd_MPIAIJKokkos;
-  B->ops->multtranspose  = MatMultTranspose_MPIAIJKokkos;
+  B->ops->assemblyend           = MatAssemblyEnd_MPIAIJKokkos;
+  B->ops->mult                  = MatMult_MPIAIJKokkos;
+  B->ops->multadd               = MatMultAdd_MPIAIJKokkos;
+  B->ops->multtranspose         = MatMultTranspose_MPIAIJKokkos;
+  // Needs an efficient implementation of the COO preallocation routines
+  //B->ops->productsetfromoptions = MatProductSetFromOptions_MPIAIJBACKEND;
 
   ierr = PetscObjectComposeFunction((PetscObject)B,"MatMPIAIJSetPreallocation_C",MatMPIAIJSetPreallocation_MPIAIJKokkos);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -198,7 +217,7 @@ PetscErrorCode  MatCreateAIJKokkos(MPI_Comm comm,PetscInt m,PetscInt n,PetscInt 
   PetscFunctionBegin;
   ierr = MatCreate(comm,A);CHKERRQ(ierr);
   ierr = MatSetSizes(*A,m,n,M,N);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm,&size);CHKERRMPI(ierr);
   if (size > 1) {
     ierr = MatSetType(*A,MATMPIAIJKOKKOS);CHKERRQ(ierr);
     ierr = MatMPIAIJSetPreallocation(*A,d_nz,d_nnz,o_nz,o_nnz);CHKERRQ(ierr);
@@ -222,8 +241,8 @@ PetscErrorCode MatKokkosGetDeviceMatWrite(Mat A, PetscSplitCSRDataStructure **B)
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)A,&comm);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(comm,&size);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm,&size);CHKERRMPI(ierr);
+  ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
   if (size == 1) {
     ierr   = MatSeqAIJKokkosGetDeviceMat(A,&d_mat);CHKERRQ(ierr);
   } else {
@@ -311,7 +330,7 @@ PetscErrorCode MatKokkosGetDeviceMatWrite(Mat A, PetscSplitCSRDataStructure **B)
     nnz = jaca->i[n];
     h_mat.diag.n = n;
     h_mat.diag.ignorezeroentries = jaca->ignorezeroentries;
-    ierr = MPI_Comm_rank(comm,&h_mat.rank);CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(comm,&h_mat.rank);CHKERRMPI(ierr);
     if (jaca->compressedrow.use) {
       SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"A does not suppport compressed row (todo)");
     } else {

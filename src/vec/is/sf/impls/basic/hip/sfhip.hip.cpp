@@ -2,8 +2,6 @@
 #include <hip/hip_runtime.h>
 #include <petschipblas.h> /* For CHKERRHIP */
 
-/* TODO - there are warnings with hipcc unused-function with device code that
- * are not well documented.  Need to work with AMD on this  */
 
 /* Map a thread id to an index in root/leaf space through a series of 3D subdomains. See PetscSFPackOpt. */
 __device__ static inline PetscInt MapTidToIndex(const PetscInt *opt,PetscInt tid)
@@ -293,11 +291,15 @@ __device__ static llint atomicMult(llint* address,llint val)
 
 template<typename Type> struct AtomicMult {__device__ Type operator() (Type& x,Type y) const {return atomicMult(&x,y);}};
 
+
 /*
   Atomic Min/Max operations
 
-  See CUDA version
+  See CUDA version for comments.
  */
+
+
+
 
 #if defined(PETSC_USE_REAL_DOUBLE)
 __device__ static double atomicMin(double* address, double val)
@@ -345,13 +347,69 @@ __device__ static float atomicMax(float* address,float val)
 }
 #endif
 
+/* As of ROCm 3.10 llint atomicMin/Max(llint*, llint) is not supported */
+__device__ static llint atomicMin(llint* address,llint val)
+{
+  ullint *address_as_ull = (ullint*)(address);
+  ullint old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old     = atomicCAS(address_as_ull, assumed, (ullint)(PetscMin(val,(llint)assumed)));
+  } while (assumed != old);
+  return (llint)old;
+}
+
+__device__ static llint atomicMax(llint* address,llint val)
+{
+  ullint *address_as_ull = (ullint*)(address);
+  ullint old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old     = atomicCAS(address_as_ull, assumed, (ullint)(PetscMax(val,(llint)assumed)));
+  } while (assumed != old);
+  return (llint)old;
+}
+
+
 template<typename Type> struct AtomicMin {__device__ Type operator() (Type& x,Type y) const {return atomicMin(&x,y);}};
 template<typename Type> struct AtomicMax {__device__ Type operator() (Type& x,Type y) const {return atomicMax(&x,y);}};
 
 /*
   Atomic bitwise operations
-
+  As of ROCm 3.10, the llint atomicAnd/Or/Xor(llint*, llint) is not supported
 */
+
+__device__ static llint atomicAnd(llint* address,llint val)
+{
+  ullint *address_as_ull = (ullint*)(address);
+  ullint old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old     = atomicCAS(address_as_ull, assumed, (ullint)(val & (llint)assumed));
+  } while (assumed != old);
+  return (llint)old;
+}
+__device__ static llint atomicOr(llint* address,llint val)
+{
+  ullint *address_as_ull = (ullint*)(address);
+  ullint old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old     = atomicCAS(address_as_ull, assumed, (ullint)(val | (llint)assumed));
+  } while (assumed != old);
+  return (llint)old;
+}
+
+__device__ static llint atomicXor(llint* address,llint val)
+{
+  ullint *address_as_ull = (ullint*)(address);
+  ullint old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old     = atomicCAS(address_as_ull, assumed, (ullint)(val ^ (llint)assumed));
+  } while (assumed != old);
+  return (llint)old;
+}
 
 template<typename Type> struct AtomicBAND {__device__ Type operator() (Type& x,Type y) const {return atomicAnd(&x,y);}};
 template<typename Type> struct AtomicBOR  {__device__ Type operator() (Type& x,Type y) const {return atomicOr (&x,y);}};
@@ -414,12 +472,12 @@ static PetscErrorCode Pack(PetscSFLink link,PetscInt count,PetscInt start,PetscS
   hipError_t         err;
   PetscInt           nthreads=256;
   PetscInt           nblocks=(count+nthreads-1)/nthreads;
-/*  const PetscInt     *iarray=opt ? opt->array : NULL; */
+  const PetscInt     *iarray=opt ? opt->array : NULL;
 
   PetscFunctionBegin;
   if (!count) PetscFunctionReturn(0);
   nblocks = PetscMin(nblocks,link->maxResidentThreadsPerGPU/nthreads);
-/* TODO  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_Pack<Type,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, count,idx,link->bs,unpacked,packed); */
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_Pack<Type,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,start,iarray,idx,(const Type*)data,(Type*)buf);
   err = hipGetLastError();CHKERRHIP(err);
   PetscFunctionReturn(0);
 }
@@ -430,12 +488,12 @@ static PetscErrorCode UnpackAndOp(PetscSFLink link,PetscInt count,PetscInt start
   hipError_t        cerr;
   PetscInt           nthreads=256;
   PetscInt           nblocks=(count+nthreads-1)/nthreads;
-/*  const PetscInt     *iarray=opt ? opt->array : NULL; */
+  const PetscInt     *iarray=opt ? opt->array : NULL;
 
   PetscFunctionBegin;
   if (!count) PetscFunctionReturn(0);
   nblocks = PetscMin(nblocks,link->maxResidentThreadsPerGPU/nthreads);
-/* TODO  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_UnpackAndOp<Type,Op,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,start,iarray,idx,(Type*)data,(const Type*)buf);  */
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_UnpackAndOp<Type,Op,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,start,iarray,idx,(Type*)data,(const Type*)buf);
   cerr = hipGetLastError();CHKERRHIP(cerr);
   PetscFunctionReturn(0);
 }
@@ -504,13 +562,13 @@ static PetscErrorCode FetchAndOpLocal(PetscSFLink link,PetscInt count,PetscInt r
   hipError_t       cerr;
   PetscInt          nthreads=256;
   PetscInt          nblocks=(count+nthreads-1)/nthreads;
-/*  const PetscInt    *rarray = rootopt ? rootopt->array : NULL;
-  const PetscInt    *larray = leafopt ? leafopt->array : NULL; */
+  const PetscInt    *rarray = rootopt ? rootopt->array : NULL;
+  const PetscInt    *larray = leafopt ? leafopt->array : NULL;
 
   PetscFunctionBegin;
   if (!count) PetscFunctionReturn(0);
   nblocks = PetscMin(nblocks,link->maxResidentThreadsPerGPU/nthreads);
-/*  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_FetchAndOpLocal<Type,Op,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,rootstart,rarray,rootidx,(Type*)rootdata,leafstart,larray,leafidx,(const Type*)leafdata,(Type*)leafupdate); */
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_FetchAndOpLocal<Type,Op,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,rootstart,rarray,rootidx,(Type*)rootdata,leafstart,larray,leafidx,(const Type*)leafdata,(Type*)leafupdate);
   cerr = hipGetLastError();CHKERRHIP(cerr);
   PetscFunctionReturn(0);
 }
@@ -700,10 +758,12 @@ static PetscErrorCode PetscSFLinkMemcpy_HIP(PetscSFLink link,PetscMemType dstmty
   enum hipMemcpyKind kinds[2][2] = {{hipMemcpyHostToHost,hipMemcpyHostToDevice},{hipMemcpyDeviceToHost,hipMemcpyDeviceToDevice}};
 
   if (n) {
-    if (dstmtype == PETSC_MEMTYPE_HOST && srcmtype == PETSC_MEMTYPE_HOST) { /* Separate HostToHost so that pure-cpu code won't call hip runtime */
+    if (PetscMemTypeHost(dstmtype) && PetscMemTypeHost(srcmtype)) { /* Separate HostToHost so that pure-cpu code won't call hip runtime */
       PetscErrorCode ierr = PetscMemcpy(dst,src,n);CHKERRQ(ierr);
-    } else { /* Assume PETSC_MEMTYPE_HOST=0, PETSC_MEMTYPE_DEVICE=1 */
-      hipError_t err = hipMemcpyAsync(dst,src,n,kinds[srcmtype][dstmtype],link->stream);CHKERRHIP(err);
+    } else {
+      int stype = PetscMemTypeDevice(srcmtype) ? 1 : 0;
+      int dtype = PetscMemTypeDevice(dstmtype) ? 1 : 0;
+      hipError_t cerr = hipMemcpyAsync(dst,src,n,kinds[stype][dtype],link->stream);CHKERRHIP(cerr);
     }
   }
   PetscFunctionReturn(0);
@@ -712,8 +772,11 @@ static PetscErrorCode PetscSFLinkMemcpy_HIP(PetscSFLink link,PetscMemType dstmty
 PETSC_EXTERN PetscErrorCode PetscSFMalloc_HIP(PetscMemType mtype,size_t size,void** ptr)
 {
   PetscFunctionBegin;
-  if (mtype == PETSC_MEMTYPE_HOST) {PetscErrorCode ierr = PetscMalloc(size,ptr);CHKERRQ(ierr);}
-  else if (mtype == PETSC_MEMTYPE_DEVICE) {hipError_t err = hipMalloc(ptr,size);CHKERRHIP(err);}
+  if (PetscMemTypeHost(mtype)) {PetscErrorCode ierr = PetscMalloc(size,ptr);CHKERRQ(ierr);}
+  else if (PetscMemTypeDevice(mtype)) {
+    if (!PetscHIPInitialized) { PetscErrorCode ierr = PetscHIPInitializeCheck();CHKERRQ(ierr); }
+    hipError_t err = hipMalloc(ptr,size);CHKERRHIP(err);
+  }
   else SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Wrong PetscMemType %d", (int)mtype);
   PetscFunctionReturn(0);
 }
@@ -721,9 +784,22 @@ PETSC_EXTERN PetscErrorCode PetscSFMalloc_HIP(PetscMemType mtype,size_t size,voi
 PETSC_EXTERN PetscErrorCode PetscSFFree_HIP(PetscMemType mtype,void* ptr)
 {
   PetscFunctionBegin;
-  if (mtype == PETSC_MEMTYPE_HOST) {PetscErrorCode ierr = PetscFree(ptr);CHKERRQ(ierr);}
-  else if (mtype == PETSC_MEMTYPE_DEVICE) {hipError_t err = hipFree(ptr);CHKERRHIP(err);}
+  if (PetscMemTypeHost(mtype)) {PetscErrorCode ierr = PetscFree(ptr);CHKERRQ(ierr);}
+  else if (PetscMemTypeDevice(mtype)) {hipError_t err = hipFree(ptr);CHKERRHIP(err);}
   else SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Wrong PetscMemType %d",(int)mtype);
+  PetscFunctionReturn(0);
+}
+
+/* Destructor when the link uses MPI for communication on HIP device */
+static PetscErrorCode PetscSFLinkDestroy_MPI_HIP(PetscSF sf,PetscSFLink link)
+{
+  hipError_t    cerr;
+
+  PetscFunctionBegin;
+  for (int i=PETSCSF_LOCAL; i<=PETSCSF_REMOTE; i++) {
+    cerr = hipFree(link->rootbuf_alloc[i][PETSC_MEMTYPE_DEVICE]);CHKERRHIP(cerr);
+    cerr = hipFree(link->leafbuf_alloc[i][PETSC_MEMTYPE_DEVICE]);CHKERRHIP(cerr);
+  }
   PetscFunctionReturn(0);
 }
 
@@ -732,10 +808,10 @@ PETSC_EXTERN PetscErrorCode PetscSFFree_HIP(PetscMemType mtype,void* ptr)
 /*====================================================================================*/
 
 /* Some fields of link are initialized by PetscSFPackSetUp_Host. This routine only does what needed on device */
-PETSC_INTERN PetscErrorCode PetscSFLinkSetUp_Hip(PetscSF sf,PetscSFLink link,MPI_Datatype unit)
+PETSC_INTERN PetscErrorCode PetscSFLinkSetUp_HIP(PetscSF sf,PetscSFLink link,MPI_Datatype unit)
 {
   PetscErrorCode ierr;
-  hipError_t    err;
+  hipError_t     cerr;
   PetscInt       nSignedChar=0,nUnsignedChar=0,nInt=0,nPetscInt=0,nPetscReal=0;
   PetscBool      is2Int,is2PetscInt;
 #if defined(PETSC_HAVE_COMPLEX)
@@ -794,7 +870,7 @@ PETSC_INTERN PetscErrorCode PetscSFLinkSetUp_Hip(PetscSF sf,PetscSFLink link,MPI
 #endif
   } else {
     MPI_Aint lb,nbyte;
-    ierr = MPI_Type_get_extent(unit,&lb,&nbyte);CHKERRQ(ierr);
+    ierr = MPI_Type_get_extent(unit,&lb,&nbyte);CHKERRMPI(ierr);
     if (lb != 0) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"Datatype with nonzero lower bound %ld\n",(long)lb);
     if (nbyte % sizeof(int)) { /* If the type size is not multiple of int */
       if      (nbyte == 4) PackInit_DumbType<char,4,1>(link); else if (nbyte%4 == 0) PackInit_DumbType<char,4,0>(link);
@@ -809,19 +885,20 @@ PETSC_INTERN PetscErrorCode PetscSFLinkSetUp_Hip(PetscSF sf,PetscSFLink link,MPI
     }
   }
 
-  if (!sf->use_default_stream) {err = hipStreamCreate(&link->stream);CHKERRHIP(err);}
   if (!sf->maxResidentThreadsPerGPU) { /* Not initialized */
     int                   device;
     struct hipDeviceProp_t props;
-    err = hipGetDevice(&device);CHKERRHIP(err);
-    err = hipGetDeviceProperties(&props,device);CHKERRHIP(err);
+    cerr = hipGetDevice(&device);CHKERRHIP(cerr);
+    cerr = hipGetDeviceProperties(&props,device);CHKERRHIP(cerr);
     sf->maxResidentThreadsPerGPU = props.maxThreadsPerMultiProcessor*props.multiProcessorCount;
   }
   link->maxResidentThreadsPerGPU = sf->maxResidentThreadsPerGPU;
 
-  link->d_SyncDevice =  PetscSFLinkSyncDevice_HIP;
-  link->d_SyncStream =  PetscSFLinkSyncStream_HIP;
-  link->Memcpy       =  PetscSFLinkMemcpy_HIP;
+  link->stream       = PetscDefaultHipStream;
+  link->Destroy      = PetscSFLinkDestroy_MPI_HIP;
+  link->SyncDevice   = PetscSFLinkSyncDevice_HIP;
+  link->SyncStream   = PetscSFLinkSyncStream_HIP;
+  link->Memcpy       = PetscSFLinkMemcpy_HIP;
   link->deviceinited = PETSC_TRUE;
   PetscFunctionReturn(0);
 }

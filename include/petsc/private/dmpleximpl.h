@@ -7,6 +7,11 @@
 #include <petscsf.h>
 #include <petsc/private/dmimpl.h>
 
+#if defined(PETSC_HAVE_EXODUSII)
+#include <exodusII.h>
+#endif
+
+
 PETSC_EXTERN PetscLogEvent DMPLEX_Interpolate;
 PETSC_EXTERN PetscLogEvent DMPLEX_Partition;
 PETSC_EXTERN PetscLogEvent DMPLEX_PartSelf;
@@ -249,7 +254,9 @@ PETSC_INTERN PetscErrorCode DMComputeL2GradientDiff_Plex(DM,PetscReal,PetscError
 PETSC_INTERN PetscErrorCode DMComputeL2FieldDiff_Plex(DM,PetscReal,PetscErrorCode(**)(PetscInt,PetscReal,const PetscReal[],PetscInt,PetscScalar *,void *),void **,Vec,PetscReal *);
 PETSC_INTERN PetscErrorCode DMLocatePoints_Plex(DM, Vec, DMPointLocationType, PetscSF);
 
-PETSC_INTERN PetscErrorCode DMPlexLoadLabels_HDF5_Internal(DM, PetscViewer);
+PETSC_INTERN PetscErrorCode DMPlexTopologyLoad_HDF5_Internal(DM, PetscViewer, PetscSF*);
+PETSC_INTERN PetscErrorCode DMPlexCoordinatesLoad_HDF5_Internal(DM, PetscViewer);
+PETSC_INTERN PetscErrorCode DMPlexLabelsLoad_HDF5_Internal(DM, PetscViewer);
 PETSC_INTERN PetscErrorCode DMPlexView_HDF5_Internal(DM, PetscViewer);
 PETSC_INTERN PetscErrorCode DMPlexLoad_HDF5_Internal(DM, PetscViewer);
 PETSC_INTERN PetscErrorCode DMPlexLoad_HDF5_Xdmf_Internal(DM, PetscViewer);
@@ -258,12 +265,16 @@ PETSC_INTERN PetscErrorCode VecView_Plex_HDF5_Native_Internal(Vec, PetscViewer);
 PETSC_INTERN PetscErrorCode VecView_Plex_Local_HDF5_Internal(Vec, PetscViewer);
 PETSC_INTERN PetscErrorCode VecLoad_Plex_HDF5_Internal(Vec, PetscViewer);
 PETSC_INTERN PetscErrorCode VecLoad_Plex_HDF5_Native_Internal(Vec, PetscViewer);
-/* TODO Make these INTERN */
-PETSC_EXTERN PetscErrorCode DMPlexView_ExodusII_Internal(DM, int, PetscInt);
-PETSC_EXTERN PetscErrorCode VecViewPlex_ExodusII_Nodal_Internal(Vec, int, int);
-PETSC_EXTERN PetscErrorCode VecLoadPlex_ExodusII_Nodal_Internal(Vec, int, int);
-PETSC_EXTERN PetscErrorCode VecViewPlex_ExodusII_Zonal_Internal(Vec, int, int);
-PETSC_EXTERN PetscErrorCode VecLoadPlex_ExodusII_Zonal_Internal(Vec, int, int);
+#if defined(PETSC_HAVE_EXODUSII)
+PETSC_EXTERN PetscErrorCode DMView_PlexExodusII(DM, PetscViewer);
+PETSC_INTERN PetscErrorCode VecView_PlexExodusII_Internal(Vec, PetscViewer);
+PETSC_INTERN PetscErrorCode VecLoad_PlexExodusII_Internal(Vec, PetscViewer);
+PETSC_INTERN PetscErrorCode VecViewPlex_ExodusII_Nodal_Internal(Vec, int, int, int);
+PETSC_INTERN PetscErrorCode VecLoadPlex_ExodusII_Nodal_Internal(Vec, int, int, int);
+PETSC_INTERN PetscErrorCode VecViewPlex_ExodusII_Zonal_Internal(Vec, int, int, int);
+PETSC_INTERN PetscErrorCode VecLoadPlex_ExodusII_Zonal_Internal(Vec, int, int, int);
+PETSC_INTERN PetscErrorCode EXOGetVarIndex_Internal(int, ex_entity_type, const char[], int*);
+#endif
 PETSC_INTERN PetscErrorCode DMPlexVTKGetCellType_Internal(DM,PetscInt,PetscInt,PetscInt*);
 PETSC_INTERN PetscErrorCode DMPlexGetAdjacency_Internal(DM,PetscInt,PetscBool,PetscBool,PetscBool,PetscInt*,PetscInt*[]);
 PETSC_INTERN PetscErrorCode DMPlexGetRawFaces_Internal(DM,DMPolytopeType,const PetscInt[],PetscInt*,const DMPolytopeType*[],const PetscInt*[],const PetscInt*[]);
@@ -324,9 +335,9 @@ PETSC_STATIC_INLINE PetscInt DihedralSwap(PetscInt N, PetscInt a, PetscInt b)
   return DihedralCompose(N,DihedralInvert(N,a),b);
 }
 
-PETSC_EXTERN PetscErrorCode DMPlexComputeResidual_Internal(DM, IS , PetscReal, Vec, Vec, PetscReal, Vec, void *);
-PETSC_EXTERN PetscErrorCode DMPlexComputeResidual_Hybrid_Internal(DM, IS , PetscReal, Vec, Vec, PetscReal, Vec, void *);
-PETSC_EXTERN PetscErrorCode DMPlexComputeJacobian_Internal(DM, IS, PetscReal, PetscReal, Vec, Vec, Mat, Mat, void *);
+PETSC_EXTERN PetscErrorCode DMPlexComputeResidual_Internal(DM, PetscHashFormKey, IS, PetscReal, Vec, Vec, PetscReal, Vec, void *);
+PETSC_EXTERN PetscErrorCode DMPlexComputeResidual_Hybrid_Internal(DM, PetscHashFormKey[], IS, PetscReal, Vec, Vec, PetscReal, Vec, void *);
+PETSC_EXTERN PetscErrorCode DMPlexComputeJacobian_Internal(DM, PetscHashFormKey, IS, PetscReal, PetscReal, Vec, Vec, Mat, Mat, void *);
 PETSC_EXTERN PetscErrorCode DMPlexComputeJacobian_Hybrid_Internal(DM, IS, PetscReal, PetscReal, Vec, Vec, Mat, Mat, void *);
 PETSC_EXTERN PetscErrorCode DMPlexReconstructGradients_Internal(DM, PetscFV, PetscInt, PetscInt, Vec, Vec, Vec, Vec);
 
@@ -380,6 +391,23 @@ PETSC_STATIC_INLINE void DMPlex_Mult3DReal_Internal(const PetscReal A[], PetscIn
   y[0]     = A[0]*z[0] + A[1]*z[1] + A[2]*z[2];
   y[ldx]   = A[3]*z[0] + A[4]*z[1] + A[5]*z[2];
   y[ldx*2] = A[6]*z[0] + A[7]*z[1] + A[8]*z[2];
+  (void)PetscLogFlops(15.0);
+}
+PETSC_STATIC_INLINE void DMPlex_MultAdd2DReal_Internal(const PetscReal A[], PetscInt ldx, const PetscScalar x[], PetscScalar y[])
+{
+  PetscScalar z[2];
+  z[0] = x[0]; z[1] = x[ldx];
+  y[0]   += A[0]*z[0] + A[1]*z[1];
+  y[ldx] += A[2]*z[0] + A[3]*z[1];
+  (void)PetscLogFlops(6.0);
+}
+PETSC_STATIC_INLINE void DMPlex_MultAdd3DReal_Internal(const PetscReal A[], PetscInt ldx, const PetscScalar x[], PetscScalar y[])
+{
+  PetscScalar z[3];
+  z[0] = x[0]; z[1] = x[ldx]; z[2] = x[ldx*2];
+  y[0]     += A[0]*z[0] + A[1]*z[1] + A[2]*z[2];
+  y[ldx]   += A[3]*z[0] + A[4]*z[1] + A[5]*z[2];
+  y[ldx*2] += A[6]*z[0] + A[7]*z[1] + A[8]*z[2];
   (void)PetscLogFlops(15.0);
 }
 PETSC_STATIC_INLINE void DMPlex_MultTransposeReal_Internal(const PetscReal A[], PetscInt m, PetscInt n, PetscInt ldx, const PetscScalar x[], PetscScalar y[])
@@ -490,6 +518,57 @@ PETSC_STATIC_INLINE void DMPlex_MatMultTransposeLeft3D_Internal(const PetscScala
     DMPlex_Mult3D_Internal(A, 1, &B[j*ldb], &C[j*ldb]);
   }
   (void)PetscLogFlops(8.0*m);
+}
+
+PETSC_STATIC_INLINE void DMPlex_PTAP2DReal_Internal(const PetscReal P[], const PetscScalar A[], PetscScalar C[])
+{
+  PetscScalar out[4];
+  PetscInt i, j, k, l;
+  for (i = 0; i < 2; ++i) {
+    for (j = 0; j < 2; ++j) {
+      out[i*2+j] = 0.;
+      for (k = 0; k < 2; ++k) {
+        for (l = 0; l < 2; ++l) {
+          out[i*2+j] += P[k*2+i]*A[k*2+l]*P[l*2+j];
+        }
+      }
+    }
+  }
+  for (i = 0; i < 2*2; ++i) C[i] = out[i];
+  (void)PetscLogFlops(48.0);
+}
+PETSC_STATIC_INLINE void DMPlex_PTAP3DReal_Internal(const PetscReal P[], const PetscScalar A[], PetscScalar C[])
+{
+  PetscScalar out[9];
+  PetscInt i, j, k, l;
+  for (i = 0; i < 3; ++i) {
+    for (j = 0; j < 3; ++j) {
+      out[i*3+j] = 0.;
+      for (k = 0; k < 3; ++k) {
+        for (l = 0; l < 3; ++l) {
+          out[i*3+j] += P[k*3+i]*A[k*3+l]*P[l*3+j];
+        }
+      }
+    }
+  }
+  for (i = 0; i < 2*2; ++i) C[i] = out[i];
+  (void)PetscLogFlops(243.0);
+}
+/* TODO Fix for aliasing of A and C */
+PETSC_STATIC_INLINE void DMPlex_PTAPReal_Internal(const PetscReal P[], PetscInt m, PetscInt n, const PetscScalar A[], PetscScalar C[])
+{
+  PetscInt i, j, k, l;
+  for (i = 0; i < n; ++i) {
+    for (j = 0; j < n; ++j) {
+      C[i*n+j] = 0.;
+      for (k = 0; k < m; ++k) {
+        for (l = 0; l < m; ++l) {
+          C[i*n+j] += P[k*n+i]*A[k*m+l]*P[l*n+j];
+        }
+      }
+    }
+  }
+  (void)PetscLogFlops(243.0);
 }
 
 PETSC_STATIC_INLINE void DMPlex_Transpose2D_Internal(PetscScalar A[])
@@ -615,6 +694,7 @@ PETSC_INTERN PetscErrorCode DMPlexGetIndicesPointFields_Internal(PetscSection,Pe
 PETSC_INTERN PetscErrorCode DMPlexGetCompressedClosure(DM, PetscSection, PetscInt, PetscInt *, PetscInt **, PetscSection *, IS *, const PetscInt **);
 PETSC_INTERN PetscErrorCode DMPlexRestoreCompressedClosure(DM, PetscSection, PetscInt, PetscInt *, PetscInt **, PetscSection *, IS *, const PetscInt **);
 
+PETSC_EXTERN PetscErrorCode DMPlexGetAllCells_Internal(DM, IS *);
 PETSC_EXTERN PetscErrorCode DMSNESGetFEGeom(DMField, IS, PetscQuadrature, PetscBool, PetscFEGeom **);
 PETSC_EXTERN PetscErrorCode DMSNESRestoreFEGeom(DMField, IS, PetscQuadrature, PetscBool, PetscFEGeom **);
 PETSC_EXTERN PetscErrorCode DMPlexComputeResidual_Patch_Internal(DM, PetscSection, IS, PetscReal, Vec, Vec, Vec, void *);

@@ -18,7 +18,7 @@ PetscErrorCode PCGetDefaultType_Private(PC pc,const char *type[])
   PetscBool      hasop,flg1,flg2,set,flg3;
 
   PetscFunctionBegin;
-  ierr = MPI_Comm_size(PetscObjectComm((PetscObject)pc),&size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(PetscObjectComm((PetscObject)pc),&size);CHKERRMPI(ierr);
   if (pc->pmat) {
     ierr = MatHasOperation(pc->pmat,MATOP_GET_DIAGONAL_BLOCK,&hasop);CHKERRQ(ierr);
     if (size == 1) {
@@ -84,7 +84,7 @@ PetscErrorCode  PCReset(PC pc)
   PetscFunctionReturn(0);
 }
 
-/*@
+/*@C
    PCDestroy - Destroys PC context that was created with PCCreate().
 
    Collective on PC
@@ -474,10 +474,10 @@ PetscErrorCode  PCMatApply(PC pc,Mat X,Mat Y)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc, PC_CLASSID, 1);
-  PetscValidHeaderSpecific(Y, MAT_CLASSID, 2);
-  PetscValidHeaderSpecific(X, MAT_CLASSID, 3);
-  PetscCheckSameComm(pc, 1, Y, 2);
-  PetscCheckSameComm(pc, 1, X, 3);
+  PetscValidHeaderSpecific(X, MAT_CLASSID, 2);
+  PetscValidHeaderSpecific(Y, MAT_CLASSID, 3);
+  PetscCheckSameComm(pc, 1, X, 2);
+  PetscCheckSameComm(pc, 1, Y, 3);
   if (Y == X) SETERRQ(PetscObjectComm((PetscObject)pc), PETSC_ERR_ARG_IDN, "Y and X must be different matrices");
   ierr = PCGetOperators(pc, NULL, &A);CHKERRQ(ierr);
   ierr = MatGetLocalSize(A, &m1, NULL);CHKERRQ(ierr);
@@ -990,8 +990,8 @@ PetscErrorCode  PCSetUp(PC pc)
     PetscFunctionReturn(0);
   } else {
     if (matnonzerostate > pc->matnonzerostate) {
-       ierr = PetscInfo(pc,"Setting up PC with different nonzero pattern\n");CHKERRQ(ierr);
-       pc->flag = DIFFERENT_NONZERO_PATTERN;
+      ierr = PetscInfo(pc,"Setting up PC with different nonzero pattern\n");CHKERRQ(ierr);
+      pc->flag = DIFFERENT_NONZERO_PATTERN;
     } else {
       ierr = PetscInfo(pc,"Setting up PC with same nonzero pattern\n");CHKERRQ(ierr);
       pc->flag = SAME_NONZERO_PATTERN;
@@ -1770,7 +1770,7 @@ PetscErrorCode  PCView(PC pc,PetscViewer viewer)
     char        type[256];
 
     ierr = PetscObjectGetComm((PetscObject)pc,&comm);CHKERRQ(ierr);
-    ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
     if (!rank) {
       ierr = PetscViewerBinaryWrite(viewer,&classid,1,PETSC_INT);CHKERRQ(ierr);
       ierr = PetscStrncpy(type,((PetscObject)pc)->type_name,256);CHKERRQ(ierr);
@@ -1805,7 +1805,7 @@ PetscErrorCode  PCView(PC pc,PetscViewer viewer)
     PetscMPIInt rank;
 
     ierr = PetscObjectName((PetscObject)pc);CHKERRQ(ierr);
-    ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
     if (!((PetscObject)pc)->amsmem && !rank) {
       ierr = PetscObjectViewSAWs((PetscObject)pc,viewer);CHKERRQ(ierr);
     }

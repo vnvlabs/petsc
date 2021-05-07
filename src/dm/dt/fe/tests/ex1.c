@@ -68,6 +68,7 @@ static void g3_uu(PetscInt dim, PetscInt Nf, PetscInt NfAux,
 static PetscErrorCode SetupPrimalProblem(DM dm, AppCtx *user)
 {
   PetscDS        prob;
+  DMLabel        label;
   const PetscInt id = 1;
   PetscErrorCode ierr;
 
@@ -76,7 +77,8 @@ static PetscErrorCode SetupPrimalProblem(DM dm, AppCtx *user)
   ierr = PetscDSSetResidual(prob, 0, f0_trig_u, f1_u);CHKERRQ(ierr);
   ierr = PetscDSSetJacobian(prob, 0, 0, NULL, NULL, NULL, g3_uu);CHKERRQ(ierr);
   ierr = PetscDSSetExactSolution(prob, 0, trig_u, user);CHKERRQ(ierr);
-  ierr = DMAddBoundary(dm, DM_BC_ESSENTIAL, "wall", "marker", 0, 0, NULL, (void (*)(void)) trig_u, NULL, 1, &id, user);CHKERRQ(ierr);
+  ierr = DMGetLabel(dm, "marker", &label);CHKERRQ(ierr);
+  ierr = DMAddBoundary(dm, DM_BC_ESSENTIAL, "wall", label, 1, &id, 0, 0, NULL, (void (*)(void)) trig_u, NULL, user, NULL);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -240,12 +242,14 @@ static PetscErrorCode TestIntegration(DM dm, PetscInt cbs, PetscInt its)
       /* TODO Replace with DMPlexGetCellFields() */
       for (k = 0; k < chunkSize*totDim; ++k) u[k] = 1.0;
       for (f = 0; f < Nf; ++f) {
-        PetscFEGeom    *geom = affineGeom ? affineGeom : geoms[f];
+        PetscHashFormKey key;
+        PetscFEGeom     *geom = affineGeom ? affineGeom : geoms[f];
         /* PetscQuadrature quad = affineQuad ? affineQuad : quads[f]; */
 
+        key.label = NULL; key.value = 0; key.field = f;
         ierr = PetscFEGeomGetChunk(geom, cS, cE, &chunkGeom);CHKERRQ(ierr);
         ierr = PetscLogEventBegin(event,0,0,0,0);CHKERRQ(ierr);
-        ierr = PetscFEIntegrateResidual(ds, f, Ne, chunkGeom, u, NULL, NULL, NULL, 0.0, elemVec);CHKERRQ(ierr);
+        ierr = PetscFEIntegrateResidual(ds, key, Ne, chunkGeom, u, NULL, NULL, NULL, 0.0, elemVec);CHKERRQ(ierr);
         ierr = PetscLogEventEnd(event,0,0,0,0);CHKERRQ(ierr);
       }
     }
@@ -320,7 +324,7 @@ int main(int argc, char **argv)
   PetscErrorCode ierr;
 
   ierr = PetscInitialize(&argc, &argv, NULL, help); if (ierr) return ierr;
-  ierr = MPI_Comm_size(PETSC_COMM_WORLD, &size);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(PETSC_COMM_WORLD, &size);CHKERRMPI(ierr);
   if (size > 1) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_SUP, "This is a uniprocessor example only.");
   ierr = ProcessOptions(PETSC_COMM_WORLD, &ctx);CHKERRQ(ierr);
   ierr = PetscLogDefaultBegin();CHKERRQ(ierr);

@@ -14,7 +14,6 @@ class ViewerType(object):
     SAWS        = S_(PETSCVIEWERSAWS)
     GLVIS       = S_(PETSCVIEWERGLVIS)
     ADIOS       = S_(PETSCVIEWERADIOS)
-    ADIOS2      = S_(PETSCVIEWERADIOS2)
     EXODUSII    = S_(PETSCVIEWEREXODUSII)
 
 class ViewerFormat(object):
@@ -126,7 +125,7 @@ cdef class Viewer(Object):
         cdef const char *cname = NULL
         name = str2bytes(name, &cname)
         cdef PetscFileMode cmode = PETSC_FILE_MODE_WRITE
-        if mode is not None: filemode(mode)
+        if mode is not None: cmode = filemode(mode)
         cdef PetscViewer newvwr = NULL
         CHKERR( PetscViewerCreate(ccomm, &newvwr) )
         PetscCLEAR(self.obj); self.vwr = newvwr

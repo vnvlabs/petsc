@@ -158,6 +158,11 @@ PetscErrorCode TaoCreate(MPI_Comm comm, Tao *newtao)
 
   tao->bounded = PETSC_FALSE;
   tao->constrained = PETSC_FALSE;
+  tao->eq_constrained = PETSC_FALSE;
+  tao->ineq_constrained = PETSC_FALSE;
+  tao->ineq_doublesided = PETSC_FALSE;
+
+  tao->recycle = PETSC_FALSE;
 
   tao->header_printed = PETSC_FALSE;
 
@@ -272,7 +277,7 @@ PetscErrorCode TaoSetUp(Tao tao)
   PetscFunctionReturn(0);
 }
 
-/*@
+/*@C
   TaoDestroy - Destroys the TAO context that was created with
   TaoCreate()
 
@@ -547,6 +552,11 @@ PetscErrorCode TaoSetFromOptions(Tao tao)
       ierr = TaoSetHessianRoutine(tao,H,H,TaoDefaultComputeHessianMFFD,NULL);CHKERRQ(ierr);
       ierr = MatDestroy(&H);CHKERRQ(ierr);
     }
+    flg = PETSC_FALSE;
+    ierr = PetscOptionsBool("-tao_recycle_history","enable recycling/re-using information from the previous TaoSolve() call for some algorithms","TaoSetRecycleHistory",flg,&flg,NULL);CHKERRQ(ierr);
+    if (flg) {
+      ierr = TaoSetRecycleHistory(tao, PETSC_TRUE);CHKERRQ(ierr);
+    }
     ierr = PetscOptionsEnum("-tao_subset_type","subset type","",TaoSubSetTypes,(PetscEnum)tao->subset_type,(PetscEnum*)&tao->subset_type,NULL);CHKERRQ(ierr);
 
     if (tao->ops->setfromoptions) {
@@ -753,6 +763,73 @@ PetscErrorCode TaoView(Tao tao, PetscViewer viewer)
     ierr = TaoGetType(tao,&type);CHKERRQ(ierr);
     ierr = PetscViewerStringSPrintf(viewer," %-3.3s",type);CHKERRQ(ierr);
   }
+  PetscFunctionReturn(0);
+}
+
+/*@
+  TaoSetRecycleHistory - Sets the boolean flag to enable/disable re-using
+  iterate information from the previous TaoSolve(). This feature is disabled by
+  default.
+
+  For conjugate gradient methods (BNCG), this re-uses the latest search direction
+  from the previous TaoSolve() call when computing the first search direction in a
+  new solution. By default, CG methods set the first search direction to the
+  negative gradient.
+
+  For quasi-Newton family of methods (BQNLS, BQNKLS, BQNKTR, BQNKTL), this re-uses
+  the accumulated quasi-Newton Hessian approximation from the previous TaoSolve()
+  call. By default, QN family of methods reset the initial Hessian approximation to
+  the identity matrix.
+
+  For any other algorithm, this setting has no effect.
+
+  Logically collective on Tao
+
+  Input Parameters:
++ tao - the Tao context
+- recycle - boolean flag
+
+  Options Database Keys:
+. -tao_recycle_history
+
+  Level: intermediate
+
+.seealso: TaoSetRecycleHistory(), TAOBNCG, TAOBQNLS, TAOBQNKLS, TAOBQNKTR, TAOBQNKTL
+
+@*/
+PetscErrorCode TaoSetRecycleHistory(Tao tao, PetscBool recycle)
+{
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(tao,TAO_CLASSID,1);
+  tao->recycle = recycle;
+  PetscFunctionReturn(0);
+}
+
+/*@
+  TaoGetRecycleHistory - Retrieve the boolean flag for re-using iterate information
+  from the previous TaoSolve(). This feature is disabled by default.
+
+  Logically collective on Tao
+
+  Input Parameters:
+, tao - the Tao context
+
+  Output Parameters:
+, recycle - boolean flag
+
+  Options Database Keys:
+. -tao_recycle_history
+
+  Level: intermediate
+
+.seealso: TaoGetRecycleHistory(), TAOBNCG, TAOBQNLS, TAOBQNKLS, TAOBQNKTR, TAOBQNKTL
+
+@*/
+PetscErrorCode TaoGetRecycleHistory(Tao tao, PetscBool *recycle)
+{
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(tao,TAO_CLASSID,1);
+  *recycle = tao->recycle;
   PetscFunctionReturn(0);
 }
 
@@ -1474,7 +1551,7 @@ PetscErrorCode TaoSetMonitor(Tao tao, PetscErrorCode (*func)(Tao, void*), void *
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(tao,TAO_CLASSID,1);
-  if (tao->numbermonitors >= MAXTAOMONITORS) SETERRQ1(PetscObjectComm((PetscObject)tao),1,"Cannot attach another monitor -- max=",MAXTAOMONITORS);
+  if (tao->numbermonitors >= MAXTAOMONITORS) SETERRQ1(PetscObjectComm((PetscObject)tao),PETSC_ERR_SUP,"Cannot attach another monitor -- max=%d",MAXTAOMONITORS);
 
   for (i=0; i<tao->numbermonitors;i++) {
     ierr = PetscMonitorCompare((PetscErrorCode (*)(void))func,ctx,dest,(PetscErrorCode (*)(void))tao->monitor[i],tao->monitorcontext[i],tao->monitordestroy[i],&identical);CHKERRQ(ierr);
@@ -2778,15 +2855,15 @@ PetscErrorCode  TaoGetGradientNorm(Tao tao, Mat *M)
   PetscFunctionReturn(0);
 }
 
-/*c
+/*@C
    TaoGradientNorm - Compute the norm with respect to the inner product the user has set.
 
    Collective on tao
 
    Input Parameter:
-.  tao      - the Tao context
++  tao      - the Tao context
 .  gradient - the gradient to be computed
-.  norm     - the norm type
+-  norm     - the norm type
 
    Output Parameter:
 .  gnorm    - the gradient norm

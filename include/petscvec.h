@@ -143,6 +143,7 @@ PETSC_EXTERN PetscErrorCode VecMDot(Vec,PetscInt,const Vec[],PetscScalar[]);
 PETSC_EXTERN PetscErrorCode VecMTDot(Vec,PetscInt,const Vec[],PetscScalar[]);
 PETSC_EXTERN PetscErrorCode VecGetSubVector(Vec,IS,Vec*);
 PETSC_EXTERN PetscErrorCode VecRestoreSubVector(Vec,IS,Vec*);
+PETSC_EXTERN PetscErrorCode VecConcatenate(PetscInt,const Vec[],Vec*,IS*[]);
 
 /*E
     NormType - determines what type of norm to compute
@@ -191,7 +192,7 @@ M*/
    Level: beginner
 
 .seealso:  NormType, MatNorm(), VecNorm(), VecNormBegin(), VecNormEnd(), NORM_1, NORM_2,
-           NORM_FROBINIUS, NORM_1_AND_2
+           NORM_FROBENIUS, NORM_1_AND_2
 
 M*/
 
@@ -201,7 +202,7 @@ M*/
    Level: beginner
 
 .seealso:  NormType, MatNorm(), VecNorm(), VecNormBegin(), VecNormEnd(), NORM_1, NORM_2,
-           NORM_FROBINIUS, NORM_INFINITY
+           NORM_FROBENIUS, NORM_INFINITY
 
 M*/
 

@@ -241,6 +241,10 @@ PETSC_INTERN PetscErrorCode MatConvert_Dense_ScaLAPACK(Mat,MatType,MatReuse,Mat*
 PETSC_INTERN PetscErrorCode MatSetPreallocationCOO_Basic(Mat,PetscInt,const PetscInt[],const PetscInt[]);
 PETSC_INTERN PetscErrorCode MatSetValuesCOO_Basic(Mat,const PetscScalar[],InsertMode);
 
+/* these callbacks rely on the old matrix function pointers for
+   matmat operations. They are unsafe, and should be removed.
+   However, the amount of work needed to clean up all the
+   implementations is not negligible */
 PETSC_INTERN PetscErrorCode MatProductSymbolic_AB(Mat);
 PETSC_INTERN PetscErrorCode MatProductNumeric_AB(Mat);
 PETSC_INTERN PetscErrorCode MatProductSymbolic_AtB(Mat);
@@ -251,11 +255,16 @@ PETSC_INTERN PetscErrorCode MatProductNumeric_PtAP(Mat);
 PETSC_INTERN PetscErrorCode MatProductNumeric_RARt(Mat);
 PETSC_INTERN PetscErrorCode MatProductSymbolic_ABC(Mat);
 PETSC_INTERN PetscErrorCode MatProductNumeric_ABC(Mat);
+
 PETSC_INTERN PetscErrorCode MatProductCreate_Private(Mat,Mat,Mat,Mat);
+/* this callback handles all the different triple products and
+   does not rely on the function pointers; used by cuSPARSE and KOKKOS-KERNELS */
+PETSC_INTERN PetscErrorCode MatProductSymbolic_ABC_Basic(Mat);
+
 
 #if defined(PETSC_USE_DEBUG)
 #  define MatCheckPreallocated(A,arg) do {                              \
-    if (PetscUnlikely(!(A)->preallocated)) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Must call MatXXXSetPreallocation() or MatSetUp() on argument %D \"%s\" before %s()",(arg),#A,PETSC_FUNCTION_NAME); \
+    if (PetscUnlikely(!(A)->preallocated)) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Must call MatXXXSetPreallocation(), MatSetUp() or the matrix has not yet been factored on argument %D \"%s\" before %s()",(arg),#A,PETSC_FUNCTION_NAME); \
   } while (0)
 #else
 #  define MatCheckPreallocated(A,arg) do {} while (0)
@@ -407,7 +416,7 @@ typedef struct { /* used by MatProduct() */
   char           *alg;
   Mat            A,B,C,Dwork;
   PetscReal      fill;
-  PetscBool      api_user; /* used by MatProductSetFromOptions_xxx() to distinguish command line options */
+  PetscBool      api_user; /* used to distinguish command line options and to indicate the matrix values are ready to be consumed at symbolic phase if needed */
 
   /* Some products may display the information on the algorithm used */
   PetscErrorCode (*view)(Mat,PetscViewer);
@@ -441,7 +450,8 @@ struct _p_Mat {
   PetscLayout            rmap,cmap;
   void                   *data;            /* implementation-specific data */
   MatFactorType          factortype;       /* MAT_FACTOR_LU, ILU, CHOLESKY or ICC */
-  PetscBool              useordering;      /* factorization using ordering provide to routine (most PETSc implementations) */
+  PetscBool              canuseordering;   /* factorization can use ordering provide to routine (most PETSc implementations) */
+  MatOrderingType        preferredordering[MAT_FACTOR_NUM_TYPES] ;/* what is the preferred (or default) ordering for the matrix solver type */
   PetscBool              assembled;        /* is the matrix assembled? */
   PetscBool              was_assembled;    /* new values inserted into assembled mat */
   PetscInt               num_ass;          /* number of times matrix has been assembled */
@@ -483,11 +493,14 @@ struct _p_Mat {
   PetscInt               nblocks,*bsizes;   /* support for MatSetVariableBlockSizes() */
   char                   *defaultvectype;
   Mat_Product            *product;
+  PetscBool              form_explicit_transpose; /* hint to generate an explicit mat tranpsose for operations like MatMultTranspose() */
+  PetscBool              transupdated;            /* whether or not the explicitly generated transpose is up-to-date */
 };
 
 PETSC_INTERN PetscErrorCode MatAXPY_Basic(Mat,PetscScalar,Mat,MatStructure);
 PETSC_INTERN PetscErrorCode MatAXPY_BasicWithPreallocation(Mat,Mat,PetscScalar,Mat,MatStructure);
 PETSC_INTERN PetscErrorCode MatAXPY_Basic_Preallocate(Mat,Mat,Mat*);
+PETSC_INTERN PetscErrorCode MatAXPY_Dense_Nest(Mat,PetscScalar,Mat);
 
 /*
     Utility for MatFactor (Schur complement)
@@ -1783,8 +1796,6 @@ PETSC_EXTERN PetscLogEvent MAT_GetMultiProcBlock;
 PETSC_EXTERN PetscLogEvent MAT_CUSPARSECopyToGPU;
 PETSC_EXTERN PetscLogEvent MAT_CUSPARSECopyFromGPU;
 PETSC_EXTERN PetscLogEvent MAT_CUSPARSEGenerateTranspose;
-PETSC_EXTERN PetscLogEvent MAT_CUSPARSEPreallCOO;
-PETSC_EXTERN PetscLogEvent MAT_CUSPARSESetVCOO;
 PETSC_EXTERN PetscLogEvent MAT_CUSPARSESolveAnalysis;
 PETSC_EXTERN PetscLogEvent MAT_SetValuesBatch;
 PETSC_EXTERN PetscLogEvent MAT_ViennaCLCopyToGPU;
@@ -1795,6 +1806,8 @@ PETSC_EXTERN PetscLogEvent MAT_Residual;
 PETSC_EXTERN PetscLogEvent MAT_SetRandom;
 PETSC_EXTERN PetscLogEvent MAT_FactorFactS;
 PETSC_EXTERN PetscLogEvent MAT_FactorInvS;
+PETSC_EXTERN PetscLogEvent MAT_PreallCOO;
+PETSC_EXTERN PetscLogEvent MAT_SetVCOO;
 PETSC_EXTERN PetscLogEvent MATCOLORING_Apply;
 PETSC_EXTERN PetscLogEvent MATCOLORING_Comm;
 PETSC_EXTERN PetscLogEvent MATCOLORING_Local;

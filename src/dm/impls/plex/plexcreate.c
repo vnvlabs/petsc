@@ -34,7 +34,7 @@ PetscErrorCode DMPlexCreateDoublet(MPI_Comm comm, PetscInt dim, PetscBool simple
   ierr = DMCreate(comm, &dm);CHKERRQ(ierr);
   ierr = DMSetType(dm, DMPLEX);CHKERRQ(ierr);
   ierr = DMSetDimension(dm, dim);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(comm, &rank);CHKERRMPI(ierr);
   switch (dim) {
   case 2:
     if (simplex) {ierr = PetscObjectSetName((PetscObject) dm, "triangular");CHKERRQ(ierr);}
@@ -173,7 +173,7 @@ PetscErrorCode DMPlexCreateSquareBoundary(DM dm, const PetscReal lower[], const 
     markerRight  = 2;
     markerLeft   = 4;
   }
-  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm), &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm), &rank);CHKERRMPI(ierr);
   if (!rank) {
     PetscInt e, ex, ey;
 
@@ -298,7 +298,7 @@ PetscErrorCode DMPlexCreateCubeBoundary(DM dm, const PetscReal lower[], const Pe
 
   PetscFunctionBegin;
   if ((faces[0] < 1) || (faces[1] < 1) || (faces[2] < 1)) SETERRQ(PetscObjectComm((PetscObject)dm), PETSC_ERR_SUP, "Must have at least 1 face per side");
-  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm), &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm), &rank);CHKERRMPI(ierr);
   vertices[0] = faces[0]+1; vertices[1] = faces[1]+1; vertices[2] = faces[2]+1;
   numVertices = vertices[0]*vertices[1]*vertices[2];
   if (!rank) {
@@ -457,7 +457,7 @@ static PetscErrorCode DMPlexCreateLineMesh_Internal(MPI_Comm comm,PetscInt segme
   ierr = DMCreateLabel(*dm,"marker");CHKERRQ(ierr);
   ierr = DMCreateLabel(*dm,"Face Sets");CHKERRQ(ierr);
 
-  ierr = MPI_Comm_rank(comm,&rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
   if (!rank) numCells = segments;
   if (!rank) numVerts = segments + (wrap ? 0 : 1);
 
@@ -529,7 +529,7 @@ static PetscErrorCode DMPlexCreateCubeMesh_Internal(DM dm, const PetscReal lower
 
   PetscFunctionBegin;
   ierr = DMGetDimension(dm,&dim);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm), &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm), &rank);CHKERRMPI(ierr);
   ierr = DMCreateLabel(dm,"marker");CHKERRQ(ierr);
   ierr = DMCreateLabel(dm,"Face Sets");CHKERRQ(ierr);
   ierr = PetscOptionsGetBool(((PetscObject) dm)->options,((PetscObject) dm)->prefix, "-dm_plex_periodic_cut", &cutMarker, NULL);CHKERRQ(ierr);
@@ -1429,7 +1429,7 @@ PetscErrorCode DMPlexCreateHexCylinderMesh(MPI_Comm comm, PetscInt numRefine, DM
 
   PetscFunctionBegin;
   PetscValidPointer(dm, 4);
-  ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(comm, &rank);CHKERRMPI(ierr);
   ierr = PetscOptionsGetInt(NULL, NULL, "-dm_plex_hex_cyl_refine", &numRefine, NULL);CHKERRQ(ierr);
   if (numRefine < 0) SETERRQ1(comm, PETSC_ERR_ARG_OUTOFRANGE, "Number of refinements %D cannot be negative", numRefine);
   ierr = PetscOptionsGetEnum(NULL, NULL, "-dm_plex_box_bd", DMBoundaryTypes, (PetscEnum *) &periodicZ, NULL);CHKERRQ(ierr);
@@ -1698,7 +1698,7 @@ PetscErrorCode DMPlexCreateWedgeCylinderMesh(MPI_Comm comm, PetscInt n, PetscBoo
 
   PetscFunctionBegin;
   PetscValidPointer(dm, 3);
-  ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(comm, &rank);CHKERRMPI(ierr);
   if (n < 0) SETERRQ1(comm, PETSC_ERR_ARG_OUTOFRANGE, "Number of wedges %D cannot be negative", n);
   ierr = DMCreate(comm, dm);CHKERRQ(ierr);
   ierr = DMSetType(*dm, DMPLEX);CHKERRQ(ierr);
@@ -1838,7 +1838,7 @@ PetscErrorCode DMPlexCreateSphereMesh(MPI_Comm comm, PetscInt dim, PetscBool sim
   ierr = DMSetType(*dm, DMPLEX);CHKERRQ(ierr);
   ierr = DMSetDimension(*dm, dim);CHKERRQ(ierr);
   ierr = DMSetCoordinateDim(*dm, dim+1);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject) *dm), &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject) *dm), &rank);CHKERRMPI(ierr);
   switch (dim) {
   case 2:
     if (simplex) {
@@ -2285,7 +2285,6 @@ static PetscErrorCode DMPlexReplace_Static(DM dm, DM dmNew)
 {
   PetscSF               sf;
   DM                    coordDM, coarseDM;
-  DMField               coordField;
   Vec                   coords;
   PetscBool             isper;
   const PetscReal      *maxCell, *L;
@@ -2297,12 +2296,13 @@ static PetscErrorCode DMPlexReplace_Static(DM dm, DM dmNew)
   ierr = DMSetPointSF(dm, sf);CHKERRQ(ierr);
   ierr = DMGetCoordinateDM(dmNew, &coordDM);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(dmNew, &coords);CHKERRQ(ierr);
-  ierr = DMGetCoordinateField(dmNew, &coordField);CHKERRQ(ierr);
   ierr = DMSetCoordinateDM(dm, coordDM);CHKERRQ(ierr);
   ierr = DMSetCoordinatesLocal(dm, coords);CHKERRQ(ierr);
-  ierr = DMSetCoordinateField(dm, coordField);CHKERRQ(ierr);
-  ierr = DMGetPeriodicity(dm, &isper, &maxCell, &L, &bd);CHKERRQ(ierr);
-  ierr = DMSetPeriodicity(dmNew, isper, maxCell, L, bd);CHKERRQ(ierr);
+  /* Do not want to create the coordinate field if it does not already exist, so do not call DMGetCoordinateField() */
+  ierr = DMFieldDestroy(&dm->coordinateField);CHKERRQ(ierr);
+  dm->coordinateField = dmNew->coordinateField;
+  ierr = DMGetPeriodicity(dmNew, &isper, &maxCell, &L, &bd);CHKERRQ(ierr);
+  ierr = DMSetPeriodicity(dm, isper, maxCell, L, bd);CHKERRQ(ierr);
   ierr = DMDestroy_Plex(dm);CHKERRQ(ierr);
   ierr = DMInitialize_Plex(dm);CHKERRQ(ierr);
   dm->data = dmNew->data;
@@ -2324,6 +2324,7 @@ static PetscErrorCode DMPlexSwap_Static(DM dmA, DM dmB)
   DM              coordDMA, coordDMB;
   Vec             coordsA,  coordsB;
   PetscSF         sfA,      sfB;
+  DMField         fieldTmp;
   void            *tmp;
   DMLabelLink     listTmp;
   DMLabel         depthTmp;
@@ -2352,6 +2353,9 @@ static PetscErrorCode DMPlexSwap_Static(DM dmA, DM dmB)
   ierr = DMSetCoordinatesLocal(dmB, coordsA);CHKERRQ(ierr);
   ierr = PetscObjectDereference((PetscObject) coordsA);CHKERRQ(ierr);
 
+  fieldTmp             = dmA->coordinateField;
+  dmA->coordinateField = dmB->coordinateField;
+  dmB->coordinateField = fieldTmp;
   tmp       = dmA->data;
   dmA->data = dmB->data;
   dmB->data = tmp;
@@ -2600,6 +2604,7 @@ static PetscErrorCode DMGetNeighbors_Plex(DM dm, PetscInt *nranks, const PetscMP
   PetscFunctionBegin;
   ierr = DMGetPointSF(dm, &sf);CHKERRQ(ierr);
   if (!data->neighbors) {
+    ierr = PetscSFSetUp(sf);CHKERRQ(ierr);
     ierr = PetscSFGetRootRanks(sf, &njranks, &jranks, NULL, NULL, NULL);CHKERRQ(ierr);
     ierr = PetscSFGetLeafRanks(sf, &niranks, &iranks, NULL, NULL);CHKERRQ(ierr);
     ierr = PetscMalloc1(njranks + niranks + 1, &data->neighbors);CHKERRQ(ierr);
@@ -2617,6 +2622,8 @@ static PetscErrorCode DMGetNeighbors_Plex(DM dm, PetscInt *nranks, const PetscMP
   }
   PetscFunctionReturn(0);
 }
+
+PETSC_INTERN PetscErrorCode DMInterpolateSolution_Plex(DM, DM, Mat, Vec, Vec);
 
 static PetscErrorCode DMInitialize_Plex(DM dm)
 {
@@ -2670,6 +2677,7 @@ static PetscErrorCode DMInitialize_Plex(DM dm)
   ierr = PetscObjectComposeFunction((PetscObject)dm,"DMSetUpGLVisViewer_C",DMSetUpGLVisViewer_Plex);CHKERRQ(ierr);
   ierr = PetscObjectComposeFunction((PetscObject)dm,"DMCreateNeumannOverlap_C",DMCreateNeumannOverlap_Plex);CHKERRQ(ierr);
   ierr = PetscObjectComposeFunction((PetscObject)dm,"DMPlexGetOverlap_C",DMPlexGetOverlap_Plex);CHKERRQ(ierr);
+  ierr = PetscObjectComposeFunction((PetscObject)dm,"DMInterpolateSolution_C",DMInterpolateSolution_Plex);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -2869,18 +2877,17 @@ $        3
 @*/
 PetscErrorCode DMPlexBuildFromCellListParallel(DM dm, PetscInt numCells, PetscInt numVertices, PetscInt NVertices, PetscInt numCorners, const PetscInt cells[], PetscSF *vertexSF)
 {
-  PetscSF         sfPoint, sfVert;
-  PetscLayout     vLayout;
-  PetscSFNode    *vertexLocal, *vertexOwner, *remoteVertex;
-  PetscInt        numVerticesAdj, *verticesAdj, numVerticesGhost = 0, *localVertex, *cones, c, p, v, g, dim;
+  PetscSF         sfPoint;
+  PetscLayout     layout;
+  PetscInt        numVerticesAdj, *verticesAdj, *cones, c, p, dim;
   PetscMPIInt     rank, size;
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
   PetscValidLogicalCollectiveInt(dm,NVertices,4);
   ierr = PetscLogEventBegin(DMPLEX_BuildFromCellList,dm,0,0,0);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject) dm), &rank);CHKERRQ(ierr);
-  ierr = MPI_Comm_size(PetscObjectComm((PetscObject) dm), &size);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(PetscObjectComm((PetscObject) dm), &rank);CHKERRMPI(ierr);
+  ierr = MPI_Comm_size(PetscObjectComm((PetscObject) dm), &size);CHKERRMPI(ierr);
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
   /* Get/check global number of vertices */
   {
@@ -2891,17 +2898,11 @@ PetscErrorCode DMPlexBuildFromCellListParallel(DM dm, PetscInt numCells, PetscIn
     NVerticesInCells = PETSC_MIN_INT;
     for (i=0; i<len; i++) if (cells[i] > NVerticesInCells) NVerticesInCells = cells[i];
     ++NVerticesInCells;
-    ierr = MPI_Allreduce(MPI_IN_PLACE, &NVerticesInCells, 1, MPIU_INT, MPI_MAX, PetscObjectComm((PetscObject) dm));CHKERRQ(ierr);
+    ierr = MPI_Allreduce(MPI_IN_PLACE, &NVerticesInCells, 1, MPIU_INT, MPI_MAX, PetscObjectComm((PetscObject) dm));CHKERRMPI(ierr);
 
     if (numVertices == PETSC_DECIDE && NVertices == PETSC_DECIDE) NVertices = NVerticesInCells;
     else if (NVertices != PETSC_DECIDE && NVertices < NVerticesInCells) SETERRQ2(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Specified global number of vertices %D must be greater than or equal to the number of vertices in cells %D",NVertices,NVerticesInCells);
   }
-  /* Partition vertices */
-  ierr = PetscLayoutCreate(PetscObjectComm((PetscObject) dm), &vLayout);CHKERRQ(ierr);
-  ierr = PetscLayoutSetLocalSize(vLayout, numVertices);CHKERRQ(ierr);
-  ierr = PetscLayoutSetSize(vLayout, NVertices);CHKERRQ(ierr);
-  ierr = PetscLayoutSetBlockSize(vLayout, 1);CHKERRQ(ierr);
-  ierr = PetscLayoutSetUp(vLayout);CHKERRQ(ierr);
   /* Count locally unique vertices */
   {
     PetscHSetI vhash;
@@ -2937,44 +2938,28 @@ PetscErrorCode DMPlexBuildFromCellListParallel(DM dm, PetscInt numCells, PetscIn
       cones[c*numCorners+p] = lv+numCells;
     }
   }
-  /* Create SF for vertices */
-  ierr = PetscSFCreate(PetscObjectComm((PetscObject)dm), &sfVert);CHKERRQ(ierr);
-  ierr = PetscObjectSetName((PetscObject) sfVert, "Vertex Ownership SF");CHKERRQ(ierr);
-  ierr = PetscSFSetFromOptions(sfVert);CHKERRQ(ierr);
-  ierr = PetscSFSetGraphLayout(sfVert, vLayout, numVerticesAdj, NULL, PETSC_OWN_POINTER, verticesAdj);CHKERRQ(ierr);
+  /* Build point sf */
+  ierr = PetscLayoutCreate(PetscObjectComm((PetscObject)dm), &layout);CHKERRQ(ierr);
+  ierr = PetscLayoutSetSize(layout, NVertices);CHKERRQ(ierr);
+  ierr = PetscLayoutSetLocalSize(layout, numVertices);CHKERRQ(ierr);
+  ierr = PetscLayoutSetBlockSize(layout, 1);CHKERRQ(ierr);
+  ierr = PetscSFCreateByMatchingIndices(layout, numVerticesAdj, verticesAdj, NULL, numCells, numVerticesAdj, verticesAdj, NULL, numCells, vertexSF, &sfPoint);CHKERRQ(ierr);
+  ierr = PetscLayoutDestroy(&layout);CHKERRQ(ierr);
   ierr = PetscFree(verticesAdj);CHKERRQ(ierr);
-  /* Build pointSF */
-  ierr = PetscMalloc2(numVerticesAdj, &vertexLocal, numVertices, &vertexOwner);CHKERRQ(ierr);
-  for (v = 0; v < numVerticesAdj; ++v) {vertexLocal[v].index = v+numCells; vertexLocal[v].rank = rank;}
-  for (v = 0; v < numVertices;    ++v) {vertexOwner[v].index = -1;         vertexOwner[v].rank = -1;}
-  ierr = PetscSFReduceBegin(sfVert, MPIU_2INT, vertexLocal, vertexOwner, MPI_MAXLOC);CHKERRQ(ierr);
-  ierr = PetscSFReduceEnd(sfVert, MPIU_2INT, vertexLocal, vertexOwner, MPI_MAXLOC);CHKERRQ(ierr);
-  for (v = 0; v < numVertices;    ++v) if (vertexOwner[v].rank < 0) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Global vertex %D was unclaimed", v + vLayout->rstart);
-  ierr = PetscSFBcastBegin(sfVert, MPIU_2INT, vertexOwner, vertexLocal);CHKERRQ(ierr);
-  ierr = PetscSFBcastEnd(sfVert, MPIU_2INT, vertexOwner, vertexLocal);CHKERRQ(ierr);
-  for (v = 0; v < numVerticesAdj; ++v) if (vertexLocal[v].rank != rank) ++numVerticesGhost;
-  ierr = PetscMalloc1(numVerticesGhost, &localVertex);CHKERRQ(ierr);
-  ierr = PetscMalloc1(numVerticesGhost, &remoteVertex);CHKERRQ(ierr);
-  for (v = 0, g = 0; v < numVerticesAdj; ++v) {
-    if (vertexLocal[v].rank != rank) {
-      localVertex[g]        = v+numCells;
-      remoteVertex[g].index = vertexLocal[v].index;
-      remoteVertex[g].rank  = vertexLocal[v].rank;
-      ++g;
-    }
-  }
-  ierr = PetscFree2(vertexLocal, vertexOwner);CHKERRQ(ierr);
-  if (g != numVerticesGhost) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid number of vertex ghosts %D should be %D", g, numVerticesGhost);
-  ierr = DMGetPointSF(dm, &sfPoint);CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject) sfPoint, "point SF");CHKERRQ(ierr);
-  ierr = PetscSFSetGraph(sfPoint, numCells+numVerticesAdj, numVerticesGhost, localVertex, PETSC_OWN_POINTER, remoteVertex, PETSC_OWN_POINTER);CHKERRQ(ierr);
-  ierr = PetscLayoutDestroy(&vLayout);CHKERRQ(ierr);
+  if (dm->sf) {
+    const char *prefix;
+
+    ierr = PetscObjectGetOptionsPrefix((PetscObject)dm->sf, &prefix);CHKERRQ(ierr);
+    ierr = PetscObjectSetOptionsPrefix((PetscObject)sfPoint, prefix);CHKERRQ(ierr);
+  }
+  ierr = DMSetPointSF(dm, sfPoint);CHKERRQ(ierr);
+  ierr = PetscSFDestroy(&sfPoint);CHKERRQ(ierr);
+  if (vertexSF) {ierr = PetscObjectSetName((PetscObject)(*vertexSF), "Vertex Ownership SF");CHKERRQ(ierr);}
   /* Fill in the rest of the topology structure */
   ierr = DMPlexSymmetrize(dm);CHKERRQ(ierr);
   ierr = DMPlexStratify(dm);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(DMPLEX_BuildFromCellList,dm,0,0,0);CHKERRQ(ierr);
-  if (vertexSF) *vertexSF = sfVert;
-  else {ierr = PetscSFDestroy(&sfVert);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 
@@ -3029,23 +3014,23 @@ PetscErrorCode DMPlexBuildCoordinatesFromCellListParallel(DM dm, PetscInt spaceD
     MPI_Datatype coordtype;
 
     /* Need a temp buffer for coords if we have complex/single */
-    ierr = MPI_Type_contiguous(spaceDim, MPIU_SCALAR, &coordtype);CHKERRQ(ierr);
-    ierr = MPI_Type_commit(&coordtype);CHKERRQ(ierr);
+    ierr = MPI_Type_contiguous(spaceDim, MPIU_SCALAR, &coordtype);CHKERRMPI(ierr);
+    ierr = MPI_Type_commit(&coordtype);CHKERRMPI(ierr);
 #if defined(PETSC_USE_COMPLEX)
     {
     PetscScalar *svertexCoords;
     PetscInt    i;
     ierr = PetscMalloc1(numVertices*spaceDim,&svertexCoords);CHKERRQ(ierr);
     for (i=0; i<numVertices*spaceDim; i++) svertexCoords[i] = vertexCoords[i];
-    ierr = PetscSFBcastBegin(sfVert, coordtype, svertexCoords, coords);CHKERRQ(ierr);
-    ierr = PetscSFBcastEnd(sfVert, coordtype, svertexCoords, coords);CHKERRQ(ierr);
+    ierr = PetscSFBcastBegin(sfVert, coordtype, svertexCoords, coords,MPI_REPLACE);CHKERRQ(ierr);
+    ierr = PetscSFBcastEnd(sfVert, coordtype, svertexCoords, coords,MPI_REPLACE);CHKERRQ(ierr);
     ierr = PetscFree(svertexCoords);CHKERRQ(ierr);
     }
 #else
-    ierr = PetscSFBcastBegin(sfVert, coordtype, vertexCoords, coords);CHKERRQ(ierr);
-    ierr = PetscSFBcastEnd(sfVert, coordtype, vertexCoords, coords);CHKERRQ(ierr);
+    ierr = PetscSFBcastBegin(sfVert, coordtype, vertexCoords, coords,MPI_REPLACE);CHKERRQ(ierr);
+    ierr = PetscSFBcastEnd(sfVert, coordtype, vertexCoords, coords,MPI_REPLACE);CHKERRQ(ierr);
 #endif
-    ierr = MPI_Type_free(&coordtype);CHKERRQ(ierr);
+    ierr = MPI_Type_free(&coordtype);CHKERRMPI(ierr);
   }
   ierr = VecRestoreArray(coordinates, &coords);CHKERRQ(ierr);
   ierr = DMSetCoordinatesLocal(dm, coordinates);CHKERRQ(ierr);
@@ -3503,7 +3488,7 @@ PetscErrorCode DMPlexCreateCellVertexFromFile(MPI_Comm comm, const char filename
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
-  ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(comm, &rank);CHKERRMPI(ierr);
   ierr = PetscViewerCreate(comm, &viewer);CHKERRQ(ierr);
   ierr = PetscViewerSetType(viewer, PETSCVIEWERASCII);CHKERRQ(ierr);
   ierr = PetscViewerFileSetMode(viewer, FILE_MODE_READ);CHKERRQ(ierr);
@@ -3638,7 +3623,7 @@ PetscErrorCode DMPlexCreateFromFile(MPI_Comm comm, const char filename[], PetscB
   PetscValidPointer(dm, 4);
   ierr = DMInitializePackage();CHKERRQ(ierr);
   ierr = PetscLogEventBegin(DMPLEX_CreateFromFile,0,0,0,0);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(comm, &rank);CHKERRMPI(ierr);
   ierr = PetscStrlen(filename, &len);CHKERRQ(ierr);
   if (!len) SETERRQ(comm, PETSC_ERR_ARG_WRONG, "Filename must be a valid path");
   ierr = PetscStrncmp(&filename[PetscMax(0,len-4)], extGmsh,    4, &isGmsh);CHKERRQ(ierr);

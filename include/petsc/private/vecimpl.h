@@ -14,6 +14,7 @@
 
 PETSC_EXTERN PetscBool VecRegisterAllCalled;
 PETSC_EXTERN PetscErrorCode VecRegisterAll(void);
+PETSC_EXTERN MPI_Op MPIU_MAXINDEX_OP, MPIU_MININDEX_OP;
 
 /* ----------------------------------------------------------------------------*/
 
@@ -100,6 +101,7 @@ struct _VecOps {
   PetscErrorCode (*getarrayreadandmemtype)(Vec,const PetscScalar**,PetscMemType*);
   PetscErrorCode (*restorearrayandmemtype)(Vec,PetscScalar**);
   PetscErrorCode (*restorearrayreadandmemtype)(Vec,const PetscScalar**);
+  PetscErrorCode (*concatenate)(PetscInt,const Vec[],Vec*,IS*[]);
 };
 
 /*
@@ -151,6 +153,7 @@ struct _p_Vec {
   size_t                 minimum_bytes_pinned_memory; /* minimum data size in bytes for which pinned memory will be allocated */
   PetscBool              pinned_memory; /* PETSC_TRUE if the current host allocation has been made from pinned memory. */
 #endif
+  char                   *defaultrandtype;
 };
 
 PETSC_EXTERN PetscLogEvent VEC_SetRandom;
@@ -319,7 +322,7 @@ PETSC_EXTERN PetscErrorCode PetscSectionRestoreField_Internal(PetscSection, Pets
   } while (0)
 
 #define VecCheckSize(x,ar1,n,N) do { \
-    if ((x)->map->N != N) SETERRQ(PetscObjectComm((PetscObject)x),PETSC_ERR_ARG_INCOMP,"Incorrect vector global size: parameter # %d global size %D != %D",ar1,(x)->map->N, N); \
+    if ((x)->map->N != N) SETERRQ3(PetscObjectComm((PetscObject)x),PETSC_ERR_ARG_INCOMP,"Incorrect vector global size: parameter # %d global size %D != %D",ar1,(x)->map->N, N); \
     VecCheckLocalSize(x,ar1,n); \
   } while (0)
 
