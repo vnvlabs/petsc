@@ -273,6 +273,7 @@ static const char *PetscErrorStrings[] = {
   /*94 */ "Example/application run with number of MPI ranks it does not support",
   /*95 */ "Missing or incorrect user input ",
   /*96 */ "GPU resources unavailable ",
+  /*97 */ "GPU error ",
 };
 
 /*@C
@@ -754,6 +755,25 @@ PETSC_EXTERN const char* PetscCUBLASGetErrorName(cublasStatus_t status)
     case CUBLAS_STATUS_LICENSE_ERROR:    return "CUBLAS_STATUS_LICENSE_ERROR";
 #endif
     default:                             return "unknown error";
+  }
+}
+#endif
+
+#if defined(PETSC_HAVE_HIP)
+#include <petschipblas.h>
+PETSC_EXTERN const char* PetscHIPBLASGetErrorName(hipblasStatus_t status)
+{
+  switch(status) {
+    case HIPBLAS_STATUS_SUCCESS:          return "HIPBLAS_STATUS_SUCCESS";
+    case HIPBLAS_STATUS_NOT_INITIALIZED:  return "HIPBLAS_STATUS_NOT_INITIALIZED";
+    case HIPBLAS_STATUS_ALLOC_FAILED:     return "HIPBLAS_STATUS_ALLOC_FAILED";
+    case HIPBLAS_STATUS_INVALID_VALUE:    return "HIPBLAS_STATUS_INVALID_VALUE";
+    case HIPBLAS_STATUS_ARCH_MISMATCH:    return "HIPBLAS_STATUS_ARCH_MISMATCH";
+    case HIPBLAS_STATUS_MAPPING_ERROR:    return "HIPBLAS_STATUS_MAPPING_ERROR";
+    case HIPBLAS_STATUS_EXECUTION_FAILED: return "HIPBLAS_STATUS_EXECUTION_FAILED";
+    case HIPBLAS_STATUS_INTERNAL_ERROR:   return "HIPBLAS_STATUS_INTERNAL_ERROR";
+    case HIPBLAS_STATUS_NOT_SUPPORTED:    return "HIPBLAS_STATUS_NOT_SUPPORTED";
+    default:                              return "unknown error";
   }
 }
 #endif

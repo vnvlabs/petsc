@@ -47,7 +47,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscGetMemType(const void *data,PetscMemType
     hipError_t                   cerr;
     struct hipPointerAttribute_t attr;
     enum hipMemoryType           mtype;
-    cerr = hipPointerGetAttributes(&attr,data); /* Do not check error since before CUDA 11.0, passing a host pointer returns cudaErrorInvalidValue */
+    cerr = hipPointerGetAttributes(&attr,data);
     hipGetLastError(); /* Reset the last error */
     mtype = attr.memoryType;
     if (cerr == hipSuccess && mtype == hipMemoryTypeDevice) *type = PETSC_MEMTYPE_DEVICE;
@@ -105,13 +105,19 @@ PetscErrorCode PetscSFCreate(MPI_Comm comm,PetscSF *sf)
   b->use_gpu_aware_mpi    = use_gpu_aware_mpi;
   b->use_stream_aware_mpi = PETSC_FALSE;
   b->use_default_stream   = PETSC_TRUE; /* The assumption is true for PETSc internal use of SF */
+  /* Set the default */
   #if defined(PETSC_HAVE_KOKKOS) /* Prefer kokkos over cuda*/
     b->backend = PETSCSF_BACKEND_KOKKOS;
   #elif defined(PETSC_HAVE_CUDA)
     b->backend = PETSCSF_BACKEND_CUDA;
+  #elif defined(PETSC_HAVE_HIP)
+    b->backend = PETSCSF_BACKEND_HIP;
   #endif
 #endif
-  *sf = b;
+  b->vscat.from_n = -1;
+  b->vscat.to_n   = -1;
+  b->vscat.unit   = MPIU_SCALAR;
+ *sf = b;
   PetscFunctionReturn(0);
 }
 
@@ -248,6 +254,8 @@ PetscErrorCode PetscSFDestroy(PetscSF *sf)
   if (--((PetscObject)(*sf))->refct > 0) {*sf = NULL; PetscFunctionReturn(0);}
   ierr = PetscSFReset(*sf);CHKERRQ(ierr);
   if ((*sf)->ops->Destroy) {ierr = (*(*sf)->ops->Destroy)(*sf);CHKERRQ(ierr);}
+  ierr = PetscSFDestroy(&(*sf)->vscat.lsf);CHKERRQ(ierr);
+  if ((*sf)->vscat.bs > 1) {ierr = MPI_Type_free(&(*sf)->vscat.unit);CHKERRQ(ierr);}
   ierr = PetscHeaderDestroy(sf);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -308,7 +316,14 @@ PetscErrorCode PetscSFSetUp(PetscSF sf)
     sf->ops->Free   = PetscSFFree_Cuda;
   }
 #endif
+#if defined(PETSC_HAVE_HIP)
+  if (sf->backend == PETSCSF_BACKEND_HIP) {
+    sf->ops->Malloc = PetscSFMalloc_HIP;
+    sf->ops->Free   = PetscSFFree_HIP;
+  }
+#endif
 
+#
 #if defined(PETSC_HAVE_KOKKOS)
   if (sf->backend == PETSCSF_BACKEND_KOKKOS) {
     sf->ops->Malloc = PetscSFMalloc_Kokkos;
@@ -337,8 +352,8 @@ PetscErrorCode PetscSFSetUp(PetscSF sf)
 .  -sf_use_stream_aware_mpi  - Assume the underlying MPI is cuda-stream aware and SF won't sync streams for send/recv buffers passed to MPI (default: false).
                                If true, this option only works with -use_gpu_aware_mpi 1.
 
--  -sf_backend cuda | kokkos -Select the device backend SF uses. Currently SF has two backends: cuda and Kokkos.
-                              On CUDA devices, one can choose cuda or kokkos with the default being cuda. On other devices,
+-  -sf_backend cuda | hip | kokkos -Select the device backend SF uses. Currently SF has these backends: cuda, hip and Kokkos.
+                              On CUDA (HIP) devices, one can choose cuda (hip) or kokkos with the default being kokkos. On other devices,
                               the only available is kokkos.
 
    Level: intermediate
@@ -360,17 +375,19 @@ PetscErrorCode PetscSFSetFromOptions(PetscSF sf)
 #if defined(PETSC_HAVE_DEVICE)
   {
     char        backendstr[32] = {0};
-    PetscBool   isCuda = PETSC_FALSE,isKokkos = PETSC_FALSE,set;
+    PetscBool   isCuda = PETSC_FALSE,isHip = PETSC_FALSE,isKokkos = PETSC_FALSE,set;
     /* Change the defaults set in PetscSFCreate() with command line options */
     ierr = PetscOptionsBool("-sf_use_default_stream","Assume SF's input and output root/leafdata is computed on the default stream","PetscSFSetFromOptions",sf->use_default_stream,&sf->use_default_stream,NULL);CHKERRQ(ierr);
     ierr = PetscOptionsBool("-sf_use_stream_aware_mpi","Assume the underlying MPI is cuda-stream aware","PetscSFSetFromOptions",sf->use_stream_aware_mpi,&sf->use_stream_aware_mpi,NULL);CHKERRQ(ierr);
     ierr = PetscOptionsString("-sf_backend","Select the device backend SF uses","PetscSFSetFromOptions",NULL,backendstr,sizeof(backendstr),&set);CHKERRQ(ierr);
     ierr = PetscStrcasecmp("cuda",backendstr,&isCuda);CHKERRQ(ierr);
     ierr = PetscStrcasecmp("kokkos",backendstr,&isKokkos);CHKERRQ(ierr);
-  #if defined(PETSC_HAVE_CUDA)
+    ierr = PetscStrcasecmp("hip",backendstr,&isHip);CHKERRQ(ierr);
+  #if defined(PETSC_HAVE_CUDA) || defined(PETSC_HAVE_HIP)
     if (isCuda) sf->backend = PETSCSF_BACKEND_CUDA;
     else if (isKokkos) sf->backend = PETSCSF_BACKEND_KOKKOS;
-    else if (set) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"-sf_backend %s is not supported on cuda devices. You may choose cuda or kokkos (if installed)", backendstr);
+    else if (isHip) sf->backend = PETSCSF_BACKEND_HIP;
+    else if (set) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"-sf_backend %s is not supported. You may choose cuda, hip or kokkos (if installed)", backendstr);
   #elif defined(PETSC_HAVE_KOKKOS)
     if (set && !isKokkos) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"-sf_backend %s is not supported. You can only choose kokkos", backendstr);
   #endif
@@ -706,6 +723,7 @@ PetscErrorCode PetscSFDuplicate(PetscSF sf,PetscSFDuplicateOption opt,PetscSF *n
 {
   PetscSFType    type;
   PetscErrorCode ierr;
+  MPI_Datatype   dtype=MPIU_SCALAR;
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sf,PETSCSF_CLASSID,1);
@@ -726,6 +744,14 @@ PetscErrorCode PetscSFDuplicate(PetscSF sf,PetscSFDuplicateOption opt,PetscSF *n
       ierr = PetscSFSetGraphWithPattern(*newsf,sf->map,sf->pattern);CHKERRQ(ierr);
     }
   }
+  /* Since oldtype is committed, so is newtype, according to MPI */
+  if (sf->vscat.bs > 1) {ierr = MPI_Type_dup(sf->vscat.unit,&dtype);CHKERRQ(ierr);}
+  (*newsf)->vscat.bs     = sf->vscat.bs;
+  (*newsf)->vscat.unit   = dtype;
+  (*newsf)->vscat.to_n   = sf->vscat.to_n;
+  (*newsf)->vscat.from_n = sf->vscat.from_n;
+  /* Do not copy lsf. Build it on demand since it is rarely used */
+
 #if defined(PETSC_HAVE_DEVICE)
   (*newsf)->backend              = sf->backend;
   (*newsf)->use_default_stream   = sf->use_default_stream;
@@ -1420,11 +1446,11 @@ PetscErrorCode PetscSFBcastAndOpBegin(PetscSF sf,MPI_Datatype unit,const void *r
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sf,PETSCSF_CLASSID,1);
   ierr = PetscSFSetUp(sf);CHKERRQ(ierr);
-  ierr = PetscLogEventBegin(PETSCSF_BcastAndOpBegin,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventBegin(PETSCSF_BcastAndOpBegin,sf,0,0,0);CHKERRQ(ierr);}
   ierr = PetscGetMemType(rootdata,&rootmtype);CHKERRQ(ierr);
   ierr = PetscGetMemType(leafdata,&leafmtype);CHKERRQ(ierr);
   ierr = (*sf->ops->BcastAndOpBegin)(sf,unit,rootmtype,rootdata,leafmtype,leafdata,op);CHKERRQ(ierr);
-  ierr = PetscLogEventEnd(PETSCSF_BcastAndOpBegin,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventEnd(PETSCSF_BcastAndOpBegin,sf,0,0,0);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 
@@ -1455,9 +1481,9 @@ PetscErrorCode PetscSFBcastAndOpWithMemTypeBegin(PetscSF sf,MPI_Datatype unit,Pe
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sf,PETSCSF_CLASSID,1);
   ierr = PetscSFSetUp(sf);CHKERRQ(ierr);
-  ierr = PetscLogEventBegin(PETSCSF_BcastAndOpBegin,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventBegin(PETSCSF_BcastAndOpBegin,sf,0,0,0);CHKERRQ(ierr);}
   ierr = (*sf->ops->BcastAndOpBegin)(sf,unit,rootmtype,rootdata,leafmtype,leafdata,op);CHKERRQ(ierr);
-  ierr = PetscLogEventEnd(PETSCSF_BcastAndOpBegin,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventEnd(PETSCSF_BcastAndOpBegin,sf,0,0,0);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 
@@ -1485,9 +1511,9 @@ PetscErrorCode PetscSFBcastAndOpEnd(PetscSF sf,MPI_Datatype unit,const void *roo
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sf,PETSCSF_CLASSID,1);
-  ierr = PetscLogEventBegin(PETSCSF_BcastAndOpEnd,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventBegin(PETSCSF_BcastAndOpEnd,sf,0,0,0);CHKERRQ(ierr);}
   ierr = (*sf->ops->BcastAndOpEnd)(sf,unit,rootdata,leafdata,op);CHKERRQ(ierr);
-  ierr = PetscLogEventEnd(PETSCSF_BcastAndOpEnd,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventEnd(PETSCSF_BcastAndOpEnd,sf,0,0,0);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 
@@ -1522,11 +1548,11 @@ PetscErrorCode PetscSFReduceBegin(PetscSF sf,MPI_Datatype unit,const void *leafd
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sf,PETSCSF_CLASSID,1);
   ierr = PetscSFSetUp(sf);CHKERRQ(ierr);
-  ierr = PetscLogEventBegin(PETSCSF_ReduceBegin,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventBegin(PETSCSF_ReduceBegin,sf,0,0,0);CHKERRQ(ierr);}
   ierr = PetscGetMemType(rootdata,&rootmtype);CHKERRQ(ierr);
   ierr = PetscGetMemType(leafdata,&leafmtype);CHKERRQ(ierr);
   ierr = (sf->ops->ReduceBegin)(sf,unit,leafmtype,leafdata,rootmtype,rootdata,op);CHKERRQ(ierr);
-  ierr = PetscLogEventEnd(PETSCSF_ReduceBegin,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventEnd(PETSCSF_ReduceBegin,sf,0,0,0);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 
@@ -1557,9 +1583,9 @@ PetscErrorCode PetscSFReduceWithMemTypeBegin(PetscSF sf,MPI_Datatype unit,PetscM
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sf,PETSCSF_CLASSID,1);
   ierr = PetscSFSetUp(sf);CHKERRQ(ierr);
-  ierr = PetscLogEventBegin(PETSCSF_ReduceBegin,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventBegin(PETSCSF_ReduceBegin,sf,0,0,0);CHKERRQ(ierr);}
   ierr = (sf->ops->ReduceBegin)(sf,unit,leafmtype,leafdata,rootmtype,rootdata,op);CHKERRQ(ierr);
-  ierr = PetscLogEventEnd(PETSCSF_ReduceBegin,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventEnd(PETSCSF_ReduceBegin,sf,0,0,0);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 
@@ -1587,9 +1613,9 @@ PetscErrorCode PetscSFReduceEnd(PetscSF sf,MPI_Datatype unit,const void *leafdat
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sf,PETSCSF_CLASSID,1);
-  ierr = PetscLogEventBegin(PETSCSF_ReduceEnd,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventBegin(PETSCSF_ReduceEnd,sf,0,0,0);CHKERRQ(ierr);}
   ierr = (*sf->ops->ReduceEnd)(sf,unit,leafdata,rootdata,op);CHKERRQ(ierr);
-  ierr = PetscLogEventEnd(PETSCSF_ReduceEnd,sf,0,0,0);CHKERRQ(ierr);
+  if (!sf->vscat.logging) {ierr = PetscLogEventEnd(PETSCSF_ReduceEnd,sf,0,0,0);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 

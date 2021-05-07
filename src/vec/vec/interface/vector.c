@@ -15,6 +15,8 @@ PetscLogEvent VEC_DotNorm2, VEC_AXPBYPCZ;
 PetscLogEvent VEC_ViennaCLCopyFromGPU, VEC_ViennaCLCopyToGPU;
 PetscLogEvent VEC_CUDACopyFromGPU, VEC_CUDACopyToGPU;
 PetscLogEvent VEC_CUDACopyFromGPUSome, VEC_CUDACopyToGPUSome;
+PetscLogEvent VEC_HIPCopyFromGPU, VEC_HIPCopyToGPU;
+PetscLogEvent VEC_HIPCopyFromGPUSome, VEC_HIPCopyToGPUSome;
 
 /*@
    VecStashGetInfo - Gets how many values are currently in the vector stash, i.e. need
@@ -710,7 +712,6 @@ PetscErrorCode  VecGetLocalSize(Vec x,PetscInt *size)
 
    Level: beginner
 
-
 .seealso:   MatGetOwnershipRange(), MatGetOwnershipRanges(), VecGetOwnershipRanges()
 @*/
 PetscErrorCode  VecGetOwnershipRange(Vec x,PetscInt *low,PetscInt *high)
@@ -745,8 +746,9 @@ PetscErrorCode  VecGetOwnershipRange(Vec x,PetscInt *low,PetscInt *high)
 
    Fortran: You must PASS in an array of length size+1
 
-   Level: beginner
+   If the ranges are used after all vectors that share the ranges has been destroyed then the program will crash accessing ranges[].
 
+   Level: beginner
 
 .seealso:   MatGetOwnershipRange(), MatGetOwnershipRanges(), VecGetOwnershipRange()
 @*/
@@ -1866,7 +1868,7 @@ PetscErrorCode VecSetInf(Vec xin)
 @*/
 PetscErrorCode VecBindToCPU(Vec v,PetscBool flg)
 {
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA) || defined(PETSC_HAVE_HIP)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
@@ -1902,7 +1904,7 @@ PetscErrorCode VecBindToCPU(Vec v,PetscBool flg)
 @*/
 PetscErrorCode VecSetPinnedMemoryMin(Vec v,size_t mbytes)
 {
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA) || defined(PETSC_HAVE_HIP)
   PetscFunctionBegin;
   v->minimum_bytes_pinned_memory = mbytes;
   PetscFunctionReturn(0);
@@ -1928,7 +1930,7 @@ PetscErrorCode VecSetPinnedMemoryMin(Vec v,size_t mbytes)
 @*/
 PetscErrorCode VecGetPinnedMemoryMin(Vec v,size_t *mbytes)
 {
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA) || defined(PETSC_HAVE_HIP)
   PetscFunctionBegin;
   *mbytes = v->minimum_bytes_pinned_memory;
   PetscFunctionReturn(0);
@@ -1958,3 +1960,36 @@ PetscErrorCode VecGetOffloadMask(Vec v,PetscOffloadMask* mask)
   *mask = v->offloadmask;
   PetscFunctionReturn(0);
 }
+
+
+#if !defined(PETSC_HAVE_VIENNACL)
+PETSC_EXTERN PetscErrorCode VecViennaCLGetCLContext(Vec v,PETSC_UINTPTR_T* ctx)
+{
+  SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"PETSc must be configured with --with-opencl to get a Vec's cl_context");
+}
+
+PETSC_EXTERN PetscErrorCode VecViennaCLGetCLQueue(Vec v,PETSC_UINTPTR_T* queue)
+{
+  SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"PETSc must be configured with --with-opencl to get a Vec's cl_command_queue");
+}
+
+PETSC_EXTERN PetscErrorCode VecViennaCLGetCLMem(Vec v,PETSC_UINTPTR_T* queue)
+{
+  SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"PETSc must be configured with --with-opencl to get a Vec's cl_mem");
+}
+
+PETSC_EXTERN PetscErrorCode VecViennaCLGetCLMemRead(Vec v,PETSC_UINTPTR_T* queue)
+{
+  SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"PETSc must be configured with --with-opencl to get a Vec's cl_mem");
+}
+
+PETSC_EXTERN PetscErrorCode VecViennaCLGetCLMemWrite(Vec v,PETSC_UINTPTR_T* queue)
+{
+  SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"PETSc must be configured with --with-opencl to get a Vec's cl_mem");
+}
+
+PETSC_EXTERN PetscErrorCode VecViennaCLRestoreCLMemWrite(Vec v)
+{
+  SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"PETSc must be configured with --with-opencl to restore a Vec's cl_mem");
+}
+#endif

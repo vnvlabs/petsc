@@ -60,8 +60,9 @@
 #define PETSC_ERR_OPT_OVERWRITE    93  /* attempted to over write options which should not be changed */
 #define PETSC_ERR_WRONG_MPI_SIZE   94  /* example/application run with number of MPI ranks it does not support */
 #define PETSC_ERR_USER_INPUT       95  /* missing or incorrect user input */
-#define PETSC_ERR_GPU_RESOURCE     96  /* missing or incorrect user input */
-#define PETSC_ERR_MAX_VALUE        97  /* this is always the one more than the largest error code */
+#define PETSC_ERR_GPU_RESOURCE     96  /* unable to load a GPU resource, for example cuBLAS */
+#define PETSC_ERR_GPU              97  /* An error from a GPU call, this may be due to lack of resources on the GPU or a true error in the call */
+#define PETSC_ERR_MAX_VALUE        98  /* this is always the one more than the largest error code */
 
 #define PetscStringizeArg(a) #a
 #define PetscStringize(a) PetscStringizeArg(a)
@@ -559,6 +560,10 @@ M*/
 
 #if defined(PETSC_HAVE_CUDA)
 #define CHKERRCUSOLVER(err) do {if (PetscUnlikely(err)) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"CUSOLVER error %d",err);} while (0)
+#endif
+/* TODO: SEK:  Need to figure out the hipsolver issues */
+#if defined(PETSC_HAVE_HIP)
+#define CHKERRHIPSOLVER(err) do {if (PetscUnlikely(err)) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"HIPSOLVER error %d",err);} while (0)
 #endif
 /*MC
    CHKMEMQ - Checks the memory for corruption, calls error handler if any is detected

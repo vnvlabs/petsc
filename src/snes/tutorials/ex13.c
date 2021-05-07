@@ -232,7 +232,7 @@ static PetscErrorCode SetupDiscretization(DM dm, const char name[], PetscErrorCo
   simplex = DMPolytopeTypeGetNumVertices(ct) == DMPolytopeTypeGetDim(ct)+1 ? PETSC_TRUE : PETSC_FALSE;
   /* Create finite element */
   ierr = PetscSNPrintf(prefix, PETSC_MAX_PATH_LEN, "%s_", name);CHKERRQ(ierr);
-  ierr = PetscFECreateDefault(PetscObjectComm((PetscObject) dm), dim, 1, simplex, name ? prefix : NULL, -1, &fe);CHKERRQ(ierr);
+  ierr = PetscFECreateDefault(PETSC_COMM_SELF, dim, 1, simplex, name ? prefix : NULL, -1, &fe);CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject) fe, name);CHKERRQ(ierr);
   /* Set discretization and boundary conditions for each mesh */
   ierr = DMSetField(dm, 0, NULL, (PetscObject) fe);CHKERRQ(ierr);
@@ -363,7 +363,7 @@ int main(int argc, char **argv)
   AppCtx         user; /* User-defined work context */
   PetscErrorCode ierr;
 
-  ierr = PetscInitialize(&argc, &argv, NULL,help);if (ierr) return ierr;
+  ierr = PetscInitialize(&argc, &argv, NULL, help);if (ierr) return ierr;
   ierr = ProcessOptions(PETSC_COMM_WORLD, &user);CHKERRQ(ierr);
   /* Primal system */
   ierr = SNESCreate(PETSC_COMM_WORLD, &snes);CHKERRQ(ierr);
@@ -542,10 +542,10 @@ int main(int argc, char **argv)
     suffix: 2d_q3_shear_conv
     args: -dm_plex_box_simplex 0 -shear -potential_petscspace_degree 3 -snes_convergence_estimate -convest_num_refine 2
   test:
-    # Using -dm_refine 1 -convest_num_refine 3 we get L_2 convergence rate: 1.7
+    # Using -convest_num_refine 3 we get L_2 convergence rate: 1.7
     suffix: 3d_p1_conv
     requires: ctetgen
-    args: -dm_plex_box_dim 3 -dm_plex_box_faces 2,2,2 -potential_petscspace_degree 1 -snes_convergence_estimate -convest_num_refine 1
+    args: -dm_plex_box_dim 3 -dm_refine 1 -potential_petscspace_degree 1 -snes_convergence_estimate -convest_num_refine 1
   test:
     # Using -dm_refine 1 -convest_num_refine 3 we get L_2 convergence rate: 2.8
     suffix: 3d_p2_conv

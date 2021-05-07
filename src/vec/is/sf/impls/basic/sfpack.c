@@ -8,6 +8,10 @@
 #include <cuda_runtime.h>
 #include <petsccublas.h>
 #endif
+#if defined(PETSC_HAVE_HIP)
+#include <hip/hip_runtime.h>
+#include <petschipblas.h>
+#endif
 /*
  * MPI_Reduce_local is not really useful because it can't handle sparse data and it vectorizes "in the wrong direction",
  * therefore we pack data types manually. This file defines packing routines for the standard data types.
@@ -489,7 +493,7 @@ PETSC_STATIC_INLINE int MPI_Type_dup(MPI_Datatype datatype,MPI_Datatype *newtype
    The routine is shared by SFBasic and SFNeighbor based on the fact they all deal with sparse graphs and
    need pack/unpack data.
 */
-PetscErrorCode PetscSFLinkCreate(PetscSF sf,MPI_Datatype unit,PetscMemType rootmtype,const void *rootdata,PetscMemType leafmtype,const void *leafdata,MPI_Op op,PetscSFOperation sfop,PetscSFLink *mylink)
+PetscErrorCode PetscSFLinkCreate(PetscSF sf,MPI_Datatype unit,PetscMemType xrootmtype,const void *rootdata,PetscMemType xleafmtype,const void *leafdata,MPI_Op op,PetscSFOperation sfop,PetscSFLink *mylink)
 {
   PetscErrorCode    ierr;
   PetscSF_Basic     *bas = (PetscSF_Basic*)sf->data;
@@ -498,6 +502,8 @@ PetscErrorCode PetscSFLinkCreate(PetscSF sf,MPI_Datatype unit,PetscMemType rootm
   PetscSFDirection  direction;
   MPI_Request       *reqs = NULL;
   PetscBool         match,rootdirect[2],leafdirect[2];
+  PetscMemType      rootmtype = PetscMemTypeHost(xrootmtype) ? PETSC_MEMTYPE_HOST : PETSC_MEMTYPE_DEVICE; /* Convert to 0/1*/
+  PetscMemType      leafmtype = PetscMemTypeHost(xleafmtype) ? PETSC_MEMTYPE_HOST : PETSC_MEMTYPE_DEVICE;
   PetscMemType      rootmtype_mpi,leafmtype_mpi;   /* mtypes seen by MPI */
   PetscInt          rootdirect_mpi,leafdirect_mpi; /* root/leafdirect seen by MPI*/
 
@@ -574,9 +580,12 @@ PetscErrorCode PetscSFLinkCreate(PetscSF sf,MPI_Datatype unit,PetscMemType rootm
 found:
 
 #if defined(PETSC_HAVE_DEVICE)
-  if ((rootmtype == PETSC_MEMTYPE_DEVICE || leafmtype == PETSC_MEMTYPE_DEVICE) && !link->deviceinited) {
+  if ((PetscMemTypeDevice(xrootmtype) || PetscMemTypeDevice(xleafmtype)) && !link->deviceinited) {
     #if defined(PETSC_HAVE_CUDA)
       if (sf->backend == PETSCSF_BACKEND_CUDA)   {ierr = PetscSFLinkSetUp_Cuda(sf,link,unit);CHKERRQ(ierr);}
+    #endif
+    #if defined(PETSC_HAVE_HIP)
+      if (sf->backend == PETSCSF_BACKEND_HIP)   {ierr = PetscSFLinkSetUp_Hip(sf,link,unit);CHKERRQ(ierr);}
     #endif
     #if defined(PETSC_HAVE_KOKKOS)
       if (sf->backend == PETSCSF_BACKEND_KOKKOS) {ierr = PetscSFLinkSetUp_Kokkos(sf,link,unit);CHKERRQ(ierr);}
@@ -778,10 +787,11 @@ PetscErrorCode PetscSFLinkDestroy(PetscSF sf,PetscSFLink *avail)
     }
   #if defined(PETSC_HAVE_DEVICE)
     if (link->Destroy) {ierr = (*link->Destroy)(link);CHKERRQ(ierr);}
+   /*TODO:  Make runtime */
    #if defined(PETSC_HAVE_CUDA)
     if (link->stream) {cudaError_t cerr = cudaStreamDestroy(link->stream);CHKERRCUDA(cerr); link->stream = NULL;}
    #elif defined(PETSC_HAVE_HIP)
-    if (link->stream) {hipError_t  cerr = hipStreamDestroy(link->stream);CHKERRQ(cerr); link->stream = NULL;} /* TODO: CHKERRHIP? */
+    if (link->stream) {hipError_t  cerr = hipStreamDestroy(link->stream);CHKERRHIP(cerr); link->stream = NULL;}
    #endif
   #endif
     ierr = PetscFree(link);CHKERRQ(ierr);
@@ -1200,6 +1210,7 @@ PetscErrorCode PetscSFLinkPackRootData(PetscSF sf,PetscSFLink link,PetscSFScope 
   PetscMemType     rootmtype = link->rootmtype;
   PetscSFPackOpt   opt = NULL;
 
+  /*TODO: SEK Problems are in here*/
   PetscFunctionBegin;
   ierr = PetscLogEventBegin(PETSCSF_Pack,sf,0,0,0);CHKERRQ(ierr);
   if (scope == PETSCSF_REMOTE) {ierr = PetscSFLinkSyncDeviceBeforePackData(sf,link);CHKERRQ(ierr);}

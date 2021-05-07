@@ -4,7 +4,7 @@ class Configure(config.package.Package):
   def __init__(self, framework):
     config.package.Package.__init__(self,framework)
     self.minversion        = '5.6.0'
-    self.version           = '5.7.1'
+    self.version           = '5.8.1'
     self.versioninclude    = 'SuiteSparse_config.h'
     self.versionname       = 'SUITESPARSE_MAIN_VERSION.SUITESPARSE_SUB_VERSION.SUITESPARSE_SUBSUB_VERSION'
     self.gitcommit         = 'v'+self.version
@@ -126,6 +126,7 @@ class Configure(config.package.Package):
       args.append('CF="'+cflags+'"')
       args.append('CHOLMOD_CONFIG="'+flg+'"')
       args.append('CUDA=no')
+      args.append('CUDA_PATH=')
 
     args = ' '.join(args)
     conffile = os.path.join(self.packageDir,self.package+'.petscconf')
