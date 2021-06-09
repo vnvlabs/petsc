@@ -3,7 +3,7 @@
 
 ALL: lib
 SOURCEH   =
-SOURCEC   = vnv.c vnv_petsc.c
+SOURCEC   = vnv.c vnv_PETSC.c
 DIRS      =
 LOCDIR    = src/sys/vnv/
 MANSEC    = Sys

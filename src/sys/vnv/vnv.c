@@ -17,8 +17,6 @@ static const char* petsc_vnv_schema = "{\"type\": \"object\", \"required\":[]}";
 INJECTION_OPTIONS(PETSC, petsc_vnv_schema) {
 
 }
-INJECTION_SUBPACKAGE(PETSC,UMFPACK)
-INJECTION_SUBPACKAGE(PETSC,CHOLMOD)
 INJECTION_SUBPACKAGE(PETSC,VnVHypre)
 
 
@@ -29,12 +27,12 @@ INJECTION_SUBPACKAGE(PETSC,VnVHypre)
 
 int petsc_vnv_test_function(int x) {
    
-  INJECTION_LOOP_BEGIN(PETSC, VWORLD(PETSC), SanityCheck, x)
+  INJECTION_LOOP_BEGIN("PETSC", VWORLD(PETSC), "SanityCheck", x)
   for (int i = 0; i < 10; i++) {
     x += i;
-    INJECTION_LOOP_ITER(PETSC,SanityCheck, inner);
+    INJECTION_LOOP_ITER("PETSC","SanityCheck", "inner");
   }
 
-  INJECTION_LOOP_END(PETSC,SanityCheck);
+  INJECTION_LOOP_END("PETSC","SanityCheck");
   return x;
 }
