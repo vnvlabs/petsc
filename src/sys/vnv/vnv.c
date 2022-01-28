@@ -17,6 +17,7 @@ static const char* petsc_vnv_schema = "{\"type\": \"object\", \"required\":[]}";
 INJECTION_OPTIONS(PETSC, petsc_vnv_schema) {
 
 }
+
 INJECTION_SUBPACKAGE(PETSC,VnVHypre)
 
 
