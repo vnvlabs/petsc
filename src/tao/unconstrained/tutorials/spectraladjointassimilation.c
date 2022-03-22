@@ -147,7 +147,6 @@ int main(int argc,char **argv)
   ierr = PetscOptionsGetReal(NULL,NULL,"-a",&appctx.param.a,NULL);CHKERRQ(ierr);
   appctx.param.Le = appctx.param.L/appctx.param.E;
 
-
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      Create GLL data structures
      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -206,7 +205,6 @@ int main(int argc,char **argv)
   ierr = DMDAVecRestoreArray(appctx.da,appctx.SEMop.grid,&wrk_ptr1);CHKERRQ(ierr);
   ierr = DMDAVecRestoreArray(appctx.da,appctx.SEMop.mass,&wrk_ptr2);CHKERRQ(ierr);
 
-
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Create matrix data structure; set matrix evaluation routine.
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -264,9 +262,9 @@ int main(int argc,char **argv)
   ierr = TaoCreate(PETSC_COMM_WORLD,&tao);CHKERRQ(ierr);
   ierr = TaoSetMonitor(tao,MonitorError,&appctx,MonitorDestroy);CHKERRQ(ierr);
   ierr = TaoSetType(tao,TAOBQNLS);CHKERRQ(ierr);
-  ierr = TaoSetInitialVector(tao,appctx.dat.ic);CHKERRQ(ierr);
+  ierr = TaoSetSolution(tao,appctx.dat.ic);CHKERRQ(ierr);
   /* Set routine for function and gradient evaluation  */
-  ierr = TaoSetObjectiveAndGradientRoutine(tao,FormFunctionGradient,(void *)&appctx);CHKERRQ(ierr);
+  ierr = TaoSetObjectiveAndGradient(tao,NULL,FormFunctionGradient,(void *)&appctx);CHKERRQ(ierr);
   /* Check for any TAO command line options  */
   ierr = TaoSetTolerances(tao,1e-8,PETSC_DEFAULT,PETSC_DEFAULT);CHKERRQ(ierr);
   ierr = TaoSetFromOptions(tao);CHKERRQ(ierr);
@@ -361,11 +359,10 @@ PetscErrorCode InitialConditions(Vec u,AppCtx *appctx)
   PetscFunctionReturn(0);
 }
 
-
 /*
    TrueSolution() computes the true solution for the Tao optimization solve which means they are the initial conditions for the objective function.
 
-             InitialConditions() computes the initial conditions for the begining of the Tao iterations
+             InitialConditions() computes the initial conditions for the beginning of the Tao iterations
 
    Input Parameter:
    u - uninitialized solution vector (global)
@@ -495,7 +492,7 @@ PetscErrorCode RHSLaplacian(TS ts,PetscReal t,Vec X,Mat A,Mat BB,void *ctx)
   ierr = MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);CHKERRQ(ierr);
   ierr = DMDAGetCorners(appctx->da,&xs,NULL,NULL,&xn,NULL,NULL);CHKERRQ(ierr);
 
-  if (appctx->param.N-1 < 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"Polynomial order must be at least 2");
+  PetscCheck(appctx->param.N-1 >= 1,PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"Polynomial order must be at least 2");
   xs   = xs/(appctx->param.N-1);
   xn   = xn/(appctx->param.N-1);
 
@@ -549,7 +546,7 @@ PetscErrorCode RHSAdvection(TS ts,PetscReal t,Vec X,Mat A,Mat BB,void *ctx)
   ierr = MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);CHKERRQ(ierr);
   ierr = DMDAGetCorners(appctx->da,&xs,NULL,NULL,&xn,NULL,NULL);CHKERRQ(ierr);
 
-  if (appctx->param.N-1 < 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"Polynomial order must be at least 2");
+  PetscCheck(appctx->param.N-1 >= 1,PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"Polynomial order must be at least 2");
   xs   = xs/(appctx->param.N-1);
   xn   = xn/(appctx->param.N-1);
 
@@ -581,7 +578,7 @@ PetscErrorCode RHSAdvection(TS ts,PetscReal t,Vec X,Mat A,Mat BB,void *ctx)
    Input Parameters:
    tao - the Tao context
    ic   - the input vector
-   ctx - optional user-defined context, as set when calling TaoSetObjectiveAndGradientRoutine()
+   ctx - optional user-defined context, as set when calling TaoSetObjectiveAndGradient()
 
    Output Parameters:
    f   - the newly evaluated function
@@ -600,12 +597,11 @@ PetscErrorCode RHSAdvection(TS ts,PetscReal t,Vec X,Mat A,Mat BB,void *ctx)
           but TSAdjoint does not solve this since it can only solve the transposed system for the
           Jacobian the user provided. Hence TSAdjoint solves
                  w_t = J^T M^{-1} w  (where w = M v)
-          since there is no way to indicate the mass matrix as a separate entitity to TS. Thus one
+          since there is no way to indicate the mass matrix as a separate entity to TS. Thus one
           must be careful in initializing the "adjoint equation" and using the result. This is
           why
               G = -2 M(u(T) - u_d)
           below (instead of -2(u(T) - u_d)
-
 
 */
 PetscErrorCode FormFunctionGradient(Tao tao,Vec ic,PetscReal *f,Vec G,void *ctx)
@@ -657,13 +653,13 @@ PetscErrorCode MonitorError(Tao tao,void *ctx)
   ierr  = VecPointwiseMult(temp,temp,temp);CHKERRQ(ierr);
   ierr  = VecDot(temp,appctx->SEMop.mass,&nrm);CHKERRQ(ierr);
   nrm   = PetscSqrtReal(nrm);
-  ierr  = TaoGetGradientVector(tao,&grad);CHKERRQ(ierr);
+  ierr  = TaoGetGradient(tao,&grad,NULL,NULL);CHKERRQ(ierr);
   ierr  = VecPointwiseMult(temp,temp,temp);CHKERRQ(ierr);
   ierr  = VecDot(temp,appctx->SEMop.mass,&gnorm);CHKERRQ(ierr);
   gnorm = PetscSqrtReal(gnorm);
   ierr  = VecDestroy(&temp);CHKERRQ(ierr);
   ierr  = TaoGetIterationNumber(tao,&its);CHKERRQ(ierr);
-  ierr  = TaoGetObjective(tao,&fct);CHKERRQ(ierr);
+  ierr  = TaoGetSolutionStatus(tao,NULL,&fct,NULL,NULL,NULL,NULL);CHKERRQ(ierr);
   if (!its) {
     ierr = PetscPrintf(PETSC_COMM_WORLD,"%% Iteration Error Objective Gradient-norm\n");CHKERRQ(ierr);
     ierr = PetscPrintf(PETSC_COMM_WORLD,"history = [\n");CHKERRQ(ierr);
@@ -680,7 +676,6 @@ PetscErrorCode MonitorDestroy(void **ctx)
   ierr = PetscPrintf(PETSC_COMM_WORLD,"];\n");CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*TEST
 
@@ -700,6 +695,5 @@ PetscErrorCode MonitorDestroy(void **ctx)
      suffix: 2
      requires: !single
      args:  -ts_adapt_dt_max 3.e-3 -E 10 -N 8 -ncoeff 5  -a .1 -tao_bqnls_mat_lmvm_scale_type none
-
 
 TEST*/

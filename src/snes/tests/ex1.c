@@ -11,8 +11,6 @@ This example also illustrates the use of matrix coloring.  Runtime options inclu
    Processors: 1
 T*/
 
-
-
 /* ------------------------------------------------------------------------
 
     Solid Fuel Ignition (SFI) problem.  This problem is modeled by
@@ -82,7 +80,7 @@ int main(int argc,char **argv)
 
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);if (ierr) return ierr;
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
-  if (size != 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_WRONG_MPI_SIZE,"This is a uniprocessor example only!");
+  PetscCheckFalse(size != 1,PETSC_COMM_WORLD,PETSC_ERR_WRONG_MPI_SIZE,"This is a uniprocessor example only!");
 
   /*
      Initialize problem parameters
@@ -92,7 +90,7 @@ int main(int argc,char **argv)
   ierr    = PetscOptionsGetInt(NULL,NULL,"-my",&user.my,NULL);CHKERRQ(ierr);
   ierr    = PetscOptionsGetReal(NULL,NULL,"-par",&user.param,NULL);CHKERRQ(ierr);
   ierr    = PetscOptionsGetBool(NULL,NULL,"-pc",&pc,NULL);CHKERRQ(ierr);
-  if (user.param >= bratu_lambda_max || user.param <= bratu_lambda_min) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Lambda is out of range");
+  PetscCheckFalse(user.param >= bratu_lambda_max || user.param <= bratu_lambda_min,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Lambda is out of range");
   N = user.mx*user.my;
   ierr    = PetscOptionsGetBool(NULL,NULL,"-use_convergence_test",&use_convergence_test,NULL);CHKERRQ(ierr);
 
@@ -150,7 +148,7 @@ int main(int argc,char **argv)
     efficiently using a coloring of the columns of the matrix.
   */
   ierr = PetscOptionsGetBool(NULL,NULL,"-snes_fd_coloring",&fd_coloring,NULL);CHKERRQ(ierr);
-  if (matrix_free && fd_coloring) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_INCOMP,"Use only one of -snes_mf, -snes_fd_coloring options!\nYou can do -snes_mf_operator -snes_fd_coloring");
+  PetscCheckFalse(matrix_free && fd_coloring,PETSC_COMM_WORLD,PETSC_ERR_ARG_INCOMP,"Use only one of -snes_mf, -snes_fd_coloring options!\nYou can do -snes_mf_operator -snes_fd_coloring");
 
   if (fd_coloring) {
     ISColoring   iscoloring;
@@ -165,7 +163,7 @@ int main(int argc,char **argv)
 
     /*
        Color the matrix, i.e. determine groups of columns that share no common
-      rows. These columns in the Jacobian can all be computed simulataneously.
+      rows. These columns in the Jacobian can all be computed simultaneously.
     */
     ierr = MatColoringCreate(J,&mc);CHKERRQ(ierr);
     ierr = MatColoringSetType(mc,MATCOLORINGSL);CHKERRQ(ierr);
@@ -246,7 +244,6 @@ int main(int argc,char **argv)
   ierr = SNESSolve(snes,NULL,x);CHKERRQ(ierr);
   ierr = SNESGetIterationNumber(snes,&its);CHKERRQ(ierr);
   ierr = PetscPrintf(PETSC_COMM_WORLD,"Number of SNES iterations = %D\n",its);CHKERRQ(ierr);
-
 
   /*
      Print the convergence history.  This is intended just to demonstrate
@@ -505,7 +502,6 @@ PetscErrorCode postcheck(SNES snes,Vec x,Vec y,Vec w,PetscBool *changed_y,PetscB
   PetscFunctionReturn(0);
 }
 
-
 /*TEST
 
    build:
@@ -522,13 +518,13 @@ PetscErrorCode postcheck(SNES snes,Vec x,Vec y,Vec w,PetscBool *changed_y,PetscB
       suffix: 2a
       filter: grep -i KSPConvergedDefault > /dev/null && echo "Found KSPConvergedDefault"
       args: -snes_monitor_short -snes_type newtontr -ksp_gmres_cgs_refinement_type refine_always -info
-      requires: define(PETSC_USE_INFO)
+      requires: defined(PETSC_USE_INFO)
 
    test:
       suffix: 2b
       filter: grep -i  "User provided convergence test" > /dev/null  && echo "Found User provided convergence test"
       args: -snes_monitor_short -snes_type newtontr -ksp_gmres_cgs_refinement_type refine_always -use_convergence_test -info
-      requires: define(PETSC_USE_INFO)
+      requires: defined(PETSC_USE_INFO)
 
    test:
       suffix: 3
@@ -539,5 +535,4 @@ PetscErrorCode postcheck(SNES snes,Vec x,Vec y,Vec w,PetscBool *changed_y,PetscB
       args: -pc -par 6.807 -snes_monitor -snes_converged_reason
 
 TEST*/
-
 

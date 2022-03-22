@@ -37,7 +37,7 @@ static PetscErrorCode SNESSolve_QN(SNES snes)
   /* basically just a regular newton's method except for the application of the Jacobian */
 
   PetscFunctionBegin;
-  if (snes->xl || snes->xu || snes->ops->computevariablebounds) SETERRQ1(PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
+  PetscCheckFalse(snes->xl || snes->xu || snes->ops->computevariablebounds,PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
 
   ierr = PetscCitationsRegister(SNESCitation,&SNEScite);CHKERRQ(ierr);
   F    = snes->vec_func;                /* residual vector */
@@ -143,7 +143,7 @@ static PetscErrorCode SNESSolve_QN(SNES snes)
     }
 
     /* convergence monitoring */
-    ierr = PetscInfo4(snes,"fnorm=%18.16e, gnorm=%18.16e, ynorm=%18.16e, lssucceed=%d\n",(double)fnorm,(double)gnorm,(double)ynorm,(int)lssucceed);CHKERRQ(ierr);
+    ierr = PetscInfo(snes,"fnorm=%18.16e, gnorm=%18.16e, ynorm=%18.16e, lssucceed=%d\n",(double)fnorm,(double)gnorm,(double)ynorm,(int)lssucceed);CHKERRQ(ierr);
 
     if (snes->npc && snes->npcside== PC_RIGHT) {
       ierr = PetscLogEventBegin(SNES_NPCSolve,snes->npc,X,0,0);CHKERRQ(ierr);
@@ -223,7 +223,7 @@ static PetscErrorCode SNESSolve_QN(SNES snes)
     }
   }
   if (i == snes->max_its) {
-    ierr = PetscInfo1(snes, "Maximum number of iterations has been reached: %D\n", snes->max_its);CHKERRQ(ierr);
+    ierr = PetscInfo(snes, "Maximum number of iterations has been reached: %D\n", snes->max_its);CHKERRQ(ierr);
     if (!snes->reason) snes->reason = SNES_DIVERGED_MAX_IT;
   }
   PetscFunctionReturn(0);
@@ -345,10 +345,10 @@ static PetscErrorCode SNESSetFromOptions_QN(PetscOptionItems *PetscOptionsObject
   ierr = PetscOptionsReal("-snes_qn_powell_gamma","Powell angle tolerance",          "SNESQN", qn->powell_gamma, &qn->powell_gamma, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-snes_qn_monitor",         "Monitor for the QN methods",      "SNESQN", qn->monflg, &qn->monflg, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnum("-snes_qn_scale_type","Scaling type","SNESQNSetScaleType",SNESQNScaleTypes,(PetscEnum)stype,(PetscEnum*)&stype,&flg);CHKERRQ(ierr);
-  if (flg) ierr = SNESQNSetScaleType(snes,stype);CHKERRQ(ierr);
+  if (flg) {ierr = SNESQNSetScaleType(snes,stype);CHKERRQ(ierr);}
 
   ierr = PetscOptionsEnum("-snes_qn_restart_type","Restart type","SNESQNSetRestartType",SNESQNRestartTypes,(PetscEnum)rtype,(PetscEnum*)&rtype,&flg);CHKERRQ(ierr);
-  if (flg) ierr = SNESQNSetRestartType(snes,rtype);CHKERRQ(ierr);
+  if (flg) {ierr = SNESQNSetRestartType(snes,rtype);CHKERRQ(ierr);}
 
   ierr = PetscOptionsEnum("-snes_qn_type","Quasi-Newton update type","",SNESQNTypes,(PetscEnum)qtype,(PetscEnum*)&qtype,&flg);CHKERRQ(ierr);
   if (flg) {ierr = SNESQNSetType(snes,qtype);CHKERRQ(ierr);}
@@ -428,13 +428,13 @@ PetscErrorCode SNESQNSetRestartType(SNES snes, SNESQNRestartType rtype)
 -   stype - scale type
 
     Options Database:
-.   -snes_qn_scale_type <diagonal,none,scalar,jacobian>
+.   -snes_qn_scale_type <diagonal,none,scalar,jacobian> - Scaling type
 
     Level: intermediate
 
     SNESQNScaleTypes:
 +   SNES_QN_SCALE_NONE - don't scale the problem
-.   SNES_QN_SCALE_SCALAR - use shanno scaling
+.   SNES_QN_SCALE_SCALAR - use Shanno scaling
 .   SNES_QN_SCALE_DIAGONAL - scale with a diagonalized BFGS formula (see Gilbert and Lemarechal 1989), available
 -   SNES_QN_SCALE_JACOBIAN - scale by solving a linear system coming from the Jacobian you provided with SNESSetJacobian() computed at the first iteration
                              of QN and at ever restart.
@@ -458,6 +458,7 @@ PetscErrorCode SNESQNSetScaleType_QN(SNES snes, SNESQNScaleType stype)
 
   PetscFunctionBegin;
   qn->scale_type = stype;
+  if (stype == SNES_QN_SCALE_JACOBIAN) snes->usesksp = PETSC_TRUE;
   PetscFunctionReturn(0);
 }
 
@@ -480,7 +481,7 @@ PetscErrorCode SNESQNSetRestartType_QN(SNES snes, SNESQNRestartType rtype)
 -   qtype - variant type
 
     Options Database:
-.   -snes_qn_type <lbfgs,broyden,badbroyden>
+.   -snes_qn_type <lbfgs,broyden,badbroyden> - quasi-Newton type
 
     Level: beginner
 
@@ -538,17 +539,17 @@ PetscErrorCode SNESQNSetType_QN(SNES snes, SNESQNType qtype)
       Uses left nonlinear preconditioning by default.
 
       References:
-+   1. -   Kelley, C.T., Iterative Methods for Linear and Nonlinear Equations, Chapter 8, SIAM, 1995.
-.   2. -   R. Byrd, J. Nocedal, R. Schnabel, Representations of Quasi Newton Matrices and their use in Limited Memory Methods,
++   * -   Kelley, C.T., Iterative Methods for Linear and Nonlinear Equations, Chapter 8, SIAM, 1995.
+.   * -   R. Byrd, J. Nocedal, R. Schnabel, Representations of Quasi Newton Matrices and their use in Limited Memory Methods,
       Technical Report, Northwestern University, June 1992.
-.   3. -   Peter N. Brown, Alan C. Hindmarsh, Homer F. Walker, Experiments with Quasi-Newton Methods in Solving Stiff ODE
+.   * -   Peter N. Brown, Alan C. Hindmarsh, Homer F. Walker, Experiments with Quasi-Newton Methods in Solving Stiff ODE
       Systems, SIAM J. Sci. Stat. Comput. Vol 6(2), April 1985.
-.   4. -   Peter R. Brune, Matthew G. Knepley, Barry F. Smith, and Xuemin Tu, "Composing Scalable Nonlinear Algebraic Solvers",
+.   * -   Peter R. Brune, Matthew G. Knepley, Barry F. Smith, and Xuemin Tu, "Composing Scalable Nonlinear Algebraic Solvers",
        SIAM Review, 57(4), 2015
-.   5. -   Griewank, Andreas. "Broyden updating, the good and the bad!." Doc. Math (2012): 301-315.
-.   6. -   Gilbert, Jean Charles, and Claude Lemar{\'e}chal. "Some numerical experiments with variable-storage quasi-Newton algorithms."
+.   * -   Griewank, Andreas. "Broyden updating, the good and the bad!." Doc. Math (2012): 301-315.
+.   * -   Gilbert, Jean Charles, and Claude Lemar{\'e}chal. "Some numerical experiments with variable-storage quasi-Newton algorithms."
       Mathematical programming 45.1-3 (1989): 407-435.
--   7. -   Dener A., Munson T. "Accelerating Limited-Memory Quasi-Newton Convergence for Large-Scale Optimization"
+-   * -   Dener A., Munson T. "Accelerating Limited-Memory Quasi-Newton Convergence for Large-Scale Optimization"
       Computational Science - ICCS 2019. ICCS 2019. Lecture Notes in Computer Science, vol 11538. Springer, Cham
 
       Level: beginner

@@ -13,7 +13,6 @@ typedef struct {
   MatScalar *diag;
 } PC_VPBJacobi;
 
-
 static PetscErrorCode PCApply_VPBJacobi(PC pc,Vec x,Vec y)
 {
   PC_VPBJacobi      *jac = (PC_VPBJacobi*)pc->data;
@@ -82,9 +81,9 @@ static PetscErrorCode PCApply_VPBJacobi(PC pc,Vec x,Vec y)
       yy[ncnt+6] = diag[6]*x0 + diag[13]*x1 + diag[20]*x2  + diag[27]*x3 + diag[34]*x4 + diag[41]*x5 + diag[48]*x6;
       break;
     default:
-      for (ib=0; ib<bs; ib++){
+      for (ib=0; ib<bs; ib++) {
         PetscScalar rowsum = 0;
-        for (jb=0; jb<bs; jb++){
+        for (jb=0; jb<bs; jb++) {
           rowsum += diag[ib+jb*bs] * xx[ncnt+jb];
         }
         yy[ncnt+ib] = rowsum;
@@ -97,8 +96,6 @@ static PetscErrorCode PCApply_VPBJacobi(PC pc,Vec x,Vec y)
   ierr = VecRestoreArray(y,&yy);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
-
 
 /* -------------------------------------------------------------------------- */
 static PetscErrorCode PCSetUp_VPBJacobi(PC pc)
@@ -114,7 +111,7 @@ static PetscErrorCode PCSetUp_VPBJacobi(PC pc)
   PetscFunctionBegin;
   ierr = MatGetVariableBlockSizes(pc->pmat,&nblocks,&bsizes);CHKERRQ(ierr);
   ierr = MatGetLocalSize(pc->pmat,&nlocal,NULL);CHKERRQ(ierr);
-  if (nlocal && !nblocks) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Must call MatSetVariableBlockSizes() before using PCVPBJACOBI");
+  PetscCheckFalse(nlocal && !nblocks,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Must call MatSetVariableBlockSizes() before using PCVPBJACOBI");
   if (!jac->diag) {
     for (i=0; i<nblocks; i++) nsize += bsizes[i]*bsizes[i];
     ierr = PetscMalloc1(nsize,&jac->diag);CHKERRQ(ierr);
@@ -144,28 +141,28 @@ static PetscErrorCode PCDestroy_VPBJacobi(PC pc)
 /*MC
      PCVPBJACOBI - Variable size point block Jacobi preconditioner
 
-
    Notes:
-    See PCJACOBI for point Jacobi preconditioning, PCPBJACOBI for fixed point block size, and PCBJACOBI for large size blocks
+     See PCJACOBI for point Jacobi preconditioning, PCPBJACOBI for fixed point block size, and PCBJACOBI for large size blocks
 
-   This works for AIJ matrices
+     This works for AIJ matrices
 
-   Uses dense LU factorization with partial pivoting to invert the blocks; if a zero pivot
-   is detected a PETSc error is generated.
+     Uses dense LU factorization with partial pivoting to invert the blocks; if a zero pivot
+     is detected a PETSc error is generated.
 
-   One must call MatSetVariableBlockSizes() to use this preconditioner
+     One must call MatSetVariableBlockSizes() to use this preconditioner
+
    Developer Notes:
-    This should support the PCSetErrorIfFailure() flag set to PETSC_TRUE to allow
-   the factorization to continue even after a zero pivot is found resulting in a Nan and hence
-   terminating KSP with a KSP_DIVERGED_NANORIF allowing
-   a nonlinear solver/ODE integrator to recover without stopping the program as currently happens.
+     This should support the PCSetErrorIfFailure() flag set to PETSC_TRUE to allow
+     the factorization to continue even after a zero pivot is found resulting in a Nan and hence
+     terminating KSP with a KSP_DIVERGED_NANORIF allowing
+     a nonlinear solver/ODE integrator to recover without stopping the program as currently happens.
 
-   Perhaps should provide an option that allows generation of a valid preconditioner
-   even if a block is singular as the PCJACOBI does.
+     Perhaps should provide an option that allows generation of a valid preconditioner
+     even if a block is singular as the PCJACOBI does.
 
    Level: beginner
 
-.seealso:  MatSetVariableBlockSizes(), PCCreate(), PCSetType(), PCType (for list of available types), PC, PCJACOBI
+.seealso:  MatSetVariableBlockSizes(), PCCreate(), PCSetType(), PCType (for list of available types), PC, PCJACOBI, PCPBJACOBI, PCBJACOBI
 
 M*/
 
@@ -205,5 +202,4 @@ PETSC_EXTERN PetscErrorCode PCCreate_VPBJacobi(PC pc)
   pc->ops->applysymmetricright = NULL;
   PetscFunctionReturn(0);
 }
-
 

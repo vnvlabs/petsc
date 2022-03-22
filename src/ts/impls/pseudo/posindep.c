@@ -59,7 +59,6 @@ PetscErrorCode  TSPseudoComputeTimeStep(TS ts,PetscReal *dt)
   PetscFunctionReturn(0);
 }
 
-
 /* ------------------------------------------------------------------------------*/
 /*@C
    TSPseudoVerifyTimeStepDefault - Default code to verify the quality of the last timestep.
@@ -89,7 +88,6 @@ PetscErrorCode  TSPseudoVerifyTimeStepDefault(TS ts,Vec update,void *dtctx,Petsc
   *flag = PETSC_TRUE;
   PetscFunctionReturn(0);
 }
-
 
 /*@
     TSPseudoVerifyTimeStep - Verifies whether the last timestep was acceptable.
@@ -155,7 +153,7 @@ static PetscErrorCode TSStep_Pseudo(TS ts)
   }
   if (reject >= ts->max_reject) {
     ts->reason = TS_DIVERGED_STEP_REJECTED;
-    ierr = PetscInfo2(ts,"Step=%D, step rejections %D greater than current TS allowed, stopping solve\n",ts->steps,reject);CHKERRQ(ierr);
+    ierr = PetscInfo(ts,"Step=%D, step rejections %D greater than current TS allowed, stopping solve\n",ts->steps,reject);CHKERRQ(ierr);
     PetscFunctionReturn(0);
   }
 
@@ -170,12 +168,12 @@ static PetscErrorCode TSStep_Pseudo(TS ts)
   }
   if (pseudo->fnorm < pseudo->fatol) {
     ts->reason = TS_CONVERGED_PSEUDO_FATOL;
-    ierr = PetscInfo3(ts,"Step=%D, converged since fnorm %g < fatol %g\n",ts->steps,pseudo->fnorm,pseudo->frtol);CHKERRQ(ierr);
+    ierr = PetscInfo(ts,"Step=%D, converged since fnorm %g < fatol %g\n",ts->steps,pseudo->fnorm,pseudo->frtol);CHKERRQ(ierr);
     PetscFunctionReturn(0);
   }
   if (pseudo->fnorm/pseudo->fnorm_initial < pseudo->frtol) {
     ts->reason = TS_CONVERGED_PSEUDO_FRTOL;
-    ierr = PetscInfo4(ts,"Step=%D, converged since fnorm %g / fnorm_initial %g < frtol %g\n",ts->steps,pseudo->fnorm,pseudo->fnorm_initial,pseudo->fatol);CHKERRQ(ierr);
+    ierr = PetscInfo(ts,"Step=%D, converged since fnorm %g / fnorm_initial %g < frtol %g\n",ts->steps,pseudo->fnorm,pseudo->fnorm_initial,pseudo->fatol);CHKERRQ(ierr);
     PetscFunctionReturn(0);
   }
   PetscFunctionReturn(0);
@@ -283,7 +281,6 @@ static PetscErrorCode SNESTSFormJacobian_Pseudo(SNES snes,Vec X,Mat AA,Mat BB,TS
   ierr = TSComputeIJacobian(ts,ts->ptime+ts->time_step,X,Xdot,1./ts->time_step,AA,BB,PETSC_FALSE);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 static PetscErrorCode TSSetUp_Pseudo(TS ts)
 {
@@ -409,7 +406,7 @@ PetscErrorCode  TSPseudoSetVerifyTimeStep(TS ts,PetscErrorCode (*dt)(TS,Vec,void
 -   inc - the scaling factor >= 1.0
 
     Options Database Key:
-.    -ts_pseudo_increment <increment>
+.    -ts_pseudo_increment <increment> - set pseudo increment
 
     Level: advanced
 
@@ -437,7 +434,7 @@ PetscErrorCode  TSPseudoSetTimeStepIncrement(TS ts,PetscReal inc)
 -   maxdt - the maximum time step, use a non-positive value to deactivate
 
     Options Database Key:
-.    -ts_pseudo_max_dt <increment>
+.    -ts_pseudo_max_dt <increment> - set pseudo max dt
 
     Level: advanced
 
@@ -467,7 +464,7 @@ $         dt = current_dt*previous_fnorm/current_fnorm.
 .   ts - the timestep context
 
     Options Database Key:
-.    -ts_pseudo_increment_dt_from_initial_dt
+.    -ts_pseudo_increment_dt_from_initial_dt <true,false> - use the initial dt to determine increment
 
     Level: advanced
 
@@ -482,7 +479,6 @@ PetscErrorCode  TSPseudoIncrementDtFromInitialDt(TS ts)
   ierr = PetscTryMethod(ts,"TSPseudoIncrementDtFromInitialDt_C",(TS),(ts));CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*@C
    TSPseudoSetTimeStep - Sets the user-defined routine to be
@@ -601,8 +597,8 @@ $    G(Y) = F(Y,(Y-X)/dt)
   Level: beginner
 
   References:
-+  1. - Todd S. Coffey and C. T. Kelley and David E. Keyes, Pseudotransient Continuation and Differential Algebraic Equations, 2003.
--  2. - C. T. Kelley and David E. Keyes, Convergence analysis of Pseudotransient Continuation, 1998.
++  * - Todd S. Coffey and C. T. Kelley and David E. Keyes, Pseudotransient Continuation and Differential Algebraic Equations, 2003.
+-  * - C. T. Kelley and David E. Keyes, Convergence analysis of Pseudotransient Continuation, 1998.
 
   Notes:
   The residual computed by this method includes the transient term (Xdot is computed instead of

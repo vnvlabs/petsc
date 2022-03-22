@@ -1,16 +1,16 @@
 #include <petsc/private/tsimpl.h>          /*I "petscts.h" I*/
 
 /*@C
-   TSPythonSetType - Initalize a TS object implemented in Python.
+   TSPythonSetType - Initialize a TS object implemented in Python.
 
    Collective on TS
 
-   Input Parameter:
+   Input Parameters:
 +  ts - the nonlinear solver (TS) context.
 -  pyname - full dotted Python name [package].module[.{class|function}]
 
    Options Database Key:
-.  -ts_python_type <pyname>
+.  -ts_python_type <pyname> - python class
 
    Level: intermediate
 

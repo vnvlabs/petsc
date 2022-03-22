@@ -236,7 +236,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
 
   ierr = PetscOptionsBegin(comm, "", "Poisson Problem Options", "DMPLEX");CHKERRQ(ierr);
   ierr = PetscOptionsEnum("-sol_type", "Type of exact solution", "ex24.c", SolTypeNames, (PetscEnum) options->solType, (PetscEnum *) &options->solType, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -245,20 +245,9 @@ static PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
   PetscErrorCode ierr;
 
   PetscFunctionBeginUser;
-  if (0) {
-    DMLabel     label;
-    const char *name = "marker";
-
-    ierr = DMPlexCreateReferenceCell(comm, 2, PETSC_TRUE, dm);CHKERRQ(ierr);
-    ierr = DMCreateLabel(*dm, name);CHKERRQ(ierr);
-    ierr = DMGetLabel(*dm, name, &label);CHKERRQ(ierr);
-    ierr = DMPlexMarkBoundaryFaces(*dm, 1, label);CHKERRQ(ierr);
-    ierr = DMPlexLabelComplete(*dm, label);CHKERRQ(ierr);
-  } else {
-    ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_TRUE, NULL, NULL, NULL, NULL, PETSC_TRUE, dm);CHKERRQ(ierr);
-  }
-  ierr = DMLocalizeCoordinates(*dm);CHKERRQ(ierr);
-  ierr = PetscObjectSetName((PetscObject) *dm, "Mesh");CHKERRQ(ierr);
+  ierr = DMCreate(comm, dm);CHKERRQ(ierr);
+  ierr = DMSetType(*dm, DMPLEX);CHKERRQ(ierr);
+  ierr = PetscObjectSetName((PetscObject)*dm, "Example Mesh");CHKERRQ(ierr);
   ierr = DMSetApplicationContext(*dm, user);CHKERRQ(ierr);
   ierr = DMSetFromOptions(*dm);CHKERRQ(ierr);
   ierr = DMViewFromOptions(*dm, NULL, "-dm_view");CHKERRQ(ierr);
@@ -287,7 +276,7 @@ static PetscErrorCode SetupPrimalProblem(DM dm, AppCtx *user)
       ierr = PetscDSSetResidual(ds, 1, f0_linear_u, NULL);CHKERRQ(ierr);
       ierr = DMAddBoundary(dm, DM_BC_NATURAL, "Dirichlet Bd Integral", label, 1, &id, 0, 0, NULL, NULL, NULL, user, &bd);CHKERRQ(ierr);
       ierr = PetscDSGetBoundary(ds, bd, &wf, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);CHKERRQ(ierr);
-      ierr = PetscWeakFormSetIndexBdResidual(wf, label, 1, 0, 0, f0_bd_linear_q, 0, NULL);CHKERRQ(ierr);
+      ierr = PetscWeakFormSetIndexBdResidual(wf, label, 1, 0, 0, 0, f0_bd_linear_q, 0, NULL);CHKERRQ(ierr);
       ierr = PetscDSSetExactSolution(ds, 0, linear_q, user);CHKERRQ(ierr);
       ierr = PetscDSSetExactSolution(ds, 1, linear_u, user);CHKERRQ(ierr);
       break;
@@ -295,7 +284,7 @@ static PetscErrorCode SetupPrimalProblem(DM dm, AppCtx *user)
       ierr = PetscDSSetResidual(ds, 1, f0_quadratic_u, NULL);CHKERRQ(ierr);
       ierr = DMAddBoundary(dm, DM_BC_NATURAL, "Dirichlet Bd Integral", label, 1, &id, 0, 0, NULL, NULL, NULL, user, &bd);CHKERRQ(ierr);
       ierr = PetscDSGetBoundary(ds, bd, &wf, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);CHKERRQ(ierr);
-      ierr = PetscWeakFormSetIndexBdResidual(wf, label, 1, 0, 0, f0_bd_quadratic_q, 0, NULL);CHKERRQ(ierr);
+      ierr = PetscWeakFormSetIndexBdResidual(wf, label, 1, 0, 0, 0, f0_bd_quadratic_q, 0, NULL);CHKERRQ(ierr);
       ierr = PetscDSSetExactSolution(ds, 0, quadratic_q, user);CHKERRQ(ierr);
       ierr = PetscDSSetExactSolution(ds, 1, quadratic_u, user);CHKERRQ(ierr);
       break;
@@ -310,7 +299,7 @@ static PetscErrorCode SetupPrimalProblem(DM dm, AppCtx *user)
       ierr = PetscDSSetExactSolution(ds, 1, quartic_u, user);CHKERRQ(ierr);
       ierr = DMAddBoundary(dm, DM_BC_ESSENTIAL, "Flux condition", label, 1, &id, 0, 0, NULL, (void (*)(void)) quartic_q, NULL, user, NULL);CHKERRQ(ierr);
       break;
-    default: SETERRQ1(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Invalid exact solution type %s", SolTypeNames[PetscMin(user->solType, SOL_UNKNOWN)]);
+    default: SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Invalid exact solution type %s", SolTypeNames[PetscMin(user->solType, SOL_UNKNOWN)]);
   }
   PetscFunctionReturn(0);
 }
@@ -412,7 +401,7 @@ int main(int argc, char **argv)
     # VTU output: -potential_view vtk:multifield.vtu -exact_vec_view vtk:exact.vtu
     suffix: 2d_q2_p0
     requires: triangle
-    args: -sol_type linear -dm_plex_box_simplex 0 \
+    args: -sol_type linear -dm_plex_simplex 0 \
           -field_petscspace_degree 2 -dm_refine 0 \
           -dmsnes_check .001 -snes_error_if_not_converged \
           -ksp_rtol 1e-10 -ksp_error_if_not_converged \
@@ -423,7 +412,7 @@ int main(int argc, char **argv)
     # Using -dm_refine 1 -convest_num_refine 3 we get L_2 convergence rate: [0.0057, 1.0]
     suffix: 2d_q2_p0_conv
     requires: triangle
-    args: -sol_type linear -dm_plex_box_simplex 0 \
+    args: -sol_type linear -dm_plex_simplex 0 \
           -field_petscspace_degree 2 -dm_refine 0 -convest_num_refine 1 -snes_convergence_estimate \
           -snes_error_if_not_converged \
           -ksp_rtol 1e-10 -ksp_error_if_not_converged \
@@ -434,7 +423,7 @@ int main(int argc, char **argv)
     # Using -dm_refine 1 -convest_num_refine 3 we get L_2 convergence rate: [-0.014, 0.0066]
     suffix: 2d_q2_p0_neumann_conv
     requires: triangle
-    args: -sol_type quartic_neumann -dm_plex_box_simplex 0 \
+    args: -sol_type quartic_neumann -dm_plex_simplex 0 \
           -field_petscspace_degree 2 -dm_refine 0 -convest_num_refine 1 -snes_convergence_estimate \
           -snes_error_if_not_converged \
           -ksp_rtol 1e-10 -ksp_error_if_not_converged \
@@ -449,7 +438,7 @@ TEST*/
   test:
     suffix: 2d_bdmq1_p0_0
     requires: triangle
-    args: -dm_plex_box_simplex 0 -sol_type linear \
+    args: -dm_plex_simplex 0 -sol_type linear \
           -field_petscspace_poly_type pminus_hdiv -field_petscspace_degree 1 -field_petscdualspace_type bdm -dm_refine 0 -convest_num_refine 3 -snes_convergence_estimate \
           -dmsnes_check .001 -snes_error_if_not_converged \
           -ksp_rtol 1e-10 -ksp_error_if_not_converged \
@@ -459,7 +448,7 @@ TEST*/
   test:
     suffix: 2d_bdmq1_p0_2
     requires: triangle
-    args: -dm_plex_box_simplex 0 -sol_type quartic \
+    args: -dm_plex_simplex 0 -sol_type quartic \
           -field_petscspace_poly_type_no pminus_hdiv -field_petscspace_degree 1 -field_petscdualspace_type bdm -dm_refine 0 -convest_num_refine 3 -snes_convergence_estimate \
           -dmsnes_check .001 -snes_error_if_not_converged \
           -ksp_rtol 1e-10 -ksp_error_if_not_converged \

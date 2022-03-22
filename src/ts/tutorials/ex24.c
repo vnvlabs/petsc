@@ -26,7 +26,7 @@ int main(int argc,char **argv)
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);if (ierr) return ierr;
   ctx.n = 3;
   ierr  = PetscOptionsGetInt(NULL,NULL,"-n",&ctx.n,NULL);CHKERRQ(ierr);
-  if (ctx.n < 2) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"The dimension specified with -n must be at least 2");
+  PetscCheckFalse(ctx.n < 2,PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"The dimension specified with -n must be at least 2");
 
   view_final = PETSC_FALSE;
   ierr = PetscOptionsGetBool(NULL,NULL,"-view_final",&view_final,NULL);CHKERRQ(ierr);
@@ -134,7 +134,6 @@ static PetscErrorCode MonitorObjective(TS ts,PetscInt step,PetscReal t,Vec X,voi
                      step,(double)t,(double)dt,(double)PetscRealPart(f),(double)gnorm,snesit,linit);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /* ------------------------------------------------------------------- */
 /*

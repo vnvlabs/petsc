@@ -217,7 +217,6 @@ static PetscErrorCode TSStep_Mimex_Split(TS ts)
   PetscFunctionReturn(0);
 }
 
-
 /* Evalute F at U and G at U0 for explicit fields and U for implicit fields */
 static PetscErrorCode TSStep_Mimex_Implicit(TS ts)
 {
@@ -250,7 +249,7 @@ static PetscErrorCode TSStep_Mimex(TS ts)
   case 1:
     ierr = TSStep_Mimex_Implicit(ts);CHKERRQ(ierr); break;
   default:
-    SETERRQ1(PetscObjectComm((PetscObject) ts), PETSC_ERR_ARG_OUTOFRANGE, "Unknown MIMEX version %d", mimex->version);
+    SETERRQ(PetscObjectComm((PetscObject) ts), PETSC_ERR_ARG_OUTOFRANGE, "Unknown MIMEX version %d", mimex->version);
   }
   PetscFunctionReturn(0);
 }

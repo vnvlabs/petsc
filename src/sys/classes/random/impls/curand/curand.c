@@ -1,13 +1,6 @@
-#include <../src/sys/classes/random/randomimpl.h>
+#include <petsc/private/deviceimpl.h>
+#include <petsc/private/randomimpl.h>
 #include <curand.h>
-
-#define CHKERRCURAND(stat) \
-do { \
-   if (PetscUnlikely(stat != CURAND_STATUS_SUCCESS)) { \
-     if (((stat == CURAND_STATUS_INITIALIZATION_FAILED) || (stat == CURAND_STATUS_ALLOCATION_FAILED)) && PetscCUDAInitialized) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_GPU_RESOURCE,"cuRAND error %d. Reports not initialized or alloc failed; this indicates the GPU has run out resources",(int)stat); \
-     else SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_GPU,"cuRand error %d",(int)stat); \
-   } \
-} while (0)
 
 typedef struct {
   curandGenerator_t gen;
@@ -29,7 +22,7 @@ PetscErrorCode  PetscRandomGetValuesReal_CURAND(PetscRandom r, PetscInt n, Petsc
 {
   curandStatus_t     cerr;
   PetscRandom_CURAND *curand = (PetscRandom_CURAND*)r->data;
-  size_t             nn = n < 0 ? -2*(size_t)n : n; /* handle complex case */
+  size_t             nn = n < 0 ? (size_t)(-2*n) : n; /* handle complex case */
 
   PetscFunctionBegin;
 #if defined(PETSC_USE_REAL_SINGLE)
@@ -70,13 +63,12 @@ PetscErrorCode PetscRandomDestroy_CURAND(PetscRandom r)
 }
 
 static struct _PetscRandomOps PetscRandomOps_Values = {
-  PetscRandomSeed_CURAND,
-  NULL,
-  NULL,
-  PetscRandomGetValues_CURAND,
-  PetscRandomGetValuesReal_CURAND,
-  PetscRandomDestroy_CURAND,
-  NULL
+  PetscDesignatedInitializer(seed,PetscRandomSeed_CURAND),
+  PetscDesignatedInitializer(getvalue,NULL),
+  PetscDesignatedInitializer(getvaluereal,NULL),
+  PetscDesignatedInitializer(getvalues,PetscRandomGetValues_CURAND),
+  PetscDesignatedInitializer(getvaluesreal,PetscRandomGetValuesReal_CURAND),
+  PetscDesignatedInitializer(destroy,PetscRandomDestroy_CURAND),
 };
 
 /*MC
@@ -94,7 +86,7 @@ PETSC_EXTERN PetscErrorCode PetscRandomCreate_CURAND(PetscRandom r)
   PetscRandom_CURAND *curand;
 
   PetscFunctionBegin;
-  ierr = PetscCUDAInitializeCheck();CHKERRQ(ierr);
+  ierr = PetscDeviceInitialize(PETSC_DEVICE_CUDA);CHKERRQ(ierr);
   ierr = PetscNewLog(r,&curand);CHKERRQ(ierr);
   cerr = curandCreateGenerator(&curand->gen,CURAND_RNG_PSEUDO_DEFAULT);CHKERRCURAND(cerr);
   /* https://docs.nvidia.com/cuda/curand/host-api-overview.html#performance-notes2 */

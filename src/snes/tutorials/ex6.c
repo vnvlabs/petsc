@@ -41,7 +41,7 @@ int main(int argc,char **argv)
 
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);if (ierr) return ierr;
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
-  if (size != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"This is a uniprocessor example only!");
+  PetscCheckFalse(size != 1,PETSC_COMM_SELF,PETSC_ERR_SUP,"This is a uniprocessor example only!");
   ierr = PetscOptionsGetInt(NULL,NULL,"-n",&n,NULL);CHKERRQ(ierr);
   h    = 1.0/(n-1);
   comm = PETSC_COMM_WORLD;
@@ -68,7 +68,6 @@ int main(int argc,char **argv)
      Set function evaluation routine and vector
   */
   ierr = SNESSetFunction(snes,r,FormFunction,(void*)F);CHKERRQ(ierr);
-
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      Create matrix data structure; set Jacobian evaluation routine
@@ -103,14 +102,14 @@ int main(int argc,char **argv)
   /* Just make sure we can not repeat addding the same function
    * PETSc will be able to igore the repeated function
    */
-  for (i=0; i<4; i++){
+  for (i=0; i<4; i++) {
     ierr = SNESConvergedReasonViewSet(snes,MySNESConvergedReasonView,&monP,0);CHKERRQ(ierr);
   }
   ierr = SNESGetKSP(snes,&ksp);CHKERRQ(ierr);
   /* Just make sure we can not repeat addding the same function
    * PETSc will be able to igore the repeated function
    */
-  for (i=0; i<4; i++){
+  for (i=0; i<4; i++) {
     ierr = KSPConvergedReasonViewSet(ksp,MyKSPConvergedReasonView,&monP,0);CHKERRQ(ierr);
   }
   /*
@@ -341,31 +340,35 @@ PetscErrorCode MyKSPConvergedReasonView(KSP ksp,void *ctx)
   return 0;
 }
 
-
 /*TEST
 
    test:
       suffix: 1
       nsize: 1
+      filter: sed -e "s/CONVERGED_ATOL/CONVERGED_RTOL/g"
 
    test:
       suffix: 2
       nsize: 1
       args: -ksp_converged_reason_view_cancel
+      filter: sed -e "s/CONVERGED_ATOL/CONVERGED_RTOL/g"
 
    test:
       suffix: 3
       nsize: 1
       args: -ksp_converged_reason_view_cancel -ksp_converged_reason
+      filter: sed -e "s/CONVERGED_ATOL/CONVERGED_RTOL/g"
 
    test:
       suffix: 4
       nsize: 1
       args: -snes_converged_reason_view_cancel
+      filter: sed -e "s/CONVERGED_ATOL/CONVERGED_RTOL/g"
 
    test:
       suffix: 5
       nsize: 1
       args: -snes_converged_reason_view_cancel -snes_converged_reason
+      filter: sed -e "s/CONVERGED_ATOL/CONVERGED_RTOL/g"
 
 TEST*/

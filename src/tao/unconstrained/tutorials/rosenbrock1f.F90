@@ -10,15 +10,14 @@
 !!/*T
 !  Concepts: TAO^Solving an unconstrained minimization problem
 !  Routines: TaoCreate();
-!  Routines: TaoSetType(); TaoSetObjectiveAndGradientRoutine();
-!  Routines: TaoSetHessianRoutine();
-!  Routines: TaoSetInitialVector();
+!  Routines: TaoSetType(); TaoSetObjectiveAndGradient();
+!  Routines: TaoSetHessian();
+!  Routines: TaoSetSolution();
 !  Routines: TaoSetFromOptions();
 !  Routines: TaoSolve();
 !  Routines: TaoDestroy();
 !  Processors: 1
 !T*/
-
 
 !
 
@@ -64,7 +63,6 @@
       n     = 2
       alpha = 99.0d0
 
-
 ! Check for command line arguments to override defaults
       call PetscOptionsGetInt(PETSC_NULL_OPTIONS,PETSC_NULL_CHARACTER,    &
      &                        '-n',n,flg,ierr)
@@ -80,7 +78,6 @@
 
       call MatSetOption(H,MAT_SYMMETRIC,PETSC_TRUE,ierr)
 
-
 !  The TAO code begins here
 
 !  Create TAO solver
@@ -90,19 +87,17 @@
       CHKERRA(ierr)
 
 !  Set routines for function, gradient, and hessian evaluation
-      call TaoSetObjectiveAndGradientRoutine(tao,                       &
+      call TaoSetObjectiveAndGradient(tao,PETSC_NULL_VEC,                 &
      &      FormFunctionGradient,0,ierr)
       CHKERRA(ierr)
-      call TaoSetHessianRoutine(tao,H,H,FormHessian,                    &
+      call TaoSetHessian(tao,H,H,FormHessian,                             &
      &     0,ierr)
       CHKERRA(ierr)
 
-
 !  Optional: Set initial guess
       call VecSet(x, zero, ierr)
-      call TaoSetInitialVector(tao, x, ierr)
+      call TaoSetSolution(tao, x, ierr)
       CHKERRA(ierr)
-
 
 !  Check for TAO command line options
       call TaoSetFromOptions(tao,ierr)
@@ -116,7 +111,6 @@
 !  can alternatively be used to activate this at runtime.
 !      call TaoView(tao,PETSC_VIEWER_STDOUT_SELF,ierr)
 
-
 !  Free TAO data structures
       call TaoDestroy(tao,ierr)
 
@@ -126,7 +120,6 @@
 
       call PetscFinalize(ierr)
       end
-
 
 ! --------------------------------------------------------------------
 !  FormFunctionGradient - Evaluates the function f(X) and gradient G(X)
@@ -149,7 +142,6 @@
       PetscErrorCode   ierr
       PetscInt         dummy
 
-
       PetscReal        ff,t1,t2
       PetscInt         i,nn
 
@@ -168,7 +160,6 @@
 !     Get pointers to vector data
       call VecGetArrayRead(X,x_v,x_i,ierr)
       call VecGetArray(G,g_v,g_i,ierr)
-
 
 !     Compute G(X)
       do i=0,nn-1
@@ -231,7 +222,6 @@
       PetscOffset      x_i
       PetscInt         i,nn,ind(0:1),i2
 
-
       ierr = 0
       nn= n/2
       i2 = 2
@@ -270,10 +260,6 @@
 
       return
       end
-
-
-
-
 
 !
 !/*TEST

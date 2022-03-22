@@ -6,8 +6,6 @@
 #include <../src/vec/vec/impls/dvecimpl.h>
 #include <petsc/private/kernels/petscaxpy.h>
 
-
-
 #if defined(PETSC_USE_FORTRAN_KERNEL_MDOT)
 #include <../src/vec/vec/impls/seq/ftn-kernels/fmdot.h>
 PetscErrorCode VecMDot_Seq(Vec xin,PetscInt nv,const Vec yin[],PetscScalar *z)
@@ -487,7 +485,6 @@ PetscErrorCode VecMTDot_Seq(Vec xin,PetscInt nv,const Vec yin[],PetscScalar *z)
   PetscFunctionReturn(0);
 }
 
-
 PetscErrorCode VecMax_Seq(Vec xin,PetscInt *idx,PetscReal *z)
 {
   PetscInt          i,j=0,n = xin->map->n;
@@ -740,7 +737,7 @@ PetscErrorCode VecPlaceArray_Seq(Vec vin,const PetscScalar *a)
   Vec_Seq *v = (Vec_Seq*)vin->data;
 
   PetscFunctionBegin;
-  if (v->unplacedarray) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"VecPlaceArray() was already called on this vector, without a call to VecResetArray()");
+  PetscCheckFalse(v->unplacedarray,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"VecPlaceArray() was already called on this vector, without a call to VecResetArray()");
   v->unplacedarray = v->array;  /* save previous array so reset can bring it back */
   v->array         = (PetscScalar*)a;
   PetscFunctionReturn(0);

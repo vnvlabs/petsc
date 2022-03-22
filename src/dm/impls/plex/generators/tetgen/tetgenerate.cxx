@@ -2,6 +2,9 @@
 
 #ifdef PETSC_HAVE_EGADS
 #include <egads.h>
+/* Need to make EGADSLite header compatible */
+extern "C" int EGlite_getTopology(const ego, ego *, int *, int *, double *, int *, ego **, int **);
+extern "C" int EGlite_inTopology(const ego, const double *);
 #endif
 
 #if defined(PETSC_HAVE_TETGEN_TETLIBRARY_NEEDED)
@@ -27,6 +30,7 @@ PETSC_EXTERN PetscErrorCode DMPlexGenerate_Tetgen(DM boundary, PetscBool interpo
   const PetscInt         dim = 3;
   ::tetgenio             in;
   ::tetgenio             out;
+  PetscContainer         modelObj;
   DMUniversalLabel       universal;
   PetscInt               vStart, vEnd, v, eStart, eEnd, e, fStart, fEnd, f;
   DMPlexInterpolatedFlag isInterpolated;
@@ -116,7 +120,7 @@ PETSC_EXTERN PetscErrorCode DMPlexGenerate_Tetgen(DM boundary, PetscBool interpo
       ierr = DMPlexRestoreTransitiveClosure(boundary, f, PETSC_TRUE, &numPoints, &points);CHKERRQ(ierr);
     }
   }
-  if (!rank) {
+  if (rank == 0) {
     DM_Plex *mesh = (DM_Plex *) boundary->data;
     char     args[32];
 
@@ -173,7 +177,7 @@ PETSC_EXTERN PetscErrorCode DMPlexGenerate_Tetgen(DM boundary, PetscBool interpo
           PetscInt        numEdges;
 
           ierr = DMPlexGetJoin(*dm, 2, vertices, &numEdges, &edges);CHKERRQ(ierr);
-          if (numEdges != 1) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Two vertices must cover only one edge, not %D", numEdges);
+          PetscCheckFalse(numEdges != 1,PETSC_COMM_SELF, PETSC_ERR_PLIB, "Two vertices must cover only one edge, not %D", numEdges);
           ierr = DMUniversalLabelSetLabelValue(universal, *dm, PETSC_TRUE, edges[0], out.edgemarkerlist[e]);CHKERRQ(ierr);
           ierr = DMPlexRestoreJoin(*dm, 2, vertices, &numEdges, &edges);CHKERRQ(ierr);
         }
@@ -185,28 +189,41 @@ PETSC_EXTERN PetscErrorCode DMPlexGenerate_Tetgen(DM boundary, PetscBool interpo
           PetscInt        numFaces;
 
           ierr = DMPlexGetFullJoin(*dm, 3, vertices, &numFaces, &faces);CHKERRQ(ierr);
-          if (numFaces != 1) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Three vertices must cover only one face, not %D", numFaces);
+          PetscCheckFalse(numFaces != 1,PETSC_COMM_SELF, PETSC_ERR_PLIB, "Three vertices must cover only one face, not %D", numFaces);
           ierr = DMUniversalLabelSetLabelValue(universal, *dm, PETSC_TRUE, faces[0], out.trifacemarkerlist[f]);CHKERRQ(ierr);
           ierr = DMPlexRestoreJoin(*dm, 3, vertices, &numFaces, &faces);CHKERRQ(ierr);
         }
       }
     }
 
+    ierr = PetscObjectQuery((PetscObject) boundary, "EGADS Model", (PetscObject *) &modelObj);CHKERRQ(ierr);
+    if (modelObj) {
 #ifdef PETSC_HAVE_EGADS
-    {
       DMLabel        bodyLabel;
-      PetscContainer modelObj;
       PetscInt       cStart, cEnd, c, eStart, eEnd, fStart, fEnd;
+      PetscBool      islite = PETSC_FALSE;
       ego           *bodies;
       ego            model, geom;
       int            Nb, oclass, mtype, *senses;
 
       /* Get Attached EGADS Model from Original DMPlex */
       ierr = PetscObjectQuery((PetscObject) boundary, "EGADS Model", (PetscObject *) &modelObj);CHKERRQ(ierr);
-      ierr = PetscContainerGetPointer(modelObj, (void **) &model);CHKERRQ(ierr);
-      ierr = EG_getTopology(model, &geom, &oclass, &mtype, NULL, &Nb, &bodies, &senses);CHKERRQ(ierr);
-      /* Transfer EGADS Model to Volumetric Mesh */
-      ierr = PetscObjectCompose((PetscObject) *dm, "EGADS Model", (PetscObject) modelObj);CHKERRQ(ierr);
+      if (modelObj) {
+        ierr = PetscContainerGetPointer(modelObj, (void **) &model);CHKERRQ(ierr);
+        ierr = EG_getTopology(model, &geom, &oclass, &mtype, NULL, &Nb, &bodies, &senses);CHKERRQ(ierr);
+        /* Transfer EGADS Model to Volumetric Mesh */
+        ierr = PetscObjectCompose((PetscObject) *dm, "EGADS Model", (PetscObject) modelObj);CHKERRQ(ierr);
+      } else {
+        ierr = PetscObjectQuery((PetscObject) boundary, "EGADSLite Model", (PetscObject *) &modelObj);CHKERRQ(ierr);
+        if (modelObj) {
+          ierr = PetscContainerGetPointer(modelObj, (void **) &model);CHKERRQ(ierr);
+          ierr = EGlite_getTopology(model, &geom, &oclass, &mtype, NULL, &Nb, &bodies, &senses);CHKERRQ(ierr);
+          /* Transfer EGADS Model to Volumetric Mesh */
+          ierr = PetscObjectCompose((PetscObject) *dm, "EGADSLite Model", (PetscObject) modelObj);CHKERRQ(ierr);
+          islite = PETSC_TRUE;
+        }
+      }
+      if (!modelObj) goto skip_egads;
 
       /* Set Cell Labels */
       ierr = DMGetLabel(*dm, "EGADS Body ID", &bodyLabel);CHKERRQ(ierr);
@@ -234,7 +251,8 @@ PETSC_EXTERN PetscErrorCode DMPlexGenerate_Tetgen(DM boundary, PetscBool interpo
           ierr = DMPlexComputeCellGeometryFVM(*dm, c, NULL, centroid, NULL);CHKERRQ(ierr);
         }
         for (b = 0; b < Nb; ++b) {
-          if (EG_inTopology(bodies[b], centroid) == EGADS_SUCCESS) break;
+          if (islite) {if (EGlite_inTopology(bodies[b], centroid) == EGADS_SUCCESS) break;}
+          else        {if (EG_inTopology(bodies[b], centroid) == EGADS_SUCCESS) break;}
         }
         if (b < Nb) {
           PetscInt   cval = b, eVal, fVal;
@@ -257,10 +275,12 @@ PETSC_EXTERN PetscErrorCode DMPlexGenerate_Tetgen(DM boundary, PetscBool interpo
           ierr = DMPlexRestoreTransitiveClosure(*dm, c, PETSC_TRUE, &Ncl, &closure);CHKERRQ(ierr);
         }
       }
-    }
+skip_egads: ;
 #endif
+    }
     ierr = DMPlexSetRefinementUniform(*dm, PETSC_FALSE);CHKERRQ(ierr);
   }
+  ierr = DMUniversalLabelDestroy(&universal);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -270,6 +290,7 @@ PETSC_EXTERN PetscErrorCode DMPlexRefine_Tetgen(DM dm, double *maxVolumes, DM *d
   const PetscInt         dim = 3;
   ::tetgenio             in;
   ::tetgenio             out;
+  PetscContainer         modelObj;
   DMUniversalLabel       universal;
   PetscInt               vStart, vEnd, v, eStart, eEnd, e, fStart, fEnd, f, cStart, cEnd, c;
   DMPlexInterpolatedFlag isInterpolated;
@@ -374,13 +395,13 @@ PETSC_EXTERN PetscErrorCode DMPlexRefine_Tetgen(DM dm, double *maxVolumes, DM *d
       PetscInt       closureSize;
 
       ierr = DMPlexGetTransitiveClosure(dm, c, PETSC_TRUE, &closureSize, &closure);CHKERRQ(ierr);
-      if ((closureSize != 5) && (closureSize != 15)) SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Mesh has cell which is not a tetrahedron, %D vertices in closure", closureSize);
+      PetscCheckFalse((closureSize != 5) && (closureSize != 15),comm, PETSC_ERR_ARG_WRONG, "Mesh has cell which is not a tetrahedron, %D vertices in closure", closureSize);
       for (v = 0; v < 4; ++v) in.tetrahedronlist[idx*in.numberofcorners + v] = closure[(v+closureSize-4)*2] - vStart;
       ierr = DMPlexRestoreTransitiveClosure(dm, c, PETSC_TRUE, &closureSize, &closure);CHKERRQ(ierr);
     }
   }
 
-  if (!rank) {
+  if (rank == 0) {
     char args[32];
 
     /* Take away 'Q' for verbose output */
@@ -436,7 +457,7 @@ PETSC_EXTERN PetscErrorCode DMPlexRefine_Tetgen(DM dm, double *maxVolumes, DM *d
           PetscInt        numEdges;
 
           ierr = DMPlexGetJoin(*dmRefined, 2, vertices, &numEdges, &edges);CHKERRQ(ierr);
-          if (numEdges != 1) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Two vertices must cover only one edge, not %D", numEdges);
+          PetscCheckFalse(numEdges != 1,PETSC_COMM_SELF, PETSC_ERR_PLIB, "Two vertices must cover only one edge, not %D", numEdges);
           ierr = DMUniversalLabelSetLabelValue(universal, *dmRefined, PETSC_TRUE, edges[0], out.edgemarkerlist[e]);CHKERRQ(ierr);
           ierr = DMPlexRestoreJoin(*dmRefined, 2, vertices, &numEdges, &edges);CHKERRQ(ierr);
         }
@@ -448,28 +469,41 @@ PETSC_EXTERN PetscErrorCode DMPlexRefine_Tetgen(DM dm, double *maxVolumes, DM *d
           PetscInt        numFaces;
 
           ierr = DMPlexGetFullJoin(*dmRefined, 3, vertices, &numFaces, &faces);CHKERRQ(ierr);
-          if (numFaces != 1) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Three vertices must cover only one face, not %D", numFaces);
+          PetscCheckFalse(numFaces != 1,PETSC_COMM_SELF, PETSC_ERR_PLIB, "Three vertices must cover only one face, not %D", numFaces);
           ierr = DMUniversalLabelSetLabelValue(universal, *dmRefined, PETSC_TRUE, faces[0], out.trifacemarkerlist[f]);CHKERRQ(ierr);
           ierr = DMPlexRestoreJoin(*dmRefined, 3, vertices, &numFaces, &faces);CHKERRQ(ierr);
         }
       }
     }
 
+    ierr = PetscObjectQuery((PetscObject) dm, "EGADS Model", (PetscObject *) &modelObj);CHKERRQ(ierr);
+    if (modelObj) {
 #ifdef PETSC_HAVE_EGADS
-    {
       DMLabel        bodyLabel;
-      PetscContainer modelObj;
       PetscInt       cStart, cEnd, c, eStart, eEnd, fStart, fEnd;
+      PetscBool      islite = PETSC_FALSE;
       ego           *bodies;
       ego            model, geom;
       int            Nb, oclass, mtype, *senses;
 
       /* Get Attached EGADS Model from Original DMPlex */
       ierr = PetscObjectQuery((PetscObject) dm, "EGADS Model", (PetscObject *) &modelObj);CHKERRQ(ierr);
-      ierr = PetscContainerGetPointer(modelObj, (void **) &model);CHKERRQ(ierr);
-      ierr = EG_getTopology(model, &geom, &oclass, &mtype, NULL, &Nb, &bodies, &senses);CHKERRQ(ierr);
-      /* Transfer EGADS Model to Volumetric Mesh */
-      ierr = PetscObjectCompose((PetscObject) *dmRefined, "EGADS Model", (PetscObject) modelObj);CHKERRQ(ierr);
+      if (modelObj) {
+        ierr = PetscContainerGetPointer(modelObj, (void **) &model);CHKERRQ(ierr);
+        ierr = EG_getTopology(model, &geom, &oclass, &mtype, NULL, &Nb, &bodies, &senses);CHKERRQ(ierr);
+        /* Transfer EGADS Model to Volumetric Mesh */
+        ierr = PetscObjectCompose((PetscObject) *dmRefined, "EGADS Model", (PetscObject) modelObj);CHKERRQ(ierr);
+      } else {
+        ierr = PetscObjectQuery((PetscObject) dm, "EGADSLite Model", (PetscObject *) &modelObj);CHKERRQ(ierr);
+        if (modelObj) {
+          ierr = PetscContainerGetPointer(modelObj, (void **) &model);CHKERRQ(ierr);
+          ierr = EGlite_getTopology(model, &geom, &oclass, &mtype, NULL, &Nb, &bodies, &senses);CHKERRQ(ierr);
+          /* Transfer EGADS Model to Volumetric Mesh */
+          ierr = PetscObjectCompose((PetscObject) *dmRefined, "EGADSLite Model", (PetscObject) modelObj);CHKERRQ(ierr);
+          islite = PETSC_TRUE;
+        }
+      }
+      if (!modelObj) goto skip_egads;
 
       /* Set Cell Labels */
       ierr = DMGetLabel(*dmRefined, "EGADS Body ID", &bodyLabel);CHKERRQ(ierr);
@@ -497,7 +531,8 @@ PETSC_EXTERN PetscErrorCode DMPlexRefine_Tetgen(DM dm, double *maxVolumes, DM *d
           ierr = DMPlexComputeCellGeometryFVM(*dmRefined, c, NULL, centroid, NULL);CHKERRQ(ierr);
         }
         for (b = 0; b < Nb; ++b) {
-          if (EG_inTopology(bodies[b], centroid) == EGADS_SUCCESS) break;
+          if (islite) {if (EGlite_inTopology(bodies[b], centroid) == EGADS_SUCCESS) break;}
+          else        {if (EG_inTopology(bodies[b], centroid) == EGADS_SUCCESS) break;}
         }
         if (b < Nb) {
           PetscInt   cval = b, eVal, fVal;
@@ -520,8 +555,9 @@ PETSC_EXTERN PetscErrorCode DMPlexRefine_Tetgen(DM dm, double *maxVolumes, DM *d
           ierr = DMPlexRestoreTransitiveClosure(*dmRefined, c, PETSC_TRUE, &Ncl, &closure);CHKERRQ(ierr);
         }
       }
-    }
+skip_egads: ;
 #endif
+    }
     ierr = DMPlexSetRefinementUniform(*dmRefined, PETSC_FALSE);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);

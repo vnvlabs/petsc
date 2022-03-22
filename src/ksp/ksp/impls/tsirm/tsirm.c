@@ -1,5 +1,4 @@
 
-
 #include <petsc/private/kspimpl.h>      /*I "petscksp.h" I*/
 
 typedef struct {
@@ -68,7 +67,7 @@ PetscErrorCode KSPSolve_TSIRM(KSP ksp)
   /* Inner solver */
   ierr = KSPGetPC(ksp,&pc);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)pc,PCKSP,&isksp);CHKERRQ(ierr);
-  if (!isksp) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_USER,"PC must be of type PCKSP");
+  PetscCheckFalse(!isksp,PetscObjectComm((PetscObject)pc),PETSC_ERR_USER,"PC must be of type PCKSP");
   ierr = PCKSPGetKSP(pc,&sub_ksp);CHKERRQ(ierr);
   ierr = KSPSetTolerances(sub_ksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,restart);CHKERRQ(ierr);
 
@@ -165,7 +164,6 @@ PetscErrorCode KSPDestroy_TSIRM(KSP ksp)
 /*MC
      KSPTSIRM - Implements the two-stage iteration with least-squares residual minimization method.
 
-
    Options Database Keys:
 +  -ksp_ksp_type <solver> -         the type of the inner solver (GMRES or any of its variants for instance)
 .  -ksp_pc_type <preconditioner> - the type of the preconditioner applied to the inner solver
@@ -189,7 +187,7 @@ PetscErrorCode KSPDestroy_TSIRM(KSP ksp)
           a minimal residual is computed with x=Sa.
 
    References:
-. 1 R. Couturier, L. Ziane Khodja, and C. Guyeux. TSIRM: A Two-Stage Iteration with least-squares Residual Minimization algorithm to solve large sparse linear systems. In PDSEC 2015, 16th IEEE Int. Workshop on Parallel and Distributed Scientific and Engineering Computing (in conjunction with IPDPS 2015), Hyderabad, India, 2015.
+.  * - R. Couturier, L. Ziane Khodja, and C. Guyeux. TSIRM: A Two-Stage Iteration with least-squares Residual Minimization algorithm to solve large sparse linear systems. In PDSEC 2015, 16th IEEE Int. Workshop on Parallel and Distributed Scientific and Engineering Computing (in conjunction with IPDPS 2015), Hyderabad, India, 2015.
 
    Contributed by: Lilia Ziane Khodja
 

@@ -8,7 +8,7 @@ static PetscErrorCode MatMult_S(Mat S,Vec x,Vec y)
   Mat            A;
 
   PetscFunctionBeginUser;
-  ierr = MatShellGetContext(S,(void**)&A);CHKERRQ(ierr);
+  ierr = MatShellGetContext(S,&A);CHKERRQ(ierr);
   ierr = MatMult(A,x,y);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -21,7 +21,7 @@ static PetscErrorCode MatMultTranspose_S(Mat S,Vec x,Vec y)
   Mat            A;
 
   PetscFunctionBeginUser;
-  ierr = MatShellGetContext(S,(void**)&A);CHKERRQ(ierr);
+  ierr = MatShellGetContext(S,&A);CHKERRQ(ierr);
   ierr = MatMultTranspose(A,x,y);CHKERRQ(ierr);
 
   /* alternate transgen true and false to test code logic */
@@ -46,9 +46,9 @@ int main(int argc,char **argv)
   ierr = PetscOptionsGetInt(NULL,NULL,"-l",&l,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetInt(NULL,NULL,"-test",&test,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetBool(NULL,NULL,"-use_shell",&use_shell,NULL);CHKERRQ(ierr);
-  if (k < 0) SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_USER,"k %D must be positive",k);
-  if (l < 0) SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_USER,"l %D must be positive",l);
-  if (l > k) SETERRQ2(PETSC_COMM_WORLD,PETSC_ERR_USER,"l %D must be smaller or equal than k %D\n",l,k);
+  PetscCheckFalse(k < 0,PETSC_COMM_WORLD,PETSC_ERR_USER,"k %" PetscInt_FMT " must be positive",k);
+  PetscCheckFalse(l < 0,PETSC_COMM_WORLD,PETSC_ERR_USER,"l %" PetscInt_FMT " must be positive",l);
+  PetscCheckFalse(l > k,PETSC_COMM_WORLD,PETSC_ERR_USER,"l %" PetscInt_FMT " must be smaller or equal than k %" PetscInt_FMT,l,k);
 
   /* sparse matrix */
   ierr = MatCreate(PETSC_COMM_WORLD,&A);CHKERRQ(ierr);
@@ -133,7 +133,7 @@ int main(int argc,char **argv)
   ierr = MatProductSymbolic(C);CHKERRQ(ierr);
   ierr = MatProductNumeric(C);CHKERRQ(ierr);
   ierr = MatMatMultEqual(S,B,C,10,&flg);CHKERRQ(ierr);
-  if (!flg) { ierr = PetscPrintf(PETSC_COMM_WORLD,"Error MatMatMult\n"); }
+  if (!flg) { ierr = PetscPrintf(PETSC_COMM_WORLD,"Error MatMatMult\n");CHKERRQ(ierr); }
 
   /* test MatTransposeMatMult */
   ierr = MatProductCreateWithMat(S,B,NULL,C);CHKERRQ(ierr);
@@ -142,14 +142,14 @@ int main(int argc,char **argv)
   ierr = MatProductSymbolic(C);CHKERRQ(ierr);
   ierr = MatProductNumeric(C);CHKERRQ(ierr);
   ierr = MatTransposeMatMultEqual(S,B,C,10,&flg);CHKERRQ(ierr);
-  if (!flg) { ierr = PetscPrintf(PETSC_COMM_WORLD,"Error MatTransposeMatMult\n"); }
+  if (!flg) { ierr = PetscPrintf(PETSC_COMM_WORLD,"Error MatTransposeMatMult\n");CHKERRQ(ierr); }
 
   ierr = MatDestroy(&C);CHKERRQ(ierr);
   ierr = MatDestroy(&S);CHKERRQ(ierr);
 
   /* finished using B */
   ierr = MatDenseCUDAGetArray(B,&aa);CHKERRQ(ierr);
-  if (vv != aa-l*nloc) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong array");
+  PetscCheckFalse(vv != aa-l*nloc,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong array");
   ierr = MatDenseCUDARestoreArray(B,&aa);CHKERRQ(ierr);
   if (reset) {
     ierr = MatDenseCUDAResetArray(B);CHKERRQ(ierr);
@@ -158,7 +158,7 @@ int main(int argc,char **argv)
 
   if (test == 1) {
     ierr = MatDenseCUDAGetArray(B,&aa);CHKERRQ(ierr);
-    if (aa) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Expected a null pointer");
+    PetscCheckFalse(aa,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Expected a null pointer");
     ierr = MatDenseCUDARestoreArray(B,&aa);CHKERRQ(ierr);
   }
 

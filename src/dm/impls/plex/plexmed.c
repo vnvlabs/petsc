@@ -54,16 +54,16 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
   ierr = MPI_Comm_size(comm, &size);CHKERRMPI(ierr);
 #if defined(PETSC_HAVE_MED)
   mederr = MEDfileCompatibility(filename, &hdfok, &medok);
-  if (mederr) SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Cannot determine MED file compatibility: %s", filename);
-  if (!hdfok) SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Not a compatible HDF format: %s", filename);
-  if (!medok) SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Not a compatible MED format: %s", filename);
+  PetscCheckFalse(mederr,comm, PETSC_ERR_ARG_WRONG, "Cannot determine MED file compatibility: %s", filename);
+  PetscCheckFalse(!hdfok,comm, PETSC_ERR_ARG_WRONG, "Not a compatible HDF format: %s", filename);
+  PetscCheckFalse(!medok,comm, PETSC_ERR_ARG_WRONG, "Not a compatible MED format: %s", filename);
 
   fileID = MEDfileOpen(filename, MED_ACC_RDONLY);
-  if (fileID < 0) SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Unable to open .med mesh file: %s", filename);
+  PetscCheckFalse(fileID < 0,comm, PETSC_ERR_ARG_WRONG, "Unable to open .med mesh file: %s", filename);
   mederr = MEDfileNumVersionRd(fileID, &major, &minor, &release);
-  if (MEDnMesh (fileID) < 1) SETERRQ4(comm, PETSC_ERR_ARG_WRONG, "No meshes found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
+  PetscCheckFalse(MEDnMesh (fileID) < 1,comm, PETSC_ERR_ARG_WRONG, "No meshes found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
   spaceDim = MEDmeshnAxis(fileID, 1);
-  if (spaceDim < 1) SETERRQ4(comm, PETSC_ERR_ARG_WRONG, "Mesh of unknown space dimension found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
+  PetscCheckFalse(spaceDim < 1,comm, PETSC_ERR_ARG_WRONG, "Mesh of unknown space dimension found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
   /* Read general mesh information */
   ierr = PetscMalloc1(MED_SNAME_SIZE*spaceDim+1, &axisname);CHKERRQ(ierr);
   ierr = PetscMalloc1(MED_SNAME_SIZE*spaceDim+1, &unitname);CHKERRQ(ierr);
@@ -76,8 +76,8 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
     spaceDim = medSpaceDim;
     meshDim  = medMeshDim;
   }
-  ierr = PetscFree(axisname);
-  ierr = PetscFree(unitname);
+  ierr = PetscFree(axisname);CHKERRQ(ierr);
+  ierr = PetscFree(unitname);CHKERRQ(ierr);
   /* Partition mesh coordinates */
   numVertices = MEDmeshnEntity(fileID, meshname, MED_NO_DT, MED_NO_IT, MED_NODE, MED_NO_GEOTYPE,
                                MED_COORDINATE, MED_NO_CMODE,&coordinatechangement, &geotransformation);
@@ -90,14 +90,14 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
   ierr = MEDfilterBlockOfEntityCr(fileID, numVertices, 1, spaceDim, MED_ALL_CONSTITUENT, MED_FULL_INTERLACE, MED_COMPACT_STMODE,
                                   MED_NO_PROFILE, vrange[rank]+1, 1, numVerticesLocal, 1, 1, &vfilter);CHKERRQ(ierr);
   /* Read mesh coordinates */
-  if (numVertices < 0) SETERRQ4(comm, PETSC_ERR_ARG_WRONG, "No nodes found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
+  PetscCheckFalse(numVertices < 0,comm, PETSC_ERR_ARG_WRONG, "No nodes found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
   ierr = PetscMalloc1(numVerticesLocal*spaceDim, &coordinates);CHKERRQ(ierr);
   ierr = MEDmeshNodeCoordinateAdvancedRd(fileID, meshname, MED_NO_DT, MED_NO_IT, &vfilter, coordinates);CHKERRQ(ierr);
   /* Read the types of entity sets in the mesh */
   ngeo = MEDmeshnEntity(fileID, meshname, MED_NO_DT, MED_NO_IT, MED_CELL,MED_GEO_ALL, MED_CONNECTIVITY,
                         MED_NODAL, &coordinatechangement, &geotransformation);
-  if (ngeo < 1) SETERRQ4(comm, PETSC_ERR_ARG_WRONG, "No cells found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
-  if (ngeo > 2) SETERRQ4(comm, PETSC_ERR_ARG_WRONG, "Currently no support for hybrid meshes in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
+  PetscCheckFalse(ngeo < 1,comm, PETSC_ERR_ARG_WRONG, "No cells found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
+  PetscCheckFalse(ngeo > 2,comm, PETSC_ERR_ARG_WRONG, "Currently no support for hybrid meshes in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
   ierr = MEDmeshEntityInfo(fileID, meshname, MED_NO_DT, MED_NO_IT, MED_CELL, 1, geotypename, &(geotype[0]));CHKERRQ(ierr);
   if (ngeo > 1) {ierr = MEDmeshEntityInfo(fileID, meshname, MED_NO_DT, MED_NO_IT, MED_CELL, 2, geotypename, &(geotype[1]));CHKERRQ(ierr);}
   else geotype[1] = 0;
@@ -118,11 +118,11 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
   ierr = MEDfilterBlockOfEntityCr(fileID, numCells, 1, numCorners, MED_ALL_CONSTITUENT, MED_FULL_INTERLACE, MED_COMPACT_STMODE,
                                   MED_NO_PROFILE, crange[rank]+1, 1, numCellsLocal, 1, 1, &cfilter);CHKERRQ(ierr);
   /* Read cell connectivity */
-  if (numCells < 0) SETERRQ4(comm, PETSC_ERR_ARG_WRONG, "No cells found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
+  PetscCheckFalse(numCells < 0,comm, PETSC_ERR_ARG_WRONG, "No cells found in .med v%d.%d.%d mesh file: %s", major, minor, release, filename);
   ierr = PetscMalloc1(numCellsLocal*numCorners, &medCellList);CHKERRQ(ierr);
   ierr = MEDmeshElementConnectivityAdvancedRd(fileID, meshname, MED_NO_DT, MED_NO_IT, MED_CELL, geotype[cellID],
                                               MED_NODAL, &cfilter, medCellList);CHKERRQ(ierr);
-  if (sizeof(med_int) > sizeof(PetscInt)) SETERRQ2(comm, PETSC_ERR_ARG_SIZ, "Size of PetscInt %zd less than  size of med_int %zd. Reconfigure PETSc --with-64-bit-indices=1", sizeof(PetscInt), sizeof(med_int));
+  PetscCheckFalse(sizeof(med_int) > sizeof(PetscInt),comm, PETSC_ERR_ARG_SIZ, "Size of PetscInt %zd less than  size of med_int %zd. Reconfigure PETSc --with-64-bit-indices=1", sizeof(PetscInt), sizeof(med_int));
   ierr = PetscMalloc1(numCellsLocal*numCorners, &cellList);CHKERRQ(ierr);
   for (i = 0; i < numCellsLocal*numCorners; i++) {
     cellList[i] = ((PetscInt) medCellList[i]) - 1; /* Correct entity counting */
@@ -148,7 +148,7 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
       }
     }
   }
-  ierr = DMPlexCreateFromCellListParallelPetsc(comm, meshDim, numCellsLocal, numVerticesLocal, numVertices, numCorners, interpolate, cellList, spaceDim, vertcoords, &sfVertices, dm);CHKERRQ(ierr);
+  ierr = DMPlexCreateFromCellListParallelPetsc(comm, meshDim, numCellsLocal, numVerticesLocal, numVertices, numCorners, interpolate, cellList, spaceDim, vertcoords, &sfVertices, NULL, dm);CHKERRQ(ierr);
   if (sizeof(med_float) == sizeof(PetscReal)) {
     vertcoords = NULL;
   } else {
@@ -189,7 +189,7 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
       for (i = 0; i < numFacetsLocal*numFacetCorners; i++) {
         facetList[i] = ((PetscInt) medFacetList[i]) - 1 ; /* Correct entity counting */
       }
-      ierr = PetscFree(medFacetList);
+      ierr = PetscFree(medFacetList);CHKERRQ(ierr);
     }
 
     /* Read facet IDs */
@@ -279,10 +279,10 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
           const PetscInt vertex = facetListRendezvous[f*numFacetCorners+c];
           if (vrange[rank] <= vertex && vertex < vrange[rank+1]) {
             /* Flip facet connectivities and IDs to a vertex-wise layout */
-            ierr = PetscSectionGetOffset(facetSectionVertices, vertex-vrange[rank], &offset);
+            ierr = PetscSectionGetOffset(facetSectionVertices, vertex-vrange[rank], &offset);CHKERRQ(ierr);
             offset += vertexIdx[vertex-vrange[rank]] * numFacetCorners;
             ierr = PetscArraycpy(&(vertexFacets[offset]), &(facetListRendezvous[f*numFacetCorners]), numFacetCorners);CHKERRQ(ierr);
-            ierr = PetscSectionGetOffset(facetSectionIDs, vertex-vrange[rank], &offset);
+            ierr = PetscSectionGetOffset(facetSectionIDs, vertex-vrange[rank], &offset);CHKERRQ(ierr);
             offset += vertexIdx[vertex-vrange[rank]];
             vertexFacetIDs[offset] = facetIDsRendezvous[f];
             vertexIdx[vertex-vrange[rank]]++;
@@ -291,17 +291,17 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
       }
       /* Distribute the vertex-wise facet connectivities over the vertexSF */
       ierr = PetscSectionCreate(comm, &facetSectionRemote);CHKERRQ(ierr);
-      ierr = DMPlexDistributeData(*dm, sfVertices, facetSectionVertices, MPIU_INT, vertexFacets, facetSectionRemote, (void**) &facetListRemote);
+      ierr = DMPlexDistributeData(*dm, sfVertices, facetSectionVertices, MPIU_INT, vertexFacets, facetSectionRemote, (void**) &facetListRemote);CHKERRQ(ierr);
       ierr = PetscSectionCreate(comm, &facetSectionIDsRemote);CHKERRQ(ierr);
-      ierr = DMPlexDistributeData(*dm, sfVertices, facetSectionIDs, MPIU_INT, vertexFacetIDs, facetSectionIDsRemote, (void**) &facetIDsRemote);
+      ierr = DMPlexDistributeData(*dm, sfVertices, facetSectionIDs, MPIU_INT, vertexFacetIDs, facetSectionIDsRemote, (void**) &facetIDsRemote);CHKERRQ(ierr);
       /* Convert facet connectivities to local vertex numbering */
       ierr = PetscSectionGetStorageSize(facetSectionRemote, &sizeVertexFacets);CHKERRQ(ierr);
       ierr = ISLocalToGlobalMappingCreateSF(sfVertices, vrange[rank], &ltogVertexNumbering);CHKERRQ(ierr);
       ierr = ISGlobalToLocalMappingApplyBlock(ltogVertexNumbering, IS_GTOLM_MASK, sizeVertexFacets, facetListRemote, NULL, facetListRemote);CHKERRQ(ierr);
       /* Clean up */
-      ierr = PetscFree(vertexFacets);
-      ierr = PetscFree(vertexIdx);
-      ierr = PetscFree(vertexFacetIDs);
+      ierr = PetscFree(vertexFacets);CHKERRQ(ierr);
+      ierr = PetscFree(vertexIdx);CHKERRQ(ierr);
+      ierr = PetscFree(vertexFacetIDs);CHKERRQ(ierr);
       ierr = PetscSectionDestroy(&facetSectionVertices);CHKERRQ(ierr);
       ierr = PetscSectionDestroy(&facetSectionIDs);CHKERRQ(ierr);
       ierr = ISLocalToGlobalMappingDestroy(&ltogVertexNumbering);CHKERRQ(ierr);
@@ -314,10 +314,10 @@ PetscErrorCode DMPlexCreateMedFromFile(MPI_Comm comm, const char filename[], Pet
       ierr = DMCreateLabel(*dm, "Face Sets");CHKERRQ(ierr);
       ierr = DMGetLabel(*dm, "Face Sets", &lblFaceSets);CHKERRQ(ierr);
       /* We need to set a new default value here, since -1 is a legitimate facet ID */
-      ierr = DMLabelSetDefaultValue(lblFaceSets, -666666666);
+      ierr = DMLabelSetDefaultValue(lblFaceSets, -666666666);CHKERRQ(ierr);
       for (v = 0; v < numVerticesLocal; v++) {
-        ierr = PetscSectionGetOffset(facetSectionRemote, v, &offset);
-        ierr = PetscSectionGetDof(facetSectionRemote, v, &dof);
+        ierr = PetscSectionGetOffset(facetSectionRemote, v, &offset);CHKERRQ(ierr);
+        ierr = PetscSectionGetDof(facetSectionRemote, v, &dof);CHKERRQ(ierr);
         for (f = 0; f < dof; f += numFacetCorners) {
           for (verticesLocal = PETSC_TRUE, c = 0; c < numFacetCorners; ++c) {
             if (facetListRemote[offset+f+c] < 0) {verticesLocal = PETSC_FALSE; break;}

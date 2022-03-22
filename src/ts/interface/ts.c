@@ -35,7 +35,7 @@ static PetscErrorCode TSAdaptSetDefaultType(TSAdapt adapt,TSAdaptType default_ty
 .  ts - the TS context obtained from TSCreate()
 
    Options Database Keys:
-+  -ts_type <type> - TSEULER, TSBEULER, TSSUNDIALS, TSPSEUDO, TSCN, TSRK, TSTHETA, TSALPHA, TSGLLE, TSSSP, TSGLEE, TSBSYMP
++  -ts_type <type> - TSEULER, TSBEULER, TSSUNDIALS, TSPSEUDO, TSCN, TSRK, TSTHETA, TSALPHA, TSGLLE, TSSSP, TSGLEE, TSBSYMP, TSIRK
 .  -ts_save_trajectory - checkpoint the solution at each time-step
 .  -ts_max_time <time> - maximum time to compute to
 .  -ts_max_steps <steps> - maximum number of time-steps to take
@@ -47,10 +47,10 @@ static PetscErrorCode TSAdaptSetDefaultType(TSAdapt adapt,TSAdaptType default_ty
 .  -ts_max_reject <maxrejects> - Maximum number of step rejections before step fails
 .  -ts_error_if_step_fails <true,false> - Error if no step succeeds
 .  -ts_rtol <rtol> - relative tolerance for local truncation error
-.  -ts_atol <atol> Absolute tolerance for local truncation error
+.  -ts_atol <atol> - Absolute tolerance for local truncation error
 .  -ts_rhs_jacobian_test_mult -mat_shell_test_mult_view - test the Jacobian at each iteration against finite difference with RHS function
 .  -ts_rhs_jacobian_test_mult_transpose -mat_shell_test_mult_transpose_view - test the Jacobian at each iteration against finite difference with RHS function
-.  -ts_adjoint_solve <yes,no> After solving the ODE/DAE solve the adjoint problem (requires -ts_save_trajectory)
+.  -ts_adjoint_solve <yes,no> - After solving the ODE/DAE solve the adjoint problem (requires -ts_save_trajectory)
 .  -ts_fd_color - Use finite differences with coloring to compute IJacobian
 .  -ts_monitor - print information at each timestep
 .  -ts_monitor_cancel - Cancel all monitors
@@ -232,9 +232,13 @@ PetscErrorCode  TSSetFromOptions(TS ts)
   ierr = PetscOptionsName("-ts_monitor_sp_swarm","Display particle phase from the DMSwarm","TSMonitorSPSwarm",&opt);CHKERRQ(ierr);
   if (opt) {
     TSMonitorSPCtx  ctx;
-    PetscInt        howoften = 1;
-    ierr = PetscOptionsInt("-ts_monitor_sp_swarm","Display particles phase from the DMSwarm","TSMonitorSPSwarm",howoften,&howoften,NULL);CHKERRQ(ierr);
-    ierr = TSMonitorSPCtxCreate(PETSC_COMM_SELF, NULL, NULL, PETSC_DECIDE, PETSC_DECIDE, 300, 300, howoften, &ctx);CHKERRQ(ierr);
+    PetscInt        howoften = 1, retain = 0;
+    PetscBool       phase = PETSC_TRUE;
+
+    ierr = PetscOptionsInt("-ts_monitor_sp_swarm","Display particles phase from the DMSwarm", "TSMonitorSPSwarm", howoften, &howoften, NULL);CHKERRQ(ierr);
+    ierr = PetscOptionsInt("-ts_monitor_sp_swarm_retain", "Retain n points plotted to show trajectory, -1 for all points", "TSMonitorSPSwarm", retain, &retain, NULL);CHKERRQ(ierr);
+    ierr = PetscOptionsBool("-ts_monitor_sp_swarm_phase", "Plot in phase space rather than coordinate space", "TSMonitorSPSwarm", phase, &phase, NULL);CHKERRQ(ierr);
+    ierr = TSMonitorSPCtxCreate(PetscObjectComm((PetscObject) ts), NULL, NULL, PETSC_DECIDE, PETSC_DECIDE, 300, 300, howoften, retain, phase, &ctx);CHKERRQ(ierr);
     ierr = TSMonitorSet(ts, TSMonitorSPSwarmSolution, ctx, (PetscErrorCode (*)(void**))TSMonitorSPCtxDestroy);CHKERRQ(ierr);
   }
   opt  = PETSC_FALSE;
@@ -257,7 +261,7 @@ PetscErrorCode  TSSetFromOptions(TS ts)
     PetscDrawAxis    axis;
 
     ierr = PetscOptionsRealArray("-ts_monitor_draw_solution_phase","Monitor solution graphically","TSMonitorDrawSolutionPhase",bounds,&n,NULL);CHKERRQ(ierr);
-    if (n != 4) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONG,"Must provide bounding box of phase field");
+    PetscCheckFalse(n != 4,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONG,"Must provide bounding box of phase field");
     ierr = TSMonitorDrawCtxCreate(PetscObjectComm((PetscObject)ts),NULL,NULL,PETSC_DECIDE,PETSC_DECIDE,300,300,1,&ctx);CHKERRQ(ierr);
     ierr = PetscViewerDrawGetDraw(ctx->viewer,0,&draw);CHKERRQ(ierr);
     ierr = PetscViewerDrawGetDrawAxis(ctx->viewer,0,&axis);CHKERRQ(ierr);
@@ -291,13 +295,13 @@ PetscErrorCode  TSSetFromOptions(TS ts)
   if (flg) {
     const char *ptr,*ptr2;
     char       *filetemplate;
-    if (!monfilename[0]) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"-ts_monitor_solution_vtk requires a file template, e.g. filename-%%03D.vts");
+    PetscCheckFalse(!monfilename[0],PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"-ts_monitor_solution_vtk requires a file template, e.g. filename-%%03D.vts");
     /* Do some cursory validation of the input. */
     ierr = PetscStrstr(monfilename,"%",(char**)&ptr);CHKERRQ(ierr);
-    if (!ptr) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"-ts_monitor_solution_vtk requires a file template, e.g. filename-%%03D.vts");
+    PetscCheckFalse(!ptr,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"-ts_monitor_solution_vtk requires a file template, e.g. filename-%%03D.vts");
     for (ptr++; ptr && *ptr; ptr++) {
       ierr = PetscStrchr("DdiouxX",*ptr,(char**)&ptr2);CHKERRQ(ierr);
-      if (!ptr2 && (*ptr < '0' || '9' < *ptr)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Invalid file template argument to -ts_monitor_solution_vtk, should look like filename-%%03D.vts");
+      PetscCheckFalse(!ptr2 && (*ptr < '0' || '9' < *ptr),PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Invalid file template argument to -ts_monitor_solution_vtk, should look like filename-%%03D.vts");
       if (ptr2) break;
     }
     ierr = PetscStrallocpy(monfilename,&filetemplate);CHKERRQ(ierr);
@@ -312,18 +316,18 @@ PetscErrorCode  TSSetFromOptions(TS ts)
     DM                   da;
     PetscMPIInt          rank;
 
-    if (dir[1] != '=') SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONG,"Unknown ray %s",dir);
+    PetscCheckFalse(dir[1] != '=',PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONG,"Unknown ray %s",dir);
     if (dir[0] == 'x') ddir = DM_X;
     else if (dir[0] == 'y') ddir = DM_Y;
-    else SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONG,"Unknown ray %s",dir);
+    else SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONG,"Unknown ray %s",dir);
     sscanf(dir+2,"%d",&ray);
 
-    ierr = PetscInfo2(((PetscObject)ts),"Displaying DMDA ray %c = %d\n",dir[0],ray);CHKERRQ(ierr);
+    ierr = PetscInfo(((PetscObject)ts),"Displaying DMDA ray %c = %d\n",dir[0],ray);CHKERRQ(ierr);
     ierr = PetscNew(&rayctx);CHKERRQ(ierr);
     ierr = TSGetDM(ts,&da);CHKERRQ(ierr);
     ierr = DMDAGetRay(da,ddir,ray,&rayctx->ray,&rayctx->scatter);CHKERRQ(ierr);
     ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)ts),&rank);CHKERRMPI(ierr);
-    if (!rank) {
+    if (rank == 0) {
       ierr = PetscViewerDrawOpen(PETSC_COMM_SELF,NULL,NULL,0,0,600,300,&rayctx->viewer);CHKERRQ(ierr);
     }
     rayctx->lgctx = NULL;
@@ -337,13 +341,13 @@ PetscErrorCode  TSSetFromOptions(TS ts)
     DM                  da;
     PetscInt            howoften = 1;
 
-    if (dir[1] != '=') SETERRQ1(PetscObjectComm((PetscObject) ts), PETSC_ERR_ARG_WRONG, "Malformed ray %s", dir);
+    PetscCheckFalse(dir[1] != '=',PetscObjectComm((PetscObject) ts), PETSC_ERR_ARG_WRONG, "Malformed ray %s", dir);
     if      (dir[0] == 'x') ddir = DM_X;
     else if (dir[0] == 'y') ddir = DM_Y;
-    else SETERRQ1(PetscObjectComm((PetscObject) ts), PETSC_ERR_ARG_WRONG, "Unknown ray direction %s", dir);
+    else SETERRQ(PetscObjectComm((PetscObject) ts), PETSC_ERR_ARG_WRONG, "Unknown ray direction %s", dir);
     sscanf(dir+2, "%d", &ray);
 
-    ierr = PetscInfo2(((PetscObject) ts),"Displaying LG DMDA ray %c = %d\n", dir[0], ray);CHKERRQ(ierr);
+    ierr = PetscInfo(((PetscObject) ts),"Displaying LG DMDA ray %c = %d\n", dir[0], ray);CHKERRQ(ierr);
     ierr = PetscNew(&rayctx);CHKERRQ(ierr);
     ierr = TSGetDM(ts, &da);CHKERRQ(ierr);
     ierr = DMDAGetRay(da, ddir, ray, &rayctx->ray, &rayctx->scatter);CHKERRQ(ierr);
@@ -443,12 +447,12 @@ PetscErrorCode  TSGetTrajectory(TS ts,TSTrajectory *tr)
 
    Collective on TS
 
-   Input Parameters:
+   Input Parameter:
 .  ts - the TS context obtained from TSCreate()
 
    Options Database:
 +  -ts_save_trajectory - saves the trajectory to a file
--  -ts_trajectory_type type
+-  -ts_trajectory_type type - set trajectory type
 
 Note: This routine should be called after all TS options have been set
 
@@ -482,7 +486,7 @@ PetscErrorCode  TSSetSaveTrajectory(TS ts)
 
    Level: intermediate
 
-.seealso: TSGetTrajectory(), TSAdjointSolve()
+.seealso: TSGetTrajectory(), TSAdjointSolve(), TSRemoveTrajectory()
 
 @*/
 PetscErrorCode  TSResetTrajectory(TS ts)
@@ -494,6 +498,31 @@ PetscErrorCode  TSResetTrajectory(TS ts)
   if (ts->trajectory) {
     ierr = TSTrajectoryDestroy(&ts->trajectory);CHKERRQ(ierr);
     ierr = TSTrajectoryCreate(PetscObjectComm((PetscObject)ts),&ts->trajectory);CHKERRQ(ierr);
+  }
+  PetscFunctionReturn(0);
+}
+
+/*@
+   TSRemoveTrajectory - Destroys and removes the internal TSTrajectory object from TS
+
+   Collective on TS
+
+   Input Parameters:
+.  ts - the TS context obtained from TSCreate()
+
+   Level: intermediate
+
+.seealso: TSResetTrajectory(), TSAdjointSolve()
+
+@*/
+PetscErrorCode TSRemoveTrajectory(TS ts)
+{
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(ts,TS_CLASSID,1);
+  if (ts->trajectory) {
+    ierr = TSTrajectoryDestroy(&ts->trajectory);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
 }
@@ -511,15 +540,11 @@ PetscErrorCode  TSResetTrajectory(TS ts)
 
    Output Parameters:
 +  A - Jacobian matrix
-.  B - optional preconditioning matrix
--  flag - flag indicating matrix structure
+-  B - optional preconditioning matrix
 
    Notes:
    Most users should not need to explicitly call this routine, as it
    is used internally within the nonlinear solvers.
-
-   See KSPSetOperators() for important information about setting the
-   flag parameter.
 
    Level: developer
 
@@ -549,7 +574,7 @@ PetscErrorCode  TSComputeRHSJacobian(TS ts,PetscReal t,Vec U,Mat A,Mat B)
 
   if (ts->rhsjacobian.time == t && (ts->problem_type == TS_LINEAR || (ts->rhsjacobian.Xid == Uid && ts->rhsjacobian.Xstate == Ustate)) && (rhsfunction != TSComputeRHSFunctionLinear)) PetscFunctionReturn(0);
 
-  if (ts->rhsjacobian.shift && ts->rhsjacobian.reuse) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Should not call TSComputeRHSJacobian() on a shifted matrix (shift=%lf) when RHSJacobian is reusable.",ts->rhsjacobian.shift);
+  PetscCheckFalse(ts->rhsjacobian.shift && ts->rhsjacobian.reuse,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Should not call TSComputeRHSJacobian() on a shifted matrix (shift=%lf) when RHSJacobian is reusable.",ts->rhsjacobian.shift);
   if (rhsjacobianfunc) {
     ierr = PetscLogEventBegin(TS_JacobianEval,ts,U,A,B);CHKERRQ(ierr);
     PetscStackPush("TS user Jacobian function");
@@ -606,7 +631,7 @@ PetscErrorCode TSComputeRHSFunction(TS ts,PetscReal t,Vec U,Vec y)
   ierr = DMTSGetRHSFunction(dm,&rhsfunction,&ctx);CHKERRQ(ierr);
   ierr = DMTSGetIFunction(dm,&ifunction,NULL);CHKERRQ(ierr);
 
-  if (!rhsfunction && !ifunction) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must call TSSetRHSFunction() and / or TSSetIFunction()");
+  PetscCheckFalse(!rhsfunction && !ifunction,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must call TSSetRHSFunction() and / or TSSetIFunction()");
 
   if (rhsfunction) {
     ierr = PetscLogEventBegin(TS_FunctionEval,ts,U,y,0);CHKERRQ(ierr);
@@ -741,7 +766,7 @@ PetscErrorCode TSGetRHSMats_Private(TS ts,Mat *Arhs,Mat *Brhs)
       PetscBool flg;
       ierr = SNESGetUseMatrixFree(ts->snes,NULL,&flg);CHKERRQ(ierr);
       /* Handle case where user provided only RHSJacobian and used -snes_mf_operator */
-      if (flg && !ijacobian && ts->Arhs == ts->Brhs){
+      if (flg && !ijacobian && ts->Arhs == ts->Brhs) {
         ierr = PetscObjectDereference((PetscObject)ts->Arhs);CHKERRQ(ierr);
         ts->Arhs = A;
         ierr = PetscObjectReference((PetscObject)A);CHKERRQ(ierr);
@@ -812,7 +837,7 @@ PetscErrorCode TSComputeIFunction(TS ts,PetscReal t,Vec U,Vec Udot,Vec Y,PetscBo
   ierr = DMTSGetIFunction(dm,&ifunction,&ctx);CHKERRQ(ierr);
   ierr = DMTSGetRHSFunction(dm,&rhsfunction,NULL);CHKERRQ(ierr);
 
-  if (!rhsfunction && !ifunction) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must call TSSetRHSFunction() and / or TSSetIFunction()");
+  PetscCheckFalse(!rhsfunction && !ifunction,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must call TSSetRHSFunction() and / or TSSetIFunction()");
 
   ierr = PetscLogEventBegin(TS_FunctionEval,ts,U,Udot,Y);CHKERRQ(ierr);
   if (ifunction) {
@@ -853,8 +878,8 @@ static PetscErrorCode TSRecoverRHSJacobian(TS ts,Mat A,Mat B)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  if (A != ts->Arhs) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Invalid Amat");
-  if (B != ts->Brhs) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Invalid Bmat");
+  PetscCheckFalse(A != ts->Arhs,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Invalid Amat");
+  PetscCheckFalse(B != ts->Brhs,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Invalid Bmat");
 
   if (ts->rhsjacobian.shift) {
     ierr = MatShift(A,-ts->rhsjacobian.shift);CHKERRQ(ierr);
@@ -926,7 +951,7 @@ PetscErrorCode TSComputeIJacobian(TS ts,PetscReal t,Vec U,Vec Udot,PetscReal shi
   ierr = DMTSGetIJacobian(dm,&ijacobian,&ctx);CHKERRQ(ierr);
   ierr = DMTSGetRHSJacobian(dm,&rhsjacobian,NULL);CHKERRQ(ierr);
 
-  if (!rhsjacobian && !ijacobian) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must call TSSetRHSJacobian() and / or TSSetIJacobian()");
+  PetscCheckFalse(!rhsjacobian && !ijacobian,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must call TSSetRHSJacobian() and / or TSSetIJacobian()");
 
   ierr = PetscLogEventBegin(TS_JacobianEval,ts,U,A,B);CHKERRQ(ierr);
   if (ijacobian) {
@@ -942,7 +967,7 @@ PetscErrorCode TSComputeIJacobian(TS ts,PetscReal t,Vec U,Vec Udot,PetscReal shi
         Mat Arhs = NULL;
         ierr = TSGetRHSMats_Private(ts,&Arhs,NULL);CHKERRQ(ierr);
         if (A == Arhs) {
-          if (rhsjacobian == TSComputeRHSJacobianConstant) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Unsupported operation! cannot use TSComputeRHSJacobianConstant"); /* there is no way to reconstruct shift*M-J since J cannot be reevaluated */
+          PetscCheckFalse(rhsjacobian == TSComputeRHSJacobianConstant,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Unsupported operation! cannot use TSComputeRHSJacobianConstant"); /* there is no way to reconstruct shift*M-J since J cannot be reevaluated */
           ts->rhsjacobian.time = PETSC_MIN_REAL;
         }
       }
@@ -1287,14 +1312,14 @@ PetscErrorCode  TSSetIFunction(TS ts,Vec r,TSIFunction f,void *ctx)
 }
 
 /*@C
-   TSGetIFunction - Returns the vector where the implicit residual is stored and the function/contex to compute it.
+   TSGetIFunction - Returns the vector where the implicit residual is stored and the function/context to compute it.
 
    Not Collective
 
    Input Parameter:
 .  ts - the TS context
 
-   Output Parameter:
+   Output Parameters:
 +  r - vector to hold residual (or NULL)
 .  func - the function to compute residual (or NULL)
 -  ctx - the function context (or NULL)
@@ -1326,7 +1351,7 @@ PetscErrorCode TSGetIFunction(TS ts,Vec *r,TSIFunction *func,void **ctx)
    Input Parameter:
 .  ts - the TS context
 
-   Output Parameter:
+   Output Parameters:
 +  r - vector to hold computed right hand side (or NULL)
 .  func - the function to compute right hand side (or NULL)
 -  ctx - the function context (or NULL)
@@ -1426,7 +1451,7 @@ PetscErrorCode  TSSetIJacobian(TS ts,Mat Amat,Mat Pmat,TSIJacobian f,void *ctx)
 
    Logically Collective
 
-   Input Arguments:
+   Input Parameters:
 +  ts - TS context obtained from TSCreate()
 -  reuse - PETSC_TRUE if the RHS Jacobian
 
@@ -1481,14 +1506,14 @@ PetscErrorCode TSSetI2Function(TS ts,Vec F,TSI2Function fun,void *ctx)
 }
 
 /*@C
-  TSGetI2Function - Returns the vector where the implicit residual is stored and the function/contex to compute it.
+  TSGetI2Function - Returns the vector where the implicit residual is stored and the function/context to compute it.
 
   Not Collective
 
   Input Parameter:
 . ts - the TS context
 
-  Output Parameter:
+  Output Parameters:
 + r - vector to hold residual (or NULL)
 . fun - the function to compute residual (or NULL)
 - ctx - the function context (or NULL)
@@ -1744,7 +1769,7 @@ PetscErrorCode TSComputeI2Jacobian(TS ts,PetscReal t,Vec U,Vec V,Vec A,PetscReal
 
    Logically Collective
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context on which to change the transient variable
 .  tvar - a function that transforms to transient variables
 -  ctx - a context for tvar
@@ -1890,7 +1915,7 @@ PetscErrorCode  TS2SetSolution(TS ts,Vec u,Vec v)
    Input Parameter:
 .  ts - the TS context obtained from TSCreate()
 
-   Output Parameter:
+   Output Parameters:
 +  u - the vector containing the solution
 -  v - the vector containing the time derivative
 
@@ -1949,10 +1974,10 @@ PetscErrorCode  TSLoad(TS ts, PetscViewer viewer)
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidHeaderSpecific(viewer,PETSC_VIEWER_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERBINARY,&isbinary);CHKERRQ(ierr);
-  if (!isbinary) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Invalid viewer; open viewer with PetscViewerBinaryOpen()");
+  PetscCheckFalse(!isbinary,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Invalid viewer; open viewer with PetscViewerBinaryOpen()");
 
   ierr = PetscViewerBinaryRead(viewer,&classid,1,NULL,PETSC_INT);CHKERRQ(ierr);
-  if (classid != TS_FILE_CLASSID) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONG,"Not TS next in file");
+  PetscCheckFalse(classid != TS_FILE_CLASSID,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONG,"Not TS next in file");
   ierr = PetscViewerBinaryRead(viewer,type,256,NULL,PETSC_CHAR);CHKERRQ(ierr);
   ierr = TSSetType(ts, type);CHKERRQ(ierr);
   if (ts->ops->load) {
@@ -2110,7 +2135,7 @@ PetscErrorCode  TSView(TS ts,PetscViewer viewer)
 
     ierr = PetscObjectGetComm((PetscObject)ts,&comm);CHKERRQ(ierr);
     ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
-    if (!rank) {
+    if (rank == 0) {
       ierr = PetscViewerBinaryWrite(viewer,&classid,1,PETSC_INT);CHKERRQ(ierr);
       ierr = PetscStrncpy(type,((PetscObject)ts)->type_name,256);CHKERRQ(ierr);
       ierr = PetscViewerBinaryWrite(viewer,type,256,PETSC_CHAR);CHKERRQ(ierr);
@@ -2148,7 +2173,7 @@ PetscErrorCode  TSView(TS ts,PetscViewer viewer)
 
     ierr = PetscObjectGetName((PetscObject)ts,&name);CHKERRQ(ierr);
     ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
-    if (!((PetscObject)ts)->amsmem && !rank) {
+    if (!((PetscObject)ts)->amsmem && rank == 0) {
       char       dir[1024];
 
       ierr = PetscObjectViewSAWs((PetscObject)ts,viewer);CHKERRQ(ierr);
@@ -2282,7 +2307,7 @@ PetscErrorCode TSSetStepNumber(TS ts,PetscInt steps)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidLogicalCollectiveInt(ts,steps,2);
-  if (steps < 0) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Step number must be non-negative");
+  PetscCheckFalse(steps < 0,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Step number must be non-negative");
   ts->steps = steps;
   PetscFunctionReturn(0);
 }
@@ -2318,7 +2343,7 @@ PetscErrorCode  TSSetTimeStep(TS ts,PetscReal time_step)
 
   Logically Collective on TS
 
-   Input Parameter:
+   Input Parameters:
 +   ts - the time-step context
 -   eftopt - exact final time option
 
@@ -2543,7 +2568,7 @@ PetscErrorCode  TSSetTimeError(TS ts,Vec v)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  if (!ts->setupcalled) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Must call TSSetUp() first");
+  PetscCheckFalse(!ts->setupcalled,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Must call TSSetUp() first");
   if (ts->ops->settimeerror) {
     ierr = (*ts->ops->settimeerror)(ts,v);CHKERRQ(ierr);
   }
@@ -2633,7 +2658,6 @@ static PetscErrorCode TSSetExactFinalTimeDefault(TS ts)
   }
   PetscFunctionReturn(0);
 }
-
 
 /*@
    TSSetUp - Sets up the internal data structures for the later use of a timestepper.
@@ -2801,6 +2825,7 @@ PetscErrorCode  TSReset(TS ts)
     ierr = PetscFree(ilink);CHKERRQ(ierr);
     ilink = next;
   }
+  ts->tsrhssplit = NULL;
   ts->num_rhs_splits = 0;
   ts->setupcalled = PETSC_FALSE;
   PetscFunctionReturn(0);
@@ -2902,7 +2927,7 @@ PetscErrorCode  TSGetSNES(TS ts,SNES *snes)
 
    Collective
 
-   Input Parameter:
+   Input Parameters:
 +  ts - the TS context obtained from TSCreate()
 -  snes - the nonlinear solver context
 
@@ -2964,8 +2989,8 @@ PetscErrorCode  TSGetKSP(TS ts,KSP *ksp)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidPointer(ksp,2);
-  if (!((PetscObject)ts)->type_name) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"KSP is not created yet. Call TSSetType() first");
-  if (ts->problem_type != TS_LINEAR) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Linear only; use TSGetSNES()");
+  PetscCheckFalse(!((PetscObject)ts)->type_name,PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"KSP is not created yet. Call TSSetType() first");
+  PetscCheckFalse(ts->problem_type != TS_LINEAR,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Linear only; use TSGetSNES()");
   ierr = TSGetSNES(ts,&snes);CHKERRQ(ierr);
   ierr = SNESGetKSP(snes,ksp);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -2997,7 +3022,7 @@ PetscErrorCode TSSetMaxSteps(TS ts,PetscInt maxsteps)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidLogicalCollectiveInt(ts,maxsteps,2);
-  if (maxsteps < 0) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Maximum number of steps must be non-negative");
+  PetscCheckFalse(maxsteps < 0,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Maximum number of steps must be non-negative");
   ts->max_steps = maxsteps;
   PetscFunctionReturn(0);
 }
@@ -3109,7 +3134,7 @@ PetscErrorCode TSGetDuration(TS ts, PetscInt *maxsteps, PetscReal *maxtime)
     *maxsteps = ts->max_steps;
   }
   if (maxtime) {
-    PetscValidScalarPointer(maxtime,3);
+    PetscValidRealPointer(maxtime,3);
     *maxtime = ts->max_time;
   }
   PetscFunctionReturn(0);
@@ -3126,7 +3151,7 @@ PetscErrorCode TSSetDuration(TS ts,PetscInt maxsteps,PetscReal maxtime)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidLogicalCollectiveInt(ts,maxsteps,2);
-  PetscValidLogicalCollectiveReal(ts,maxtime,2);
+  PetscValidLogicalCollectiveReal(ts,maxtime,3);
   if (maxsteps >= 0) ts->max_steps = maxsteps;
   if (maxtime != PETSC_DEFAULT) ts->max_time = maxtime;
   PetscFunctionReturn(0);
@@ -3190,7 +3215,9 @@ PetscErrorCode  TSSetSolution(TS ts,Vec u)
 - func - The function
 
   Calling sequence of func:
-.   PetscErrorCode func (TS ts);
+.vb
+  PetscErrorCode func (TS ts);
+.ve
 
   Level: intermediate
 
@@ -3228,13 +3255,18 @@ PetscErrorCode  TSPreStep(TS ts)
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   if (ts->prestep) {
     Vec              U;
+    PetscObjectId    idprev;
+    PetscBool        sameObject;
     PetscObjectState sprev,spost;
 
     ierr = TSGetSolution(ts,&U);CHKERRQ(ierr);
+    ierr = PetscObjectGetId((PetscObject)U,&idprev);CHKERRQ(ierr);
     ierr = PetscObjectStateGet((PetscObject)U,&sprev);CHKERRQ(ierr);
-    PetscStackCallStandard((*ts->prestep),(ts));
+    PetscStackCallStandard((*ts->prestep),ts);
+    ierr = TSGetSolution(ts,&U);CHKERRQ(ierr);
+    ierr = PetscObjectCompareId((PetscObject)U,idprev,&sameObject);CHKERRQ(ierr);
     ierr = PetscObjectStateGet((PetscObject)U,&spost);CHKERRQ(ierr);
-    if (sprev != spost) {ierr = TSRestartStep(ts);CHKERRQ(ierr);}
+    if (!sameObject || sprev != spost) {ierr = TSRestartStep(ts);CHKERRQ(ierr);}
   }
   PetscFunctionReturn(0);
 }
@@ -3250,7 +3282,9 @@ PetscErrorCode  TSPreStep(TS ts)
 - func - The function
 
   Calling sequence of func:
-.    PetscErrorCode func(TS ts, PetscReal stagetime);
+.vb
+  PetscErrorCode func(TS ts, PetscReal stagetime);
+.ve
 
   Level: intermediate
 
@@ -3280,7 +3314,9 @@ PetscErrorCode  TSSetPreStage(TS ts, PetscErrorCode (*func)(TS,PetscReal))
 - func - The function
 
   Calling sequence of func:
-. PetscErrorCode func(TS ts, PetscReal stagetime, PetscInt stageindex, Vec* Y);
+.vb
+  PetscErrorCode func(TS ts, PetscReal stagetime, PetscInt stageindex, Vec* Y);
+.ve
 
   Level: intermediate
 
@@ -3310,7 +3346,9 @@ PetscErrorCode  TSSetPostStage(TS ts, PetscErrorCode (*func)(TS,PetscReal,PetscI
 - func - The function
 
   Calling sequence of func:
-. PetscErrorCode func(TS ts);
+.vb
+  PetscErrorCode func(TS ts);
+.ve
 
   Level: intermediate
 
@@ -3353,7 +3391,7 @@ PetscErrorCode  TSPreStage(TS ts, PetscReal stagetime)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   if (ts->prestage) {
-    PetscStackCallStandard((*ts->prestage),(ts,stagetime));
+    PetscStackCallStandard((*ts->prestage),ts,stagetime);
   }
   PetscFunctionReturn(0);
 }
@@ -3383,7 +3421,7 @@ PetscErrorCode  TSPostStage(TS ts, PetscReal stagetime, PetscInt stageindex, Vec
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   if (ts->poststage) {
-    PetscStackCallStandard((*ts->poststage),(ts,stagetime,stageindex,Y));
+    PetscStackCallStandard((*ts->poststage),ts,stagetime,stageindex,Y);
   }
   PetscFunctionReturn(0);
 }
@@ -3416,7 +3454,7 @@ PetscErrorCode  TSPostEvaluate(TS ts)
 
     ierr = TSGetSolution(ts,&U);CHKERRQ(ierr);
     ierr = PetscObjectStateGet((PetscObject)U,&sprev);CHKERRQ(ierr);
-    PetscStackCallStandard((*ts->postevaluate),(ts));
+    PetscStackCallStandard((*ts->postevaluate),ts);
     ierr = PetscObjectStateGet((PetscObject)U,&spost);CHKERRQ(ierr);
     if (sprev != spost) {ierr = TSRestartStep(ts);CHKERRQ(ierr);}
   }
@@ -3476,13 +3514,18 @@ PetscErrorCode  TSPostStep(TS ts)
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   if (ts->poststep) {
     Vec              U;
+    PetscObjectId    idprev;
+    PetscBool        sameObject;
     PetscObjectState sprev,spost;
 
     ierr = TSGetSolution(ts,&U);CHKERRQ(ierr);
+    ierr = PetscObjectGetId((PetscObject)U,&idprev);CHKERRQ(ierr);
     ierr = PetscObjectStateGet((PetscObject)U,&sprev);CHKERRQ(ierr);
-    PetscStackCallStandard((*ts->poststep),(ts));
+    PetscStackCallStandard((*ts->poststep),ts);
+    ierr = TSGetSolution(ts,&U);CHKERRQ(ierr);
+    ierr = PetscObjectCompareId((PetscObject)U,idprev,&sameObject);CHKERRQ(ierr);
     ierr = PetscObjectStateGet((PetscObject)U,&spost);CHKERRQ(ierr);
-    if (sprev != spost) {ierr = TSRestartStep(ts);CHKERRQ(ierr);}
+    if (!sameObject || sprev != spost) {ierr = TSRestartStep(ts);CHKERRQ(ierr);}
   }
   PetscFunctionReturn(0);
 }
@@ -3492,11 +3535,11 @@ PetscErrorCode  TSPostStep(TS ts)
 
    Collective on TS
 
-   Input Argument:
+   Input Parameters:
 +  ts - time stepping context
 -  t - time to interpolate to
 
-   Output Argument:
+   Output Parameter:
 .  U - state at given time
 
    Level: intermediate
@@ -3513,8 +3556,8 @@ PetscErrorCode TSInterpolate(TS ts,PetscReal t,Vec U)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidHeaderSpecific(U,VEC_CLASSID,3);
-  if (t < ts->ptime_prev || t > ts->ptime) SETERRQ3(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Requested time %g not in last time steps [%g,%g]",t,(double)ts->ptime_prev,(double)ts->ptime);
-  if (!ts->ops->interpolate) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"%s does not provide interpolation",((PetscObject)ts)->type_name);
+  PetscCheckFalse(t < ts->ptime_prev || t > ts->ptime,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Requested time %g not in last time steps [%g,%g]",t,(double)ts->ptime_prev,(double)ts->ptime);
+  PetscCheckFalse(!ts->ops->interpolate,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"%s does not provide interpolation",((PetscObject)ts)->type_name);
   ierr = (*ts->ops->interpolate)(ts,t,U);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -3559,10 +3602,10 @@ PetscErrorCode  TSStep(TS ts)
   ierr = TSSetUp(ts);CHKERRQ(ierr);
   ierr = TSTrajectorySetUp(ts->trajectory,ts);CHKERRQ(ierr);
 
-  if (!ts->ops->step) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSStep not implemented for type '%s'",((PetscObject)ts)->type_name);
-  if (ts->max_time >= PETSC_MAX_REAL && ts->max_steps == PETSC_MAX_INT) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"You must call TSSetMaxTime() or TSSetMaxSteps(), or use -ts_max_time <time> or -ts_max_steps <steps>");
-  if (ts->exact_final_time == TS_EXACTFINALTIME_UNSPECIFIED) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"You must call TSSetExactFinalTime() or use -ts_exact_final_time <stepover,interpolate,matchstep> before calling TSStep()");
-  if (ts->exact_final_time == TS_EXACTFINALTIME_MATCHSTEP && !ts->adapt) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Since TS is not adaptive you cannot use TS_EXACTFINALTIME_MATCHSTEP, suggest TS_EXACTFINALTIME_INTERPOLATE");
+  PetscCheckFalse(!ts->ops->step,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSStep not implemented for type '%s'",((PetscObject)ts)->type_name);
+  PetscCheckFalse(ts->max_time >= PETSC_MAX_REAL && ts->max_steps == PETSC_MAX_INT,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"You must call TSSetMaxTime() or TSSetMaxSteps(), or use -ts_max_time <time> or -ts_max_steps <steps>");
+  PetscCheckFalse(ts->exact_final_time == TS_EXACTFINALTIME_UNSPECIFIED,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"You must call TSSetExactFinalTime() or use -ts_exact_final_time <stepover,interpolate,matchstep> before calling TSStep()");
+  PetscCheckFalse(ts->exact_final_time == TS_EXACTFINALTIME_MATCHSTEP && !ts->adapt,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Since TS is not adaptive you cannot use TS_EXACTFINALTIME_MATCHSTEP, suggest TS_EXACTFINALTIME_INTERPOLATE");
 
   if (!ts->steps) ts->ptime_prev = ts->ptime;
   ptime = ts->ptime; ts->ptime_prev_rollback = ts->ptime_prev;
@@ -3584,8 +3627,8 @@ PetscErrorCode  TSStep(TS ts)
     else if (ts->ptime >= ts->max_time) ts->reason = TS_CONVERGED_TIME;
   }
 
-  if (ts->reason < 0 && ts->errorifstepfailed && ts->reason == TS_DIVERGED_NONLINEAR_SOLVE) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSStep has failed due to %s, increase -ts_max_snes_failures or make negative to attempt recovery",TSConvergedReasons[ts->reason]);
-  if (ts->reason < 0 && ts->errorifstepfailed) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSStep has failed due to %s",TSConvergedReasons[ts->reason]);
+  PetscCheckFalse(ts->reason < 0 && ts->errorifstepfailed && ts->reason == TS_DIVERGED_NONLINEAR_SOLVE,PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSStep has failed due to %s, increase -ts_max_snes_failures or make negative to attempt recovery",TSConvergedReasons[ts->reason]);
+  PetscCheckFalse(ts->reason < 0 && ts->errorifstepfailed,PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSStep has failed due to %s",TSConvergedReasons[ts->reason]);
   PetscFunctionReturn(0);
 }
 
@@ -3595,14 +3638,16 @@ PetscErrorCode  TSStep(TS ts)
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
-.  wnormtype - norm type, either NORM_2 or NORM_INFINITY
--  order - optional, desired order for the error evaluation or PETSC_DECIDE
+-  wnormtype - norm type, either NORM_2 or NORM_INFINITY
 
-   Output Arguments:
-+  order - optional, the actual order of the error evaluation
--  wlte - the weighted local truncation error norm
+   Input/Output Parameter:
+.  order - optional, desired order for the error evaluation or PETSC_DECIDE;
+           on output, the actual order of the error evaluation
+
+   Output Parameter:
+.  wlte - the weighted local truncation error norm
 
    Level: advanced
 
@@ -3620,12 +3665,12 @@ PetscErrorCode TSEvaluateWLTE(TS ts,NormType wnormtype,PetscInt *order,PetscReal
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidType(ts,1);
-  PetscValidLogicalCollectiveEnum(ts,wnormtype,4);
+  PetscValidLogicalCollectiveEnum(ts,wnormtype,2);
   if (order) PetscValidIntPointer(order,3);
   if (order) PetscValidLogicalCollectiveInt(ts,*order,3);
   PetscValidRealPointer(wlte,4);
-  if (wnormtype != NORM_2 && wnormtype != NORM_INFINITY) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"No support for norm type %s",NormTypes[wnormtype]);
-  if (!ts->ops->evaluatewlte) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSEvaluateWLTE not implemented for type '%s'",((PetscObject)ts)->type_name);
+  PetscCheckFalse(wnormtype != NORM_2 && wnormtype != NORM_INFINITY,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"No support for norm type %s",NormTypes[wnormtype]);
+  PetscCheckFalse(!ts->ops->evaluatewlte,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSEvaluateWLTE not implemented for type '%s'",((PetscObject)ts)->type_name);
   ierr = (*ts->ops->evaluatewlte)(ts,wnormtype,order,wlte);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -3635,12 +3680,12 @@ PetscErrorCode TSEvaluateWLTE(TS ts,NormType wnormtype,PetscInt *order,PetscReal
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  order - desired order of accuracy
 -  done - whether the step was evaluated at this order (pass NULL to generate an error if not available)
 
-   Output Arguments:
+   Output Parameter:
 .  U - state at the end of the current step
 
    Level: advanced
@@ -3659,7 +3704,7 @@ PetscErrorCode TSEvaluateStep(TS ts,PetscInt order,Vec U,PetscBool *done)
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidType(ts,1);
   PetscValidHeaderSpecific(U,VEC_CLASSID,3);
-  if (!ts->ops->evaluatestep) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSEvaluateStep not implemented for type '%s'",((PetscObject)ts)->type_name);
+  PetscCheckFalse(!ts->ops->evaluatestep,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSEvaluateStep not implemented for type '%s'",((PetscObject)ts)->type_name);
   ierr = (*ts->ops->evaluatestep)(ts,order,U,done);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -3669,10 +3714,10 @@ PetscErrorCode TSEvaluateStep(TS ts,PetscInt order,Vec U,PetscBool *done)
 
   Not collective
 
-  Input Argument:
+  Input Parameter:
 . ts        - time stepping context
 
-  Output Argument:
+  Output Parameter:
 . initConditions - The function which computes an initial condition
 
    Level: advanced
@@ -3699,7 +3744,7 @@ PetscErrorCode TSGetComputeInitialCondition(TS ts, PetscErrorCode (**initConditi
 
   Logically collective on ts
 
-  Input Arguments:
+  Input Parameters:
 + ts        - time stepping context
 - initCondition - The function which computes an initial condition
 
@@ -3727,7 +3772,7 @@ PetscErrorCode TSSetComputeInitialCondition(TS ts, PetscErrorCode (*initConditio
 
   Collective on ts
 
-  Input Arguments:
+  Input Parameters:
 + ts - time stepping context
 - u  - The Vec to store the condition in which will be used in TSSolve()
 
@@ -3751,10 +3796,10 @@ PetscErrorCode TSComputeInitialCondition(TS ts, Vec u)
 
   Not collective
 
-  Input Argument:
+  Input Parameter:
 . ts         - time stepping context
 
-  Output Argument:
+  Output Parameter:
 . exactError - The function which computes the solution error
 
   Level: advanced
@@ -3782,7 +3827,7 @@ PetscErrorCode TSGetComputeExactError(TS ts, PetscErrorCode (**exactError)(TS, V
 
   Logically collective on ts
 
-  Input Arguments:
+  Input Parameters:
 + ts         - time stepping context
 - exactError - The function which computes the solution error
 
@@ -3811,7 +3856,7 @@ PetscErrorCode TSSetComputeExactError(TS ts, PetscErrorCode (*exactError)(TS, Ve
 
   Collective on ts
 
-  Input Arguments:
+  Input Parameters:
 + ts - time stepping context
 . u  - The approximate solution
 - e  - The Vec used to store the error
@@ -3837,7 +3882,7 @@ PetscErrorCode TSComputeExactError(TS ts, Vec u, Vec e)
 
    Collective on TS
 
-   Input Parameter:
+   Input Parameters:
 +  ts - the TS context obtained from TSCreate()
 -  u - the solution vector  (can be null if TSSetSolution() was used and TSSetExactFinalTime(ts,TS_EXACTFINALTIME_MATCHSTEP) was not used,
                              otherwise must contain the initial conditions and will contain the solution at the final requested time
@@ -3868,16 +3913,16 @@ PetscErrorCode TSSolve(TS ts,Vec u)
       ierr = VecDestroy(&solution);CHKERRQ(ierr); /* grant ownership */
     }
     ierr = VecCopy(u,ts->vec_sol);CHKERRQ(ierr);
-    if (ts->forward_solve) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Sensitivity analysis does not support the mode TS_EXACTFINALTIME_INTERPOLATE");
+    PetscCheckFalse(ts->forward_solve,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Sensitivity analysis does not support the mode TS_EXACTFINALTIME_INTERPOLATE");
   } else if (u) {
     ierr = TSSetSolution(ts,u);CHKERRQ(ierr);
   }
   ierr = TSSetUp(ts);CHKERRQ(ierr);
   ierr = TSTrajectorySetUp(ts->trajectory,ts);CHKERRQ(ierr);
 
-  if (ts->max_time >= PETSC_MAX_REAL && ts->max_steps == PETSC_MAX_INT) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"You must call TSSetMaxTime() or TSSetMaxSteps(), or use -ts_max_time <time> or -ts_max_steps <steps>");
-  if (ts->exact_final_time == TS_EXACTFINALTIME_UNSPECIFIED) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"You must call TSSetExactFinalTime() or use -ts_exact_final_time <stepover,interpolate,matchstep> before calling TSSolve()");
-  if (ts->exact_final_time == TS_EXACTFINALTIME_MATCHSTEP && !ts->adapt) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Since TS is not adaptive you cannot use TS_EXACTFINALTIME_MATCHSTEP, suggest TS_EXACTFINALTIME_INTERPOLATE");
+  PetscCheckFalse(ts->max_time >= PETSC_MAX_REAL && ts->max_steps == PETSC_MAX_INT,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"You must call TSSetMaxTime() or TSSetMaxSteps(), or use -ts_max_time <time> or -ts_max_steps <steps>");
+  PetscCheckFalse(ts->exact_final_time == TS_EXACTFINALTIME_UNSPECIFIED,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"You must call TSSetExactFinalTime() or use -ts_exact_final_time <stepover,interpolate,matchstep> before calling TSSolve()");
+  PetscCheckFalse(ts->exact_final_time == TS_EXACTFINALTIME_MATCHSTEP && !ts->adapt,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Since TS is not adaptive you cannot use TS_EXACTFINALTIME_MATCHSTEP, suggest TS_EXACTFINALTIME_INTERPOLATE");
 
   if (ts->forward_solve) {
     ierr = TSForwardSetUp(ts);CHKERRQ(ierr);
@@ -4099,7 +4144,7 @@ PetscErrorCode  TSSetTime(TS ts, PetscReal t)
 
    Logically Collective on TS
 
-   Input Parameter:
+   Input Parameters:
 +  ts     - The TS context
 -  prefix - The prefix to prepend to all option names
 
@@ -4132,7 +4177,7 @@ PetscErrorCode  TSSetOptionsPrefix(TS ts,const char prefix[])
 
    Logically Collective on TS
 
-   Input Parameter:
+   Input Parameters:
 +  ts     - The TS context
 -  prefix - The prefix to prepend to all option names
 
@@ -4348,7 +4393,7 @@ PetscErrorCode  TSGetDM(TS ts,DM *dm)
 
    Logically Collective on SNES
 
-   Input Parameter:
+   Input Parameters:
 + snes - nonlinear solver
 . U - the current state at which to evaluate the residual
 - ctx - user context, must be a TS
@@ -4383,15 +4428,14 @@ PetscErrorCode  SNESTSFormFunction(SNES snes,Vec U,Vec F,void *ctx)
 
    Collective on SNES
 
-   Input Parameter:
+   Input Parameters:
 + snes - nonlinear solver
 . U - the current state at which to evaluate the residual
 - ctx - user context, must be a TS
 
-   Output Parameter:
+   Output Parameters:
 + A - the Jacobian
-. B - the preconditioning matrix (may be the same as A)
-- flag - indicates any structure change in the matrix
+- B - the preconditioning matrix (may be the same as A)
 
    Notes:
    This function is not normally called by users and is automatically registered with the SNES used by TS.
@@ -4412,7 +4456,7 @@ PetscErrorCode  SNESTSFormJacobian(SNES snes,Vec U,Mat A,Mat B,void *ctx)
   PetscValidHeaderSpecific(A,MAT_CLASSID,3);
   PetscValidPointer(B,4);
   PetscValidHeaderSpecific(B,MAT_CLASSID,4);
-  PetscValidHeaderSpecific(ts,TS_CLASSID,6);
+  PetscValidHeaderSpecific(ts,TS_CLASSID,5);
   ierr = (ts->ops->snesjacobian)(snes,U,A,B,ts);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -4422,13 +4466,13 @@ PetscErrorCode  SNESTSFormJacobian(SNES snes,Vec U,Mat A,Mat B,void *ctx)
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  t - time at which to evaluate
 .  U - state at which to evaluate
 -  ctx - context
 
-   Output Arguments:
+   Output Parameter:
 .  F - right hand side
 
    Level: intermediate
@@ -4458,16 +4502,15 @@ PetscErrorCode TSComputeRHSFunctionLinear(TS ts,PetscReal t,Vec U,Vec F,void *ct
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  t - time at which to evaluate
 .  U - state at which to evaluate
 -  ctx - context
 
-   Output Arguments:
+   Output Parameters:
 +  A - pointer to operator
-.  B - pointer to preconditioning matrix
--  flg - matrix structure flag
+-  B - pointer to preconditioning matrix
 
    Level: intermediate
 
@@ -4487,14 +4530,14 @@ PetscErrorCode TSComputeRHSJacobianConstant(TS ts,PetscReal t,Vec U,Mat A,Mat B,
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  t - time at which to evaluate
 .  U - state at which to evaluate
 .  Udot - time derivative of state vector
 -  ctx - context
 
-   Output Arguments:
+   Output Parameter:
 .  F - left hand side
 
    Level: intermediate
@@ -4526,7 +4569,7 @@ PetscErrorCode TSComputeIFunctionLinear(TS ts,PetscReal t,Vec U,Vec Udot,Vec F,v
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  t - time at which to evaluate
 .  U - state at which to evaluate
@@ -4534,10 +4577,9 @@ PetscErrorCode TSComputeIFunctionLinear(TS ts,PetscReal t,Vec U,Vec Udot,Vec F,v
 .  shift - shift to apply
 -  ctx - context
 
-   Output Arguments:
+   Output Parameters:
 +  A - pointer to operator
-.  B - pointer to preconditioning matrix
--  flg - matrix structure flag
+-  B - pointer to preconditioning matrix
 
    Level: advanced
 
@@ -4598,7 +4640,7 @@ PetscErrorCode  TSGetEquationType(TS ts,TSEquationType *equation_type)
 
    Not Collective
 
-   Input Parameter:
+   Input Parameters:
 +  ts - the TS context
 -  equation_type - see TSEquationType
 
@@ -4809,7 +4851,7 @@ PetscErrorCode TSGetSNESFailures(TS ts,PetscInt *fails)
 
    Not Collective
 
-   Input Parameter:
+   Input Parameters:
 +  ts - TS context
 -  rejects - maximum number of rejected steps, pass -1 for unlimited
 
@@ -4836,7 +4878,7 @@ PetscErrorCode TSSetMaxStepRejections(TS ts,PetscInt rejects)
 
    Not Collective
 
-   Input Parameter:
+   Input Parameters:
 +  ts - TS context
 -  fails - maximum number of failed nonlinear solves, pass -1 for unlimited
 
@@ -4863,7 +4905,7 @@ PetscErrorCode TSSetMaxSNESFailures(TS ts,PetscInt fails)
 
    Not Collective
 
-   Input Parameter:
+   Input Parameters:
 +  ts - TS context
 -  err - PETSC_TRUE to error if no step succeeds, PETSC_FALSE to return without failure
 
@@ -4887,10 +4929,10 @@ PetscErrorCode TSSetErrorIfStepFails(TS ts,PetscBool err)
 
    Collective on TS if controller has not been created yet
 
-   Input Arguments:
+   Input Parameter:
 .  ts - time stepping context
 
-   Output Arguments:
+   Output Parameter:
 .  adapt - adaptive controller
 
    Level: intermediate
@@ -4918,7 +4960,7 @@ PetscErrorCode TSGetAdapt(TS ts,TSAdapt *adapt)
 
    Logically Collective
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time integration context
 .  atol - scalar absolute tolerances, PETSC_DECIDE to leave current value
 .  vatol - vector of absolute tolerances or NULL, used in preference to atol if present
@@ -4927,7 +4969,7 @@ PetscErrorCode TSGetAdapt(TS ts,TSAdapt *adapt)
 
    Options Database keys:
 +  -ts_rtol <rtol> - relative tolerance for local truncation error
--  -ts_atol <atol> Absolute tolerance for local truncation error
+-  -ts_atol <atol> - Absolute tolerance for local truncation error
 
    Notes:
    With PETSc's implicit schemes for DAE problems, the calculation of the local truncation error
@@ -4966,10 +5008,10 @@ PetscErrorCode TSSetTolerances(TS ts,PetscReal atol,Vec vatol,PetscReal rtol,Vec
 
    Logically Collective
 
-   Input Arguments:
+   Input Parameter:
 .  ts - time integration context
 
-   Output Arguments:
+   Output Parameters:
 +  atol - scalar absolute tolerances, NULL to ignore
 .  vatol - vector of absolute tolerances, NULL to ignore
 .  rtol - scalar relative tolerances, NULL to ignore
@@ -4994,12 +5036,12 @@ PetscErrorCode TSGetTolerances(TS ts,PetscReal *atol,Vec *vatol,PetscReal *rtol,
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  U - state vector, usually ts->vec_sol
 -  Y - state vector to be compared to U
 
-   Output Arguments:
+   Output Parameters:
 +  norm - weighted norm, a value of 1.0 means that the error matches the tolerances
 .  norma - weighted norm based on the absolute tolerance, a value of 1.0 means that the error matches the tolerances
 -  normr - weighted norm based on the relative tolerance, a value of 1.0 means that the error matches the tolerances
@@ -5029,7 +5071,7 @@ PetscErrorCode TSErrorWeightedNorm2(TS ts,Vec U,Vec Y,PetscReal *norm,PetscReal 
   PetscValidPointer(norm,4);
   PetscValidPointer(norma,5);
   PetscValidPointer(normr,6);
-  if (U == Y) SETERRQ(PetscObjectComm((PetscObject)U),PETSC_ERR_ARG_IDN,"U and Y cannot be the same vector");
+  PetscCheckFalse(U == Y,PetscObjectComm((PetscObject)U),PETSC_ERR_ARG_IDN,"U and Y cannot be the same vector");
 
   ierr = VecGetSize(U,&N);CHKERRQ(ierr);
   ierr = VecGetLocalSize(U,&n);CHKERRQ(ierr);
@@ -5047,17 +5089,17 @@ PetscErrorCode TSErrorWeightedNorm2(TS ts,Vec U,Vec Y,PetscReal *norm,PetscReal 
       SkipSmallValue(y[i],u[i],ts->adapt->ignore_max);
       diff = PetscAbsScalar(y[i] - u[i]);
       tola = PetscRealPart(atol[i]);
-      if (tola>0.){
+      if (tola>0.) {
         suma  += PetscSqr(diff/tola);
         na_loc++;
       }
       tolr = PetscRealPart(rtol[i]) * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
-      if (tolr>0.){
+      if (tolr>0.) {
         sumr  += PetscSqr(diff/tolr);
         nr_loc++;
       }
       tol=tola+tolr;
-      if (tol>0.){
+      if (tol>0.) {
         sum  += PetscSqr(diff/tol);
         n_loc++;
       }
@@ -5071,17 +5113,17 @@ PetscErrorCode TSErrorWeightedNorm2(TS ts,Vec U,Vec Y,PetscReal *norm,PetscReal 
       SkipSmallValue(y[i],u[i],ts->adapt->ignore_max);
       diff = PetscAbsScalar(y[i] - u[i]);
       tola = PetscRealPart(atol[i]);
-      if (tola>0.){
+      if (tola>0.) {
         suma  += PetscSqr(diff/tola);
         na_loc++;
       }
       tolr = ts->rtol * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
-      if (tolr>0.){
+      if (tolr>0.) {
         sumr  += PetscSqr(diff/tolr);
         nr_loc++;
       }
       tol=tola+tolr;
-      if (tol>0.){
+      if (tol>0.) {
         sum  += PetscSqr(diff/tol);
         n_loc++;
       }
@@ -5094,17 +5136,17 @@ PetscErrorCode TSErrorWeightedNorm2(TS ts,Vec U,Vec Y,PetscReal *norm,PetscReal 
       SkipSmallValue(y[i],u[i],ts->adapt->ignore_max);
       diff = PetscAbsScalar(y[i] - u[i]);
       tola = ts->atol;
-      if (tola>0.){
+      if (tola>0.) {
         suma  += PetscSqr(diff/tola);
         na_loc++;
       }
       tolr = PetscRealPart(rtol[i]) * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
-      if (tolr>0.){
+      if (tolr>0.) {
         sumr  += PetscSqr(diff/tolr);
         nr_loc++;
       }
       tol=tola+tolr;
-      if (tol>0.){
+      if (tol>0.) {
         sum  += PetscSqr(diff/tol);
         n_loc++;
       }
@@ -5115,17 +5157,17 @@ PetscErrorCode TSErrorWeightedNorm2(TS ts,Vec U,Vec Y,PetscReal *norm,PetscReal 
       SkipSmallValue(y[i],u[i],ts->adapt->ignore_max);
       diff = PetscAbsScalar(y[i] - u[i]);
       tola = ts->atol;
-      if (tola>0.){
+      if (tola>0.) {
         suma  += PetscSqr(diff/tola);
         na_loc++;
       }
       tolr = ts->rtol * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
-      if (tolr>0.){
+      if (tolr>0.) {
         sumr  += PetscSqr(diff/tolr);
         nr_loc++;
       }
       tol=tola+tolr;
-      if (tol>0.){
+      if (tol>0.) {
         sum  += PetscSqr(diff/tol);
         n_loc++;
       }
@@ -5151,15 +5193,15 @@ PetscErrorCode TSErrorWeightedNorm2(TS ts,Vec U,Vec Y,PetscReal *norm,PetscReal 
   nr_glb = err_glb[5];
 
   *norm  = 0.;
-  if (n_glb>0.){*norm  = PetscSqrtReal(gsum  / n_glb);}
+  if (n_glb>0.) {*norm  = PetscSqrtReal(gsum  / n_glb);}
   *norma = 0.;
-  if (na_glb>0.){*norma = PetscSqrtReal(gsuma / na_glb);}
+  if (na_glb>0.) {*norma = PetscSqrtReal(gsuma / na_glb);}
   *normr = 0.;
-  if (nr_glb>0.){*normr = PetscSqrtReal(gsumr / nr_glb);}
+  if (nr_glb>0.) {*normr = PetscSqrtReal(gsumr / nr_glb);}
 
-  if (PetscIsInfOrNanScalar(*norm)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norm");
-  if (PetscIsInfOrNanScalar(*norma)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norma");
-  if (PetscIsInfOrNanScalar(*normr)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in normr");
+  PetscCheckFalse(PetscIsInfOrNanScalar(*norm),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norm");
+  PetscCheckFalse(PetscIsInfOrNanScalar(*norma),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norma");
+  PetscCheckFalse(PetscIsInfOrNanScalar(*normr),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in normr");
   PetscFunctionReturn(0);
 }
 
@@ -5168,12 +5210,12 @@ PetscErrorCode TSErrorWeightedNorm2(TS ts,Vec U,Vec Y,PetscReal *norm,PetscReal 
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  U - state vector, usually ts->vec_sol
 -  Y - state vector to be compared to U
 
-   Output Arguments:
+   Output Parameters:
 +  norm - weighted norm, a value of 1.0 means that the error matches the tolerances
 .  norma - weighted norm based on the absolute tolerance, a value of 1.0 means that the error matches the tolerances
 -  normr - weighted norm based on the relative tolerance, a value of 1.0 means that the error matches the tolerances
@@ -5201,7 +5243,7 @@ PetscErrorCode TSErrorWeightedNormInfinity(TS ts,Vec U,Vec Y,PetscReal *norm,Pet
   PetscValidPointer(norm,4);
   PetscValidPointer(norma,5);
   PetscValidPointer(normr,6);
-  if (U == Y) SETERRQ(PetscObjectComm((PetscObject)U),PETSC_ERR_ARG_IDN,"U and Y cannot be the same vector");
+  PetscCheckFalse(U == Y,PetscObjectComm((PetscObject)U),PETSC_ERR_ARG_IDN,"U and Y cannot be the same vector");
 
   ierr = VecGetSize(U,&N);CHKERRQ(ierr);
   ierr = VecGetLocalSize(U,&n);CHKERRQ(ierr);
@@ -5224,13 +5266,13 @@ PetscErrorCode TSErrorWeightedNormInfinity(TS ts,Vec U,Vec Y,PetscReal *norm,Pet
       tola = PetscRealPart(atol[i]);
       tolr = PetscRealPart(rtol[i]) * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
       tol  = tola+tolr;
-      if (tola>0.){
+      if (tola>0.) {
         maxa = PetscMax(maxa,diff / tola);
       }
-      if (tolr>0.){
+      if (tolr>0.) {
         maxr = PetscMax(maxr,diff / tolr);
       }
-      if (tol>0.){
+      if (tol>0.) {
         max = PetscMax(max,diff / tol);
       }
     }
@@ -5245,13 +5287,13 @@ PetscErrorCode TSErrorWeightedNormInfinity(TS ts,Vec U,Vec Y,PetscReal *norm,Pet
       tola = PetscRealPart(atol[i]);
       tolr = ts->rtol  * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
       tol  = tola+tolr;
-      if (tola>0.){
+      if (tola>0.) {
         maxa = PetscMax(maxa,diff / tola);
       }
-      if (tolr>0.){
+      if (tolr>0.) {
         maxr = PetscMax(maxr,diff / tolr);
       }
-      if (tol>0.){
+      if (tol>0.) {
         max = PetscMax(max,diff / tol);
       }
     }
@@ -5266,13 +5308,13 @@ PetscErrorCode TSErrorWeightedNormInfinity(TS ts,Vec U,Vec Y,PetscReal *norm,Pet
       tola = ts->atol;
       tolr = PetscRealPart(rtol[i]) * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
       tol  = tola+tolr;
-      if (tola>0.){
+      if (tola>0.) {
         maxa = PetscMax(maxa,diff / tola);
       }
-      if (tolr>0.){
+      if (tolr>0.) {
         maxr = PetscMax(maxr,diff / tolr);
       }
-      if (tol>0.){
+      if (tol>0.) {
         max = PetscMax(max,diff / tol);
       }
     }
@@ -5285,13 +5327,13 @@ PetscErrorCode TSErrorWeightedNormInfinity(TS ts,Vec U,Vec Y,PetscReal *norm,Pet
       tola = ts->atol;
       tolr = ts->rtol * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
       tol  = tola+tolr;
-      if (tola>0.){
+      if (tola>0.) {
         maxa = PetscMax(maxa,diff / tola);
       }
-      if (tolr>0.){
+      if (tolr>0.) {
         maxr = PetscMax(maxr,diff / tolr);
       }
-      if (tol>0.){
+      if (tol>0.) {
         max = PetscMax(max,diff / tol);
       }
     }
@@ -5309,9 +5351,9 @@ PetscErrorCode TSErrorWeightedNormInfinity(TS ts,Vec U,Vec Y,PetscReal *norm,Pet
   *norm = gmax;
   *norma = gmaxa;
   *normr = gmaxr;
-  if (PetscIsInfOrNanScalar(*norm)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norm");
-    if (PetscIsInfOrNanScalar(*norma)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norma");
-    if (PetscIsInfOrNanScalar(*normr)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in normr");
+  PetscCheckFalse(PetscIsInfOrNanScalar(*norm),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norm");
+    PetscCheckFalse(PetscIsInfOrNanScalar(*norma),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norma");
+    PetscCheckFalse(PetscIsInfOrNanScalar(*normr),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in normr");
   PetscFunctionReturn(0);
 }
 
@@ -5320,13 +5362,13 @@ PetscErrorCode TSErrorWeightedNormInfinity(TS ts,Vec U,Vec Y,PetscReal *norm,Pet
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  U - state vector, usually ts->vec_sol
 .  Y - state vector to be compared to U
 -  wnormtype - norm type, either NORM_2 or NORM_INFINITY
 
-   Output Arguments:
+   Output Parameters:
 +  norm  - weighted norm, a value of 1.0 achieves a balance between absolute and relative tolerances
 .  norma - weighted norm, a value of 1.0 means that the error meets the absolute tolerance set by the user
 -  normr - weighted norm, a value of 1.0 means that the error meets the relative tolerance set by the user
@@ -5347,23 +5389,22 @@ PetscErrorCode TSErrorWeightedNorm(TS ts,Vec U,Vec Y,NormType wnormtype,PetscRea
     ierr = TSErrorWeightedNorm2(ts,U,Y,norm,norma,normr);CHKERRQ(ierr);
   } else if (wnormtype == NORM_INFINITY) {
     ierr = TSErrorWeightedNormInfinity(ts,U,Y,norm,norma,normr);CHKERRQ(ierr);
-  } else SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"No support for norm type %s",NormTypes[wnormtype]);
+  } else SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"No support for norm type %s",NormTypes[wnormtype]);
   PetscFunctionReturn(0);
 }
-
 
 /*@
    TSErrorWeightedENorm2 - compute a weighted 2 error norm based on supplied absolute and relative tolerances
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  E - error vector
 .  U - state vector, usually ts->vec_sol
 -  Y - state vector, previous time step
 
-   Output Arguments:
+   Output Parameters:
 +  norm - weighted norm, a value of 1.0 means that the error matches the tolerances
 .  norma - weighted norm based on the absolute tolerance, a value of 1.0 means that the error matches the tolerances
 -  normr - weighted norm based on the relative tolerance, a value of 1.0 means that the error matches the tolerances
@@ -5392,7 +5433,7 @@ PetscErrorCode TSErrorWeightedENorm2(TS ts,Vec E,Vec U,Vec Y,PetscReal *norm,Pet
   PetscValidType(U,3);
   PetscValidType(Y,4);
   PetscCheckSameComm(E,2,U,3);
-  PetscCheckSameComm(U,2,Y,3);
+  PetscCheckSameComm(U,3,Y,4);
   PetscValidPointer(norm,5);
   PetscValidPointer(norma,6);
   PetscValidPointer(normr,7);
@@ -5414,17 +5455,17 @@ PetscErrorCode TSErrorWeightedENorm2(TS ts,Vec E,Vec U,Vec Y,PetscReal *norm,Pet
       SkipSmallValue(y[i],u[i],ts->adapt->ignore_max);
       err = PetscAbsScalar(e[i]);
       tola = PetscRealPart(atol[i]);
-      if (tola>0.){
+      if (tola>0.) {
         suma  += PetscSqr(err/tola);
         na_loc++;
       }
       tolr = PetscRealPart(rtol[i]) * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
-      if (tolr>0.){
+      if (tolr>0.) {
         sumr  += PetscSqr(err/tolr);
         nr_loc++;
       }
       tol=tola+tolr;
-      if (tol>0.){
+      if (tol>0.) {
         sum  += PetscSqr(err/tol);
         n_loc++;
       }
@@ -5438,17 +5479,17 @@ PetscErrorCode TSErrorWeightedENorm2(TS ts,Vec E,Vec U,Vec Y,PetscReal *norm,Pet
       SkipSmallValue(y[i],u[i],ts->adapt->ignore_max);
       err = PetscAbsScalar(e[i]);
       tola = PetscRealPart(atol[i]);
-      if (tola>0.){
+      if (tola>0.) {
         suma  += PetscSqr(err/tola);
         na_loc++;
       }
       tolr = ts->rtol * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
-      if (tolr>0.){
+      if (tolr>0.) {
         sumr  += PetscSqr(err/tolr);
         nr_loc++;
       }
       tol=tola+tolr;
-      if (tol>0.){
+      if (tol>0.) {
         sum  += PetscSqr(err/tol);
         n_loc++;
       }
@@ -5461,17 +5502,17 @@ PetscErrorCode TSErrorWeightedENorm2(TS ts,Vec E,Vec U,Vec Y,PetscReal *norm,Pet
       SkipSmallValue(y[i],u[i],ts->adapt->ignore_max);
       err = PetscAbsScalar(e[i]);
       tola = ts->atol;
-      if (tola>0.){
+      if (tola>0.) {
         suma  += PetscSqr(err/tola);
         na_loc++;
       }
       tolr = PetscRealPart(rtol[i]) * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
-      if (tolr>0.){
+      if (tolr>0.) {
         sumr  += PetscSqr(err/tolr);
         nr_loc++;
       }
       tol=tola+tolr;
-      if (tol>0.){
+      if (tol>0.) {
         sum  += PetscSqr(err/tol);
         n_loc++;
       }
@@ -5482,17 +5523,17 @@ PetscErrorCode TSErrorWeightedENorm2(TS ts,Vec E,Vec U,Vec Y,PetscReal *norm,Pet
       SkipSmallValue(y[i],u[i],ts->adapt->ignore_max);
       err = PetscAbsScalar(e[i]);
       tola = ts->atol;
-      if (tola>0.){
+      if (tola>0.) {
         suma  += PetscSqr(err/tola);
         na_loc++;
       }
       tolr = ts->rtol * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
-      if (tolr>0.){
+      if (tolr>0.) {
         sumr  += PetscSqr(err/tolr);
         nr_loc++;
       }
       tol=tola+tolr;
-      if (tol>0.){
+      if (tol>0.) {
         sum  += PetscSqr(err/tol);
         n_loc++;
       }
@@ -5519,15 +5560,15 @@ PetscErrorCode TSErrorWeightedENorm2(TS ts,Vec E,Vec U,Vec Y,PetscReal *norm,Pet
   nr_glb = err_glb[5];
 
   *norm  = 0.;
-  if (n_glb>0.){*norm  = PetscSqrtReal(gsum  / n_glb);}
+  if (n_glb>0.) {*norm  = PetscSqrtReal(gsum  / n_glb);}
   *norma = 0.;
-  if (na_glb>0.){*norma = PetscSqrtReal(gsuma / na_glb);}
+  if (na_glb>0.) {*norma = PetscSqrtReal(gsuma / na_glb);}
   *normr = 0.;
-  if (nr_glb>0.){*normr = PetscSqrtReal(gsumr / nr_glb);}
+  if (nr_glb>0.) {*normr = PetscSqrtReal(gsumr / nr_glb);}
 
-  if (PetscIsInfOrNanScalar(*norm)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norm");
-  if (PetscIsInfOrNanScalar(*norma)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norma");
-  if (PetscIsInfOrNanScalar(*normr)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in normr");
+  PetscCheckFalse(PetscIsInfOrNanScalar(*norm),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norm");
+  PetscCheckFalse(PetscIsInfOrNanScalar(*norma),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norma");
+  PetscCheckFalse(PetscIsInfOrNanScalar(*normr),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in normr");
   PetscFunctionReturn(0);
 }
 
@@ -5535,13 +5576,13 @@ PetscErrorCode TSErrorWeightedENorm2(TS ts,Vec E,Vec U,Vec Y,PetscReal *norm,Pet
    TSErrorWeightedENormInfinity - compute a weighted infinity error norm based on supplied absolute and relative tolerances
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  E - error vector
 .  U - state vector, usually ts->vec_sol
 -  Y - state vector, previous time step
 
-   Output Arguments:
+   Output Parameters:
 +  norm - weighted norm, a value of 1.0 means that the error matches the tolerances
 .  norma - weighted norm based on the absolute tolerance, a value of 1.0 means that the error matches the tolerances
 -  normr - weighted norm based on the relative tolerance, a value of 1.0 means that the error matches the tolerances
@@ -5568,7 +5609,7 @@ PetscErrorCode TSErrorWeightedENormInfinity(TS ts,Vec E,Vec U,Vec Y,PetscReal *n
   PetscValidType(U,3);
   PetscValidType(Y,4);
   PetscCheckSameComm(E,2,U,3);
-  PetscCheckSameComm(U,2,Y,3);
+  PetscCheckSameComm(U,3,Y,4);
   PetscValidPointer(norm,5);
   PetscValidPointer(norma,6);
   PetscValidPointer(normr,7);
@@ -5595,13 +5636,13 @@ PetscErrorCode TSErrorWeightedENormInfinity(TS ts,Vec E,Vec U,Vec Y,PetscReal *n
       tola = PetscRealPart(atol[i]);
       tolr = PetscRealPart(rtol[i]) * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
       tol  = tola+tolr;
-      if (tola>0.){
+      if (tola>0.) {
         maxa = PetscMax(maxa,err / tola);
       }
-      if (tolr>0.){
+      if (tolr>0.) {
         maxr = PetscMax(maxr,err / tolr);
       }
-      if (tol>0.){
+      if (tol>0.) {
         max = PetscMax(max,err / tol);
       }
     }
@@ -5616,13 +5657,13 @@ PetscErrorCode TSErrorWeightedENormInfinity(TS ts,Vec E,Vec U,Vec Y,PetscReal *n
       tola = PetscRealPart(atol[i]);
       tolr = ts->rtol  * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
       tol  = tola+tolr;
-      if (tola>0.){
+      if (tola>0.) {
         maxa = PetscMax(maxa,err / tola);
       }
-      if (tolr>0.){
+      if (tolr>0.) {
         maxr = PetscMax(maxr,err / tolr);
       }
-      if (tol>0.){
+      if (tol>0.) {
         max = PetscMax(max,err / tol);
       }
     }
@@ -5637,13 +5678,13 @@ PetscErrorCode TSErrorWeightedENormInfinity(TS ts,Vec E,Vec U,Vec Y,PetscReal *n
       tola = ts->atol;
       tolr = PetscRealPart(rtol[i]) * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
       tol  = tola+tolr;
-      if (tola>0.){
+      if (tola>0.) {
         maxa = PetscMax(maxa,err / tola);
       }
-      if (tolr>0.){
+      if (tolr>0.) {
         maxr = PetscMax(maxr,err / tolr);
       }
-      if (tol>0.){
+      if (tol>0.) {
         max = PetscMax(max,err / tol);
       }
     }
@@ -5656,13 +5697,13 @@ PetscErrorCode TSErrorWeightedENormInfinity(TS ts,Vec E,Vec U,Vec Y,PetscReal *n
       tola = ts->atol;
       tolr = ts->rtol * PetscMax(PetscAbsScalar(u[i]),PetscAbsScalar(y[i]));
       tol  = tola+tolr;
-      if (tola>0.){
+      if (tola>0.) {
         maxa = PetscMax(maxa,err / tola);
       }
-      if (tolr>0.){
+      if (tolr>0.) {
         maxr = PetscMax(maxr,err / tolr);
       }
-      if (tol>0.){
+      if (tol>0.) {
         max = PetscMax(max,err / tol);
       }
     }
@@ -5681,9 +5722,9 @@ PetscErrorCode TSErrorWeightedENormInfinity(TS ts,Vec E,Vec U,Vec Y,PetscReal *n
   *norm = gmax;
   *norma = gmaxa;
   *normr = gmaxr;
-  if (PetscIsInfOrNanScalar(*norm)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norm");
-    if (PetscIsInfOrNanScalar(*norma)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norma");
-    if (PetscIsInfOrNanScalar(*normr)) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in normr");
+  PetscCheckFalse(PetscIsInfOrNanScalar(*norm),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norm");
+    PetscCheckFalse(PetscIsInfOrNanScalar(*norma),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in norma");
+    PetscCheckFalse(PetscIsInfOrNanScalar(*normr),PetscObjectComm((PetscObject)ts),PETSC_ERR_FP,"Infinite or not-a-number generated in normr");
   PetscFunctionReturn(0);
 }
 
@@ -5692,14 +5733,14 @@ PetscErrorCode TSErrorWeightedENormInfinity(TS ts,Vec E,Vec U,Vec Y,PetscReal *n
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 .  E - error vector
 .  U - state vector, usually ts->vec_sol
 .  Y - state vector, previous time step
 -  wnormtype - norm type, either NORM_2 or NORM_INFINITY
 
-   Output Arguments:
+   Output Parameters:
 +  norm  - weighted norm, a value of 1.0 achieves a balance between absolute and relative tolerances
 .  norma - weighted norm, a value of 1.0 means that the error meets the absolute tolerance set by the user
 -  normr - weighted norm, a value of 1.0 means that the error meets the relative tolerance set by the user
@@ -5720,17 +5761,16 @@ PetscErrorCode TSErrorWeightedENorm(TS ts,Vec E,Vec U,Vec Y,NormType wnormtype,P
     ierr = TSErrorWeightedENorm2(ts,E,U,Y,norm,norma,normr);CHKERRQ(ierr);
   } else if (wnormtype == NORM_INFINITY) {
     ierr = TSErrorWeightedENormInfinity(ts,E,U,Y,norm,norma,normr);CHKERRQ(ierr);
-  } else SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"No support for norm type %s",NormTypes[wnormtype]);
+  } else SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"No support for norm type %s",NormTypes[wnormtype]);
   PetscFunctionReturn(0);
 }
-
 
 /*@
    TSSetCFLTimeLocal - Set the local CFL constraint relative to forward Euler
 
    Logically Collective on TS
 
-   Input Arguments:
+   Input Parameters:
 +  ts - time stepping context
 -  cfltime - maximum stable time step if using forward Euler (value can be different on each process)
 
@@ -5755,10 +5795,10 @@ PetscErrorCode TSSetCFLTimeLocal(TS ts,PetscReal cfltime)
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameter:
 .  ts - time stepping context
 
-   Output Arguments:
+   Output Parameter:
 .  cfltime - maximum stable time step for forward Euler
 
    Level: advanced
@@ -5825,7 +5865,7 @@ PetscErrorCode TSComputeLinearStability(TS ts,PetscReal xr,PetscReal xi,PetscRea
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  if (!ts->ops->linearstability) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Linearized stability function not provided for this method");
+  PetscCheckFalse(!ts->ops->linearstability,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Linearized stability function not provided for this method");
   ierr = (*ts->ops->linearstability)(ts,xr,xi,yr,yi);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -5876,8 +5916,8 @@ PetscErrorCode  TSRollBack(TS ts)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts, TS_CLASSID,1);
-  if (ts->steprollback) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"TSRollBack already called");
-  if (!ts->ops->rollback) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSRollBack not implemented for type '%s'",((PetscObject)ts)->type_name);
+  PetscCheckFalse(ts->steprollback,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"TSRollBack already called");
+  PetscCheckFalse(!ts->ops->rollback,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSRollBack not implemented for type '%s'",((PetscObject)ts)->type_name);
   ierr = (*ts->ops->rollback)(ts);CHKERRQ(ierr);
   ts->time_step = ts->ptime - ts->ptime_prev;
   ts->ptime = ts->ptime_prev;
@@ -6066,7 +6106,7 @@ PetscErrorCode TSFunctionDomainError(TS ts,PetscReal stagetime,Vec Y,PetscBool* 
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   *accept = PETSC_TRUE;
   if (ts->functiondomainerror) {
-    PetscStackCallStandard((*ts->functiondomainerror),(ts,stagetime,Y,accept));
+    PetscStackCallStandard((*ts->functiondomainerror),ts,stagetime,Y,accept);
   }
   PetscFunctionReturn(0);
 }
@@ -6252,7 +6292,7 @@ PetscErrorCode  TSRHSJacobianTestTranspose(TS ts,PetscBool *flg)
 
   Logically collective
 
-  Input Parameter:
+  Input Parameters:
 +  ts - timestepping context
 -  use_splitrhsfunction - PETSC_TRUE indicates that the split RHSFunction will be used
 

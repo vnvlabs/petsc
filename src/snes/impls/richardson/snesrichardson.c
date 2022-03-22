@@ -1,6 +1,5 @@
 #include <../src/snes/impls/richardson/snesrichardsonimpl.h>
 
-
 PetscErrorCode SNESReset_NRichardson(SNES snes)
 {
   PetscFunctionBegin;
@@ -38,7 +37,7 @@ PetscErrorCode SNESDestroy_NRichardson(SNES snes)
 PetscErrorCode SNESSetUp_NRichardson(SNES snes)
 {
   PetscFunctionBegin;
-  if (snes->npcside== PC_RIGHT) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"NRichardson only supports left preconditioning");
+  PetscCheckFalse(snes->npcside== PC_RIGHT,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"NRichardson only supports left preconditioning");
   if (snes->functype == SNES_FUNCTION_DEFAULT) snes->functype = SNES_FUNCTION_UNPRECONDITIONED;
   PetscFunctionReturn(0);
 }
@@ -103,7 +102,7 @@ PetscErrorCode SNESSolve_NRichardson(SNES snes)
   SNESConvergedReason  reason;
 
   PetscFunctionBegin;
-  if (snes->xl || snes->xu || snes->ops->computevariablebounds) SETERRQ1(PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
+  PetscCheckFalse(snes->xl || snes->xu || snes->ops->computevariablebounds,PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
 
   snes->reason = SNES_CONVERGED_ITERATING;
 
@@ -216,7 +215,7 @@ PetscErrorCode SNESSolve_NRichardson(SNES snes)
     }
   }
   if (i == maxits+1) {
-    ierr = PetscInfo1(snes, "Maximum number of iterations has been reached: %D\n", maxits);CHKERRQ(ierr);
+    ierr = PetscInfo(snes, "Maximum number of iterations has been reached: %D\n", maxits);CHKERRQ(ierr);
     if (!snes->reason) snes->reason = SNES_DIVERGED_MAX_IT;
   }
   PetscFunctionReturn(0);
@@ -228,8 +227,8 @@ PetscErrorCode SNESSolve_NRichardson(SNES snes)
   Level: beginner
 
   Options Database:
-+   -snes_linesearch_type <l2,cp,basic> Line search type.
--   -snes_linesearch_damping<1.0> Damping for the line search.
++   -snes_linesearch_type <l2,cp,basic> - Line search type.
+-   -snes_linesearch_damping<1.0> - Damping for the line search.
 
   Notes:
     If no inner nonlinear preconditioner is provided then solves F(x) - b = 0 using x^{n+1} = x^{n} - lambda

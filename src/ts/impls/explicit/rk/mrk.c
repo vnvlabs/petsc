@@ -39,7 +39,7 @@ static PetscErrorCode TSInterpolate_RK_MultirateNonsplit(TS ts,PetscReal itime,V
   PetscErrorCode   ierr;
 
   PetscFunctionBegin;
-  if (!B) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSRK %s does not have an interpolation formula",rk->tableau->name);
+  PetscCheckFalse(!B,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSRK %s does not have an interpolation formula",rk->tableau->name);
   t = (itime - rk->ptime)/h;
   ierr = PetscMalloc1(s,&b);CHKERRQ(ierr);
   for (i=0; i<s; i++) b[i] = 0;
@@ -68,6 +68,7 @@ static PetscErrorCode TSStepRefine_RK_MultirateNonsplit(TS ts)
   PetscReal       t = ts->ptime,h = ts->time_step;
   PetscErrorCode  ierr;
 
+  PetscFunctionBegin;
   ierr = VecDuplicate(ts->vec_sol,&vec_fast);CHKERRQ(ierr);
   previousts = rk->subts_current;
   ierr = TSRHSSplitGetSubTS(rk->subts_current,"fast",&subts);CHKERRQ(ierr);
@@ -186,10 +187,10 @@ static PetscErrorCode TSSetUp_RK_MultirateNonsplit(TS ts)
   PetscFunctionBegin;
   ierr = TSRHSSplitGetIS(ts,"slow",&rk->is_slow);CHKERRQ(ierr);
   ierr = TSRHSSplitGetIS(ts,"fast",&rk->is_fast);CHKERRQ(ierr);
-  if (!rk->is_slow || !rk->is_fast) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up RHSSplits with TSRHSSplitSetIS() using split names 'slow' and 'fast' respectively in order to use multirate RK");
+  PetscCheckFalse(!rk->is_slow || !rk->is_fast,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up RHSSplits with TSRHSSplitSetIS() using split names 'slow' and 'fast' respectively in order to use multirate RK");
   ierr = TSRHSSplitGetSubTS(ts,"slow",&rk->subts_slow);CHKERRQ(ierr);
   ierr = TSRHSSplitGetSubTS(ts,"fast",&rk->subts_fast);CHKERRQ(ierr);
-  if (!rk->subts_slow || !rk->subts_fast) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up the RHSFunctions for 'slow' and 'fast' components using TSRHSSplitSetRHSFunction() or calling TSSetRHSFunction() for each sub-TS");
+  PetscCheckFalse(!rk->subts_slow || !rk->subts_fast,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up the RHSFunctions for 'slow' and 'fast' components using TSRHSSplitSetRHSFunction() or calling TSSetRHSFunction() for each sub-TS");
   ierr = VecDuplicate(ts->vec_sol,&rk->X0);CHKERRQ(ierr);
   ierr = VecDuplicateVecs(ts->vec_sol,tab->s,&rk->YdotRHS_slow);CHKERRQ(ierr);
   rk->subts_current = rk->subts_fast;
@@ -251,7 +252,7 @@ static PetscErrorCode TSInterpolate_RK_MultirateSplit(TS ts,PetscReal itime,Vec 
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
-  if (!B) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSRK %s does not have an interpolation formula",rk->tableau->name);
+  PetscCheckFalse(!B,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSRK %s does not have an interpolation formula",rk->tableau->name);
 
   switch (rk->status) {
     case TS_STEP_INCOMPLETE:
@@ -335,12 +336,13 @@ static PetscErrorCode TSStepRefine_RK_MultirateSplit(TS ts)
   PetscReal       t = ts->ptime,h = ts->time_step;
   PetscErrorCode  ierr;
 
+  PetscFunctionBegin;
   for (k=0; k<rk->dtratio; k++) {
     ierr = VecGetSubVector(ts->vec_sol,rk->is_fast,&Xfast);CHKERRQ(ierr);
     for (i=0; i<s; i++) {
       ierr = VecGetSubVector(YdotRHS[i],rk->is_fast,&YdotRHS_fast[i]);CHKERRQ(ierr);
     }
-    /* propogate fast component using small time steps */
+    /* propagate fast component using small time steps */
     for (i=0; i<s; i++) {
       /* stage value for slow components */
       ierr = TSInterpolate_RK_MultirateSplit(rk->ts_root,t+k*h/rk->dtratio+h/rk->dtratio*c[i],Y[i]);CHKERRQ(ierr);
@@ -403,7 +405,7 @@ static PetscErrorCode TSStep_RK_MultirateSplit(TS ts)
     ierr = VecGetSubVector(YdotRHS[i],rk->is_fast,&YdotRHS_fast[i]);CHKERRQ(ierr);
   }
   ierr = VecCopy(ts->vec_sol,rk->X0);CHKERRQ(ierr);
-  /* propogate both slow and fast components using large time steps */
+  /* propagate both slow and fast components using large time steps */
   for (i=0; i<s; i++) {
     rk->stage_time = t + h*c[i];
     ierr = TSPreStage(ts,rk->stage_time);CHKERRQ(ierr);
@@ -446,10 +448,10 @@ static PetscErrorCode TSSetUp_RK_MultirateSplit(TS ts)
   PetscFunctionBegin;
   ierr = TSRHSSplitGetIS(ts,"slow",&rk->is_slow);CHKERRQ(ierr);
   ierr = TSRHSSplitGetIS(ts,"fast",&rk->is_fast);CHKERRQ(ierr);
-  if (!rk->is_slow || !rk->is_fast) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up RHSSplits with TSRHSSplitSetIS() using split names 'slow' and 'fast' respectively in order to use -ts_type bsi");
+  PetscCheckFalse(!rk->is_slow || !rk->is_fast,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up RHSSplits with TSRHSSplitSetIS() using split names 'slow' and 'fast' respectively in order to use -ts_type bsi");
   ierr = TSRHSSplitGetSubTS(ts,"slow",&rk->subts_slow);CHKERRQ(ierr);
   ierr = TSRHSSplitGetSubTS(ts,"fast",&rk->subts_fast);CHKERRQ(ierr);
-  if (!rk->subts_slow || !rk->subts_fast) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up the RHSFunctions for 'slow' and 'fast' components using TSRHSSplitSetRHSFunction() or calling TSSetRHSFunction() for each sub-TS");
+  PetscCheckFalse(!rk->subts_slow || !rk->subts_fast,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up the RHSFunctions for 'slow' and 'fast' components using TSRHSSplitSetRHSFunction() or calling TSSetRHSFunction() for each sub-TS");
 
   ierr = VecDuplicate(ts->vec_sol,&X0);CHKERRQ(ierr);
   /* The TS at each level share the same tableau, work array, solution vector, stage values and stage derivatives */

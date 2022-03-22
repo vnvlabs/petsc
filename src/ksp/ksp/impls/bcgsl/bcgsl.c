@@ -14,7 +14,6 @@
 #include <../src/ksp/ksp/impls/bcgsl/bcgslimpl.h>
 #include <petscblaslapack.h>
 
-
 static PetscErrorCode  KSPSolve_BCGSL(KSP ksp)
 {
   KSP_BCGSL      *bcgsl = (KSP_BCGSL*) ksp->data;
@@ -49,7 +48,6 @@ static PetscErrorCode  KSPSolve_BCGSL(KSP ksp)
   KSPCheckNorm(ksp,zeta0);
   rnmax_computed = zeta0;
   rnmax_true     = zeta0;
-
 
   ierr       = PetscObjectSAWsTakeAccess((PetscObject)ksp);CHKERRQ(ierr);
   ksp->its   = 0;
@@ -269,7 +267,6 @@ static PetscErrorCode  KSPSolve_BCGSL(KSP ksp)
       PetscFunctionReturn(0);
     }
 
-
     ierr = VecMAXPY(VX, bcgsl->ell,AY0c+1, VVR);CHKERRQ(ierr);
     for (i=1; i<=bcgsl->ell; i++) AY0c[i] *= -1.0;
     ierr = VecMAXPY(VVU[0], bcgsl->ell,AY0c+1, VVU+1);CHKERRQ(ierr);
@@ -325,7 +322,7 @@ static PetscErrorCode  KSPSolve_BCGSL(KSP ksp)
 
    Options Database Keys:
 
-.  -ksp_bcgsl_xres delta
+.  -ksp_bcgsl_xres delta - Threshold used to decide when to refresh computed residuals
 
    Level: intermediate
 
@@ -429,7 +426,7 @@ PetscErrorCode  KSPBCGSLSetPol(KSP ksp, PetscBool uMROR)
 
    Options Database Keys:
 
-.  -ksp_bcgsl_ell ell
+.  -ksp_bcgsl_ell ell - Number of Krylov search directions
 
    Level: intermediate
 
@@ -446,7 +443,7 @@ PetscErrorCode  KSPBCGSLSetEll(KSP ksp, PetscInt ell)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (ell < 1) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE, "KSPBCGSLSetEll: second argument must be positive");
+  PetscCheckFalse(ell < 1,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE, "KSPBCGSLSetEll: second argument must be positive");
   PetscValidLogicalCollectiveInt(ksp,ell,2);
 
   if (!ksp->setupstage) bcgsl->ell = ell;
@@ -566,14 +563,14 @@ PetscErrorCode KSPDestroy_BCGSL(KSP ksp)
                 out of the denominator in the formula for ghat.
 
     References:
-+     1. - G.L.G. Sleijpen, H.A. van der Vorst, "An overview of
++   * - G.L.G. Sleijpen, H.A. van der Vorst, "An overview of
          approaches for the stable computation of hybrid BiCG
          methods", Applied Numerical Mathematics: Transactions
          f IMACS, 19(3), 1996.
-.     2. -  G.L.G. Sleijpen, H.A. van der Vorst, D.R. Fokkema,
+.   * - G.L.G. Sleijpen, H.A. van der Vorst, D.R. Fokkema,
          "BiCGStab(L) and other hybrid BiCG methods",
           Numerical Algorithms, 7, 1994.
--     3. -  D.R. Fokkema, "Enhanced implementation of BiCGStab(L)
+-   * - D.R. Fokkema, "Enhanced implementation of BiCGStab(L)
          for solving linear systems of equations", preprint
          from www.citeseer.com.
 

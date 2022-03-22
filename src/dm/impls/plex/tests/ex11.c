@@ -21,7 +21,7 @@ static PetscErrorCode TestInsertion()
     PetscInt val;
 
     ierr = DMLabelGetValue(label, i, &val);CHKERRQ(ierr);
-    if (val != values[i%5]) SETERRQ3(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Value %d for point %d should be %d", val, i, values[i%5]);
+    PetscCheckFalse(val != values[i%5],PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Value %d for point %d should be %d", val, i, values[i%5]);
   }
   /* Test stratum */
   for (v = 0; v < 5; ++v) {
@@ -30,11 +30,11 @@ static PetscErrorCode TestInsertion()
     PetscInt        n;
 
     ierr = DMLabelGetStratumIS(label, values[v], &stratum);CHKERRQ(ierr);
-    if (!stratum) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Stratum %d is empty!", v);
+    PetscCheckFalse(!stratum,PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Stratum %d is empty!", v);
     ierr = ISGetIndices(stratum, &points);CHKERRQ(ierr);
     ierr = ISGetLocalSize(stratum, &n);CHKERRQ(ierr);
     for (i = 0; i < n; ++i) {
-      if (points[i] != i*5+v) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Point %d should be %d", points[i], i*5+v);
+      PetscCheckFalse(points[i] != i*5+v,PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Point %d should be %d", points[i], i*5+v);
     }
     ierr = ISRestoreIndices(stratum, &points);CHKERRQ(ierr);
     ierr = ISDestroy(&stratum);CHKERRQ(ierr);
@@ -44,7 +44,7 @@ static PetscErrorCode TestInsertion()
     PetscInt val;
 
     ierr = DMLabelGetValue(label, i, &val);CHKERRQ(ierr);
-    if (val != values[i%5]) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Value %d should be %d", val, values[i%5]);
+    PetscCheckFalse(val != values[i%5],PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Value %d should be %d", val, values[i%5]);
   }
   /* Test Duplicate */
   ierr = DMLabelDuplicate(label, &label2);CHKERRQ(ierr);
@@ -52,7 +52,7 @@ static PetscErrorCode TestInsertion()
     PetscInt val;
 
     ierr = DMLabelGetValue(label2, i, &val);CHKERRQ(ierr);
-    if (val != values[i%5]) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Value %d should be %d", val, values[i%5]);
+    PetscCheckFalse(val != values[i%5],PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Value %d should be %d", val, values[i%5]);
   }
   ierr = DMLabelDestroy(&label2);CHKERRQ(ierr);
   ierr = DMLabelDestroy(&label);CHKERRQ(ierr);
@@ -86,7 +86,7 @@ static PetscErrorCode TestEmptyStrata(MPI_Comm comm)
   ierr = DMCreate(comm, &dm);CHKERRQ(ierr);
   ierr = DMSetType(dm, DMPLEX);CHKERRQ(ierr);
   ierr = DMSetDimension(dm, dim);CHKERRQ(ierr);
-  if (!rank) {
+  if (rank == 0) {
     ierr = DMPlexSetChart(dm, 0, 25);CHKERRQ(ierr);
     ierr = DMPlexSetConeSize(dm, 0, 6);CHKERRQ(ierr);
     ierr = DMPlexSetConeSize(dm, 1, 6);CHKERRQ(ierr);
@@ -103,7 +103,7 @@ static PetscErrorCode TestEmptyStrata(MPI_Comm comm)
     ierr = DMPlexSetConeSize(dm, 12, 4);CHKERRQ(ierr);
   }
   ierr = DMSetUp(dm);CHKERRQ(ierr);
-  if (!rank) {
+  if (rank == 0) {
     ierr = DMPlexSetCone(dm, 0, c0);CHKERRQ(ierr);
     ierr = DMPlexSetCone(dm, 1, c1);CHKERRQ(ierr);
     ierr = DMPlexSetCone(dm, 2, c2);CHKERRQ(ierr);
@@ -126,7 +126,7 @@ static PetscErrorCode TestEmptyStrata(MPI_Comm comm)
 
     ierr = DMCreateLabel(dm, "depth");CHKERRQ(ierr);
     ierr = DMPlexGetDepthLabel(dm, &label);CHKERRQ(ierr);
-    if (!rank) {
+    if (rank == 0) {
       PetscInt i;
 
       for (i = 0; i < 25; ++i) {
@@ -175,7 +175,7 @@ static PetscErrorCode TestEmptyStrata(MPI_Comm comm)
     ierr = VecGetSize(v, &N);CHKERRQ(ierr);
     if (N != 2) {
       ierr = DMView(dm, PETSC_VIEWER_STDOUT_(comm));CHKERRQ(ierr);
-      SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "FAIL: Vector size %d != 2\n", N);
+      SETERRQ(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "FAIL: Vector size %d != 2", N);
     }
     ierr = VecDestroy(&v);CHKERRQ(ierr);
   }
@@ -200,7 +200,7 @@ static PetscErrorCode TestDistribution(MPI_Comm comm)
   ierr = PetscOptionsGetString(NULL, NULL, "-filename", filename, sizeof(filename), &flg);CHKERRQ(ierr);
   if (!flg) PetscFunctionReturn(0);
   ierr = PetscOptionsGetInt(NULL, NULL, "-overlap", &overlap, NULL);CHKERRQ(ierr);
-  ierr = DMPlexCreateFromFile(comm, filename, PETSC_TRUE, &dm);CHKERRQ(ierr);
+  ierr = DMPlexCreateFromFile(comm, filename, "ex11_plex", PETSC_TRUE, &dm);CHKERRQ(ierr);
   ierr = DMSetBasicAdjacency(dm, PETSC_TRUE, PETSC_FALSE);CHKERRQ(ierr);
   ierr = DMCreateLabel(dm, name);CHKERRQ(ierr);
   ierr = DMGetLabel(dm, name, &label);CHKERRQ(ierr);
@@ -230,26 +230,26 @@ static PetscErrorCode TestUniversalLabel(MPI_Comm comm)
   DMLabel          bd1, bd2, ulabel;
   DMUniversalLabel universal;
   PetscInt         pStart, pEnd, p;
-  PetscBool        run = PETSC_FALSE, flg, flg2;
-  char             filename[PETSC_MAX_PATH_LEN];
-  char             bdfilename[PETSC_MAX_PATH_LEN];
+  PetscBool        run = PETSC_FALSE, notFile;
   PetscErrorCode   ierr;
 
   PetscFunctionBeginUser;
   ierr = PetscOptionsGetBool(NULL, NULL, "-universal", &run, NULL);CHKERRQ(ierr);
   if (!run) PetscFunctionReturn(0);
-  ierr = PetscOptionsGetString(NULL, NULL, "-filename", filename, sizeof(filename), &flg);CHKERRQ(ierr);
-  ierr = PetscOptionsGetString(NULL, NULL, "-bd_filename", bdfilename, sizeof(bdfilename), &flg2);CHKERRQ(ierr);
-  if (flg) {
-    ierr = DMPlexCreateFromFile(comm, filename, PETSC_TRUE, &dm1);CHKERRQ(ierr);
-  } else if (flg2) {
-    DM bd;
 
-    ierr = DMPlexCreateFromFile(comm, bdfilename, PETSC_TRUE, &bd);CHKERRQ(ierr);
-    ierr = DMPlexGenerate(bd, NULL, PETSC_TRUE, &dm1);CHKERRQ(ierr);
-    ierr = DMDestroy(&bd);CHKERRQ(ierr);
+  char filename[PETSC_MAX_PATH_LEN];
+  PetscBool flg;
+
+  ierr = PetscOptionsGetString(NULL, NULL, "-filename", filename, sizeof(filename), &flg);CHKERRQ(ierr);
+  if (flg) {
+    ierr = DMPlexCreateFromFile(comm, filename, "ex11_plex", PETSC_TRUE, &dm1);CHKERRQ(ierr);
   } else {
-    ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_TRUE, NULL, NULL, NULL, NULL, PETSC_TRUE, &dm1);CHKERRQ(ierr);
+    ierr = DMCreate(comm, &dm1);CHKERRQ(ierr);
+    ierr = DMSetType(dm1, DMPLEX);CHKERRQ(ierr);
+    ierr = DMSetFromOptions(dm1);CHKERRQ(ierr);
+  }
+  ierr = DMHasLabel(dm1, "marker", &notFile);CHKERRQ(ierr);
+  if (notFile) {
     ierr = DMCreateLabel(dm1, "Boundary Faces");CHKERRQ(ierr);
     ierr = DMGetLabel(dm1, "Boundary Faces", &bd1);CHKERRQ(ierr);
     ierr = DMPlexMarkBoundaryFaces(dm1, 13, bd1);CHKERRQ(ierr);
@@ -265,7 +265,7 @@ static PetscErrorCode TestUniversalLabel(MPI_Comm comm)
   ierr = DMUniversalLabelGetLabel(universal, &ulabel);CHKERRQ(ierr);
   ierr = PetscObjectViewFromOptions((PetscObject) ulabel, NULL, "-universal_view");CHKERRQ(ierr);
 
-  if (flg || flg2) {
+  if (!notFile) {
     PetscInt Nl, l;
 
     ierr = DMClone(dm1, &dm2);CHKERRQ(ierr);
@@ -280,7 +280,9 @@ static PetscErrorCode TestUniversalLabel(MPI_Comm comm)
       if (!isdepth && !iscelltype) {ierr = DMRemoveLabel(dm2, name, NULL);CHKERRQ(ierr);}
     }
   } else {
-    ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_TRUE, NULL, NULL, NULL, NULL, PETSC_TRUE, &dm2);CHKERRQ(ierr);
+    ierr = DMCreate(comm, &dm2);CHKERRQ(ierr);
+    ierr = DMSetType(dm2, DMPLEX);CHKERRQ(ierr);
+    ierr = DMSetFromOptions(dm2);CHKERRQ(ierr);
   }
   ierr = PetscObjectSetName((PetscObject) dm2, "Second Mesh");CHKERRQ(ierr);
   ierr = DMUniversalLabelCreateLabels(universal, PETSC_TRUE, dm2);CHKERRQ(ierr);
@@ -355,12 +357,12 @@ int main(int argc, char **argv)
     # Note that the labels differ because we have multiply-marked some points during EGADS creation
     suffix: univ_egads_sphere
     requires: egads
-    args: -universal -filename ${wPETSC_DIR}/share/petsc/datafiles/meshes/unit_sphere.egadslite -dm_view -universal_view
+    args: -universal -dm_plex_filename ${wPETSC_DIR}/share/petsc/datafiles/meshes/unit_sphere.egadslite -dm_view -universal_view
 
   test:
     # Note that the labels differ because we have multiply-marked some points during EGADS creation
     suffix: univ_egads_ball
     requires: egads ctetgen
-    args: -universal -bd_filename ${wPETSC_DIR}/share/petsc/datafiles/meshes/unit_sphere.egadslite -dm_view -universal_view
+    args: -universal -dm_plex_boundary_filename ${wPETSC_DIR}/share/petsc/datafiles/meshes/unit_sphere.egadslite -dm_view -universal_view
 
 TEST*/

@@ -19,6 +19,9 @@ PETSC_EXTERN PetscErrorCode MatPartitioningRegisterAll(void);
 PETSC_EXTERN PetscErrorCode MatCoarsenRegisterAll(void);
 PETSC_EXTERN PetscErrorCode MatSeqAIJRegisterAll(void);
 
+/* Gets the root type of the input matrix's type (e.g., MATAIJ for MATSEQAIJ) */
+PETSC_EXTERN PetscErrorCode MatGetRootType_Private(Mat, MatType*);
+
 /*
   This file defines the parts of the matrix data structure that are
   shared by all matrix types.
@@ -123,8 +126,8 @@ struct _MatOps {
   PetscErrorCode (*setvaluesadifor)(Mat,PetscInt,void*);
   PetscErrorCode (*fdcoloringapply)(Mat,MatFDColoring,Vec,void*);
   PetscErrorCode (*setfromoptions)(PetscOptionItems*,Mat);
-  PetscErrorCode (*multconstrained)(Mat,Vec,Vec);
-  PetscErrorCode (*multtransposeconstrained)(Mat,Vec,Vec);
+  PetscErrorCode (*placeholder_77)(void);
+  PetscErrorCode (*placeholder_78)(void);
   /*79*/
   PetscErrorCode (*findzerodiagonals)(Mat,IS*);
   PetscErrorCode (*mults)(Mat,Vecs,Vecs);
@@ -181,7 +184,7 @@ struct _MatOps {
   PetscErrorCode (*getmultiprocblock)(Mat,MPI_Comm,MatReuse,Mat*);
   /*124*/
   PetscErrorCode (*findnonzerorows)(Mat,IS*);
-  PetscErrorCode (*getcolumnnorms)(Mat,NormType,PetscReal*);
+  PetscErrorCode (*getcolumnreductions)(Mat,PetscInt,PetscReal*);
   PetscErrorCode (*invertblockdiagonal)(Mat,const PetscScalar**);
   PetscErrorCode (*invertvariableblockdiagonal)(Mat,PetscInt,const PetscInt*,PetscScalar*);
   PetscErrorCode (*createsubmatricesmpi)(Mat,PetscInt,const IS[], const IS[], MatReuse, Mat**);
@@ -238,7 +241,7 @@ PETSC_INTERN PetscErrorCode MatDiagonalSet_Default(Mat,Vec,InsertMode);
 #if defined(PETSC_HAVE_SCALAPACK)
 PETSC_INTERN PetscErrorCode MatConvert_Dense_ScaLAPACK(Mat,MatType,MatReuse,Mat*);
 #endif
-PETSC_INTERN PetscErrorCode MatSetPreallocationCOO_Basic(Mat,PetscInt,const PetscInt[],const PetscInt[]);
+PETSC_INTERN PetscErrorCode MatSetPreallocationCOO_Basic(Mat,PetscCount,const PetscInt[],const PetscInt[]);
 PETSC_INTERN PetscErrorCode MatSetValuesCOO_Basic(Mat,const PetscScalar[],InsertMode);
 
 /* these callbacks rely on the old matrix function pointers for
@@ -261,10 +264,10 @@ PETSC_INTERN PetscErrorCode MatProductCreate_Private(Mat,Mat,Mat,Mat);
    does not rely on the function pointers; used by cuSPARSE and KOKKOS-KERNELS */
 PETSC_INTERN PetscErrorCode MatProductSymbolic_ABC_Basic(Mat);
 
-
+#if !defined(PETSC_CLANG_STATIC_ANALYZER)
 #if defined(PETSC_USE_DEBUG)
 #  define MatCheckPreallocated(A,arg) do {                              \
-    if (PetscUnlikely(!(A)->preallocated)) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Must call MatXXXSetPreallocation(), MatSetUp() or the matrix has not yet been factored on argument %D \"%s\" before %s()",(arg),#A,PETSC_FUNCTION_NAME); \
+    PetscCheck((A)->preallocated,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Must call MatXXXSetPreallocation(), MatSetUp() or the matrix has not yet been factored on argument %d \"%s\" before %s()",(arg),#A,PETSC_FUNCTION_NAME); \
   } while (0)
 #else
 #  define MatCheckPreallocated(A,arg) do {} while (0)
@@ -272,11 +275,17 @@ PETSC_INTERN PetscErrorCode MatProductSymbolic_ABC_Basic(Mat);
 
 #if defined(PETSC_USE_DEBUG)
 #  define MatCheckProduct(A,arg) do {                              \
-    if (PetscUnlikely(!(A)->product)) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Argument %D \"%s\" is not a matrix obtained from MatProductCreate()",(arg),#A); \
+    PetscCheck((A)->product,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Argument %d \"%s\" is not a matrix obtained from MatProductCreate()",(arg),#A); \
   } while (0)
 #else
 #  define MatCheckProduct(A,arg) do {} while (0)
 #endif
+#else  /* PETSC_CLANG_STATIC_ANALYZER */
+template <typename Tm>
+void MatCheckPreallocated(Tm,int);
+template <typename Tm>
+void MatCheckProduct(Tm,int);
+#endif /* PETSC_CLANG_STATIC_ANALYZER */
 
 /*
   The stash is used to temporarily store inserted matrix values that
@@ -415,6 +424,9 @@ typedef struct { /* used by MatProduct() */
   MatProductType type;
   char           *alg;
   Mat            A,B,C,Dwork;
+  PetscBool      symbolic_used_the_fact_A_is_symmetric; /* Symbolic phase took advantage of the fact that A is symmetric, and optimized e.g. AtB as AB. Then, .. */
+  PetscBool      symbolic_used_the_fact_B_is_symmetric; /* .. in the numeric phase, if a new A is not symmetric (but has the same sparsity as the old A therefore .. */
+  PetscBool      symbolic_used_the_fact_C_is_symmetric; /* MatMatMult(A,B,MAT_REUSE_MATRIX,..&C) is still legitimate), we need to redo symbolic! */
   PetscReal      fill;
   PetscBool      api_user; /* used to distinguish command line options and to indicate the matrix values are ready to be consumed at symbolic phase if needed */
 
@@ -427,29 +439,12 @@ typedef struct { /* used by MatProduct() */
   PetscErrorCode (*destroy)(void*); /* destroy routine */
 } Mat_Product;
 
-#define CSRDataStructure(datatype)  \
-  int         *i; \
-  int         *j; \
-  datatype    *a;\
-  PetscInt    n;\
-  PetscInt    ignorezeroentries;
-
-typedef struct {
-  CSRDataStructure(PetscScalar)
-} PetscCSRDataStructure;
-
-struct _p_SplitCSRMat {
-  PetscInt              cstart,cend,rstart,rend;
-  PetscCSRDataStructure diag,offdiag;
-  PetscInt              *colmap;
-  PetscMPIInt           rank;
-};
-
 struct _p_Mat {
   PETSCHEADER(struct _MatOps);
   PetscLayout            rmap,cmap;
   void                   *data;            /* implementation-specific data */
   MatFactorType          factortype;       /* MAT_FACTOR_LU, ILU, CHOLESKY or ICC */
+  PetscBool              trivialsymbolic;  /* indicates the symbolic factorization doesn't actually do a symbolic factorization, it is delayed to the numeric factorization */
   PetscBool              canuseordering;   /* factorization can use ordering provide to routine (most PETSc implementations) */
   MatOrderingType        preferredordering[MAT_FACTOR_NUM_TYPES] ;/* what is the preferred (or default) ordering for the matrix solver type */
   PetscBool              assembled;        /* is the matrix assembled? */
@@ -478,6 +473,7 @@ struct _p_Mat {
 #if defined(PETSC_HAVE_DEVICE)
   PetscOffloadMask       offloadmask;      /* a mask which indicates where the valid matrix data is (GPU, CPU or both) */
   PetscBool              boundtocpu;
+  PetscBool              bindingpropagates;
 #endif
   void                   *spptr;          /* pointer for special library like SuperLU */
   char                   *solvertype;
@@ -520,7 +516,6 @@ PETSC_INTERN PetscErrorCode MatZeroRowsMapLocal_Private(Mat,PetscInt,const Petsc
 */
 PETSC_INTERN PetscErrorCode MatView_Binary_BlockSizes(Mat,PetscViewer);
 PETSC_INTERN PetscErrorCode MatLoad_Binary_BlockSizes(Mat,PetscViewer);
-
 
 /*
     Object for partitioning graphs
@@ -742,13 +737,13 @@ PETSC_EXTERN PetscErrorCode MatFactorDumpMatrix(Mat);
 PETSC_INTERN PetscErrorCode MatShift_Basic(Mat,PetscScalar);
 PETSC_INTERN PetscErrorCode MatSetBlockSizes_Default(Mat,PetscInt,PetscInt);
 
-PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck_nz(Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
+static inline PetscErrorCode MatPivotCheck_nz(Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
 {
   PetscReal _rs   = sctx->rs;
   PetscReal _zero = info->zeropivot*_rs;
 
   PetscFunctionBegin;
-  if (PetscAbsScalar(sctx->pv) <= _zero && !PetscIsNanScalar(sctx->pv)){
+  if (PetscAbsScalar(sctx->pv) <= _zero && !PetscIsNanScalar(sctx->pv)) {
     /* force |diag| > zeropivot*rs */
     if (!sctx->nshift) sctx->shift_amount = info->shiftamount;
     else sctx->shift_amount *= 2.0;
@@ -760,13 +755,13 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck_nz(Mat mat,const MatFactorInfo 
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck_pd(Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
+static inline PetscErrorCode MatPivotCheck_pd(Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
 {
   PetscReal _rs   = sctx->rs;
   PetscReal _zero = info->zeropivot*_rs;
 
   PetscFunctionBegin;
-  if (PetscRealPart(sctx->pv) <= _zero && !PetscIsNanScalar(sctx->pv)){
+  if (PetscRealPart(sctx->pv) <= _zero && !PetscIsNanScalar(sctx->pv)) {
     /* force matfactor to be diagonally dominant */
     if (sctx->nshift == sctx->nshift_max) {
       sctx->shift_fraction = sctx->shift_hi;
@@ -783,12 +778,12 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck_pd(Mat mat,const MatFactorInfo 
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck_inblocks(Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
+static inline PetscErrorCode MatPivotCheck_inblocks(Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
 {
   PetscReal _zero = info->zeropivot;
 
   PetscFunctionBegin;
-  if (PetscAbsScalar(sctx->pv) <= _zero && !PetscIsNanScalar(sctx->pv)){
+  if (PetscAbsScalar(sctx->pv) <= _zero && !PetscIsNanScalar(sctx->pv)) {
     sctx->pv          += info->shiftamount;
     sctx->shift_amount = 0.0;
     sctx->nshift++;
@@ -797,7 +792,7 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck_inblocks(Mat mat,const MatFacto
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck_none(Mat fact,Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
+static inline PetscErrorCode MatPivotCheck_none(Mat fact,Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
 {
   PetscReal      _zero = info->zeropivot;
   PetscErrorCode ierr;
@@ -806,25 +801,25 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck_none(Mat fact,Mat mat,const Mat
   sctx->newshift = PETSC_FALSE;
   if (PetscAbsScalar(sctx->pv) <= _zero && !PetscIsNanScalar(sctx->pv)) {
     if (!mat->erroriffailure) {
-      ierr = PetscInfo3(mat,"Detected zero pivot in factorization in row %D value %g tolerance %g\n",row,(double)PetscAbsScalar(sctx->pv),(double)_zero);CHKERRQ(ierr);
+      ierr = PetscInfo(mat,"Detected zero pivot in factorization in row %" PetscInt_FMT " value %g tolerance %g\n",row,(double)PetscAbsScalar(sctx->pv),(double)_zero);CHKERRQ(ierr);
       fact->factorerrortype             = MAT_FACTOR_NUMERIC_ZEROPIVOT;
       fact->factorerror_zeropivot_value = PetscAbsScalar(sctx->pv);
       fact->factorerror_zeropivot_row   = row;
-    } else SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_MAT_LU_ZRPVT,"Zero pivot row %D value %g tolerance %g\n",row,(double)PetscAbsScalar(sctx->pv),(double)_zero);
+    } else SETERRQ(PETSC_COMM_SELF,PETSC_ERR_MAT_LU_ZRPVT,"Zero pivot row %" PetscInt_FMT " value %g tolerance %g",row,(double)PetscAbsScalar(sctx->pv),(double)_zero);
   }
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
+static inline PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFactorInfo *info,FactorShiftCtx *sctx,PetscInt row)
 {
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (info->shifttype == (PetscReal) MAT_SHIFT_NONZERO){
+  if (info->shifttype == (PetscReal) MAT_SHIFT_NONZERO) {
     ierr = MatPivotCheck_nz(mat,info,sctx,row);CHKERRQ(ierr);
-  } else if (info->shifttype == (PetscReal) MAT_SHIFT_POSITIVE_DEFINITE){
+  } else if (info->shifttype == (PetscReal) MAT_SHIFT_POSITIVE_DEFINITE) {
     ierr = MatPivotCheck_pd(mat,info,sctx,row);CHKERRQ(ierr);
-  } else if (info->shifttype == (PetscReal) MAT_SHIFT_INBLOCKS){
+  } else if (info->shifttype == (PetscReal) MAT_SHIFT_INBLOCKS) {
     ierr = MatPivotCheck_inblocks(mat,info,sctx,row);CHKERRQ(ierr);
   } else {
     ierr = MatPivotCheck_none(fact,mat,info,sctx,row);CHKERRQ(ierr);
@@ -867,9 +862,9 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   PetscInt _k,_entry,_location,_lnkdata;\
   nlnk     = 0;\
   _lnkdata = idx_start;\
-  for (_k=0; _k<nidx; _k++){\
+  for (_k=0; _k<nidx; _k++) {\
     _entry = indices[_k];\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       /* start from the beginning if _entry < previous _entry */\
       if (_k && _entry < _lnkdata) _lnkdata  = idx_start;\
@@ -905,9 +900,9 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   PetscInt _k,_entry,_location,_lnkdata;\
   nlnk     = 0;\
   _lnkdata = idx_start;\
-  for (_k=0; _k<nidx; _k++){\
+  for (_k=0; _k<nidx; _k++) {\
     _entry = perm[indices[_k]];\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       /* start from the beginning if _entry < previous _entry */\
       if (_k && _entry < _lnkdata) _lnkdata  = idx_start;\
@@ -942,9 +937,9 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   PetscInt _k,_entry,_location,_lnkdata;\
   nlnk      = 0;\
   _lnkdata  = idx_start;\
-  for (_k=0; _k<nidx; _k++){\
+  for (_k=0; _k<nidx; _k++) {\
     _entry = indices[_k];\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       do {\
         _location = _lnkdata;\
@@ -962,9 +957,9 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
 #define PetscLLAddSorted_new(nidx,indices,idx_start,lnk_empty,nlnk,lnk,bt) 0; \
 {\
   PetscInt _k,_entry,_location,_lnkdata;\
-  if (lnk_empty){\
+  if (lnk_empty) {\
     _lnkdata  = idx_start;                      \
-    for (_k=0; _k<nidx; _k++){                  \
+    for (_k=0; _k<nidx; _k++) {                  \
       _entry = indices[_k];                             \
       PetscBTSet(bt,_entry);  /* mark the new entry */          \
           _location = _lnkdata;                                 \
@@ -978,7 +973,7 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
     lnk[indices[nidx-1]] = lnk[idx_start];\
     lnk[idx_start]       = indices[0];\
     PetscBTSet(bt,indices[0]);  \
-    for (_k=1; _k<nidx; _k++){                  \
+    for (_k=1; _k<nidx; _k++) {                  \
       PetscBTSet(bt,indices[_k]);                                          \
       lnk[indices[_k-1]] = indices[_k];                                  \
     }                                                           \
@@ -988,9 +983,9 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   } else {\
     nlnk      = 0;                              \
     _lnkdata  = idx_start;                      \
-    for (_k=0; _k<nidx; _k++){                  \
+    for (_k=0; _k<nidx; _k++) {                  \
       _entry = indices[_k];                             \
-      if (!PetscBTLookupSet(bt,_entry)){  /* new entry */       \
+      if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */       \
         /* search for insertion location */                     \
         do {                                                    \
           _location = _lnkdata;                                 \
@@ -1031,11 +1026,11 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   nlnk     = 0;\
   _lnkdata = idx_start;\
   _nidx = im[idx_start] - nzbd; /* num of entries with idx_start < index <= diag */\
-  for (_k=0; _k<_nidx; _k++){\
+  for (_k=0; _k<_nidx; _k++) {\
     _entry = indices[_k];\
     nzbd++;\
     if (_entry== diag) im[idx_start] = nzbd;\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       do {\
         _location = _lnkdata;\
@@ -1066,7 +1061,7 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
 #define PetscLLClean(idx_start,lnk_max,nlnk,lnk,indices,bt) 0;\
 {\
   PetscInt _j,_idx=idx_start;\
-  for (_j=0; _j<nlnk; _j++){\
+  for (_j=0; _j<nlnk; _j++) {\
     _idx = lnk[_idx];\
     indices[_j] = _idx;\
     ierr = PetscBTClear(bt,_idx);CHKERRQ(ierr);\
@@ -1114,9 +1109,9 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   PetscInt _k,_entry,_location,_lnkdata;\
   nlnk     = 0;\
   _lnkdata = idx_start;\
-  for (_k=0; _k<nidx; _k++){\
+  for (_k=0; _k<nidx; _k++) {\
     _entry = perm[idx[_k]];\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       if (_k && _entry < _lnkdata) _lnkdata  = idx_start;\
       do {\
@@ -1159,11 +1154,11 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   PetscInt _k,_entry,_location,_lnkdata,_incrlev,_lnklvl_prow=lnklvl[prow];\
   nlnk     = 0;\
   _lnkdata = idx_start;\
-  for (_k=0; _k<nidx; _k++){\
+  for (_k=0; _k<nidx; _k++) {\
     _incrlev = idxlvl[_k] + _lnklvl_prow + 1;\
     if (_incrlev > level) continue;\
     _entry = idx[_k];\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       do {\
         _location = _lnkdata;\
@@ -1203,11 +1198,11 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   PetscInt _k,_entry,_location,_lnkdata,_incrlev;\
   nlnk     = 0;\
   _lnkdata = idx_start;\
-  for (_k=0; _k<nidx; _k++){\
+  for (_k=0; _k<nidx; _k++) {\
     _incrlev = idxlvl[_k] + 1;\
     if (_incrlev > level) continue;\
     _entry = idx[_k];\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       if (_k && _entry < _lnkdata) _lnkdata  = idx_start;\
       do {\
@@ -1248,11 +1243,11 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   PetscInt _k,_entry,_location,_lnkdata,_incrlev;\
   nlnk = 0;\
   _lnkdata = idx_start;\
-  for (_k=0; _k<nidx; _k++){\
+  for (_k=0; _k<nidx; _k++) {\
     _incrlev = idxlvl[_k] + 1;\
     if (_incrlev > level) continue;\
     _entry = idx[_k];\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       do {\
         _location = _lnkdata;\
@@ -1295,11 +1290,11 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
   PetscInt _k,_entry,_location,_lnkdata,_incrlev;\
   nlnk = 0;\
   _lnkdata = idx_start;\
-  for (_k=0; _k<nidx; _k++){\
+  for (_k=0; _k<nidx; _k++) {\
     _incrlev = idxlvl[_k] + idxlvl_prow + 1;\
     if (_incrlev > level) continue;\
     _entry = idx[_k];\
-    if (!PetscBTLookupSet(bt,_entry)){  /* new entry */\
+    if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */\
       /* search for insertion location */\
       do {\
         _location = _lnkdata;\
@@ -1335,7 +1330,7 @@ PETSC_STATIC_INLINE PetscErrorCode MatPivotCheck(Mat fact,Mat mat,const MatFacto
 #define PetscIncompleteLLClean(idx_start,lnk_max,nlnk,lnk,lnklvl,indices,indiceslvl,bt) 0;\
 do {\
   PetscInt _j,_idx=idx_start;\
-  for (_j=0; _j<nlnk; _j++){\
+  for (_j=0; _j<nlnk; _j++) {\
     _idx = lnk[_idx];\
     *(indices+_j) = _idx;\
     *(indiceslvl+_j) = lnklvl[_idx];\
@@ -1349,17 +1344,26 @@ do {\
 */
 #define PetscIncompleteLLDestroy(lnk,bt) (PetscFree(lnk) || PetscBTDestroy(&(bt)))
 
-#define MatCheckSameLocalSize(A,ar1,B,ar2) do { \
-  PetscCheckSameComm(A,ar1,B,ar2); \
-  if ((A->rmap->n != B->rmap->n) || (A->cmap->n != B->cmap->n)) SETERRQ6(PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Incompatible matrix local sizes: parameter # %d (%D x %D) != parameter # %d (%D x %D)",ar1,A->rmap->n,A->cmap->n,ar2,B->rmap->n,B->cmap->n);} while (0)
-
-#define MatCheckSameSize(A,ar1,B,ar2) do { \
-  if ((A->rmap->N != B->rmap->N) || (A->cmap->N != B->cmap->N)) SETERRQ6(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_INCOMP,"Incompatible matrix global sizes: parameter # %d (%D x %D) != parameter # %d (%D x %D)",ar1,A->rmap->N,A->cmap->N,ar2,B->rmap->N,B->cmap->N);\
-  MatCheckSameLocalSize(A,ar1,B,ar2);} while (0)
+#if !defined(PETSC_CLANG_STATIC_ANALYZER)
+#define MatCheckSameLocalSize(A,ar1,B,ar2) do {                         \
+    PetscCheckSameComm(A,ar1,B,ar2);                                    \
+    PetscCheck(((A)->rmap->n == (B)->rmap->n) && ((A)->cmap->n == (B)->cmap->n),PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Incompatible matrix local sizes: parameter # %d (%" PetscInt_FMT " x %" PetscInt_FMT ") != parameter # %d (%" PetscInt_FMT " x %" PetscInt_FMT ")",ar1,(A)->rmap->n,(A)->cmap->n,ar2,(B)->rmap->n,(B)->cmap->n); \
+  } while (0)
+#define MatCheckSameSize(A,ar1,B,ar2) do {                              \
+    PetscCheck(((A)->rmap->N == (B)->rmap->N) && ((A)->cmap->N == (B)->cmap->N),PetscObjectComm((PetscObject)(A)),PETSC_ERR_ARG_INCOMP,"Incompatible matrix global sizes: parameter # %d (%" PetscInt_FMT " x %" PetscInt_FMT ") != parameter # %d (%" PetscInt_FMT " x %" PetscInt_FMT ")",ar1,(A)->rmap->N,(A)->cmap->N,ar2,(B)->rmap->N,(B)->cmap->N); \
+    MatCheckSameLocalSize(A,ar1,B,ar2);                                 \
+  } while (0)
+#else
+template <typename Tm>
+void MatCheckSameLocalSize(Tm,int,Tm,int);
+template <typename Tm>
+void MatCheckSameSize(Tm,int,Tm,int);
+#endif
 
 #define VecCheckMatCompatible(M,x,ar1,b,ar2) do { \
-  if (M->cmap->N != x->map->N) SETERRQ3(PetscObjectComm((PetscObject)M),PETSC_ERR_ARG_SIZ,"Vector global length incompatible with matrix: parameter # %d global size %D != matrix column global size %D",ar1,x->map->N,M->cmap->N); \
-  if (M->rmap->N != b->map->N) SETERRQ3(PetscObjectComm((PetscObject)M),PETSC_ERR_ARG_SIZ,"Vector global length incompatible with matrix: parameter # %d global size %D != matrix row global size %D",ar2,b->map->N,M->rmap->N);} while (0)
+    PetscCheck((M)->cmap->N == (x)->map->N,PetscObjectComm((PetscObject)(M)),PETSC_ERR_ARG_SIZ,"Vector global length incompatible with matrix: parameter # %d global size %" PetscInt_FMT " != matrix column global size %" PetscInt_FMT,ar1,(x)->map->N,(M)->cmap->N); \
+    PetscCheck((M)->rmap->N == (b)->map->N,PetscObjectComm((PetscObject)(M)),PETSC_ERR_ARG_SIZ,"Vector global length incompatible with matrix: parameter # %d global size %" PetscInt_FMT " != matrix row global size %" PetscInt_FMT,ar2,(b)->map->N,(M)->rmap->N); \
+  } while (0)
 
 /* -------------------------------------------------------------------------------------------------------*/
 #include <petscbt.h>
@@ -1399,7 +1403,7 @@ do {\
     lnk       - list created and initialized
     bt        - PetscBT (bitarray) with all bits set to false. Note: bt has size lnk_max, not nln_max!
 */
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedCreate(PetscInt nlnk_max,PetscInt lnk_max,PetscInt **lnk,PetscBT *bt)
+static inline PetscErrorCode PetscLLCondensedCreate(PetscInt nlnk_max,PetscInt lnk_max,PetscInt **lnk,PetscBT *bt)
 {
   PetscErrorCode ierr;
   PetscInt       *llnk,lsize = 0;
@@ -1426,16 +1430,16 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedCreate(PetscInt nlnk_max,Pets
     lnk       - the sorted(increasing order) linked list containing previous and newly added non-redundate indices
     bt        - updated PetscBT (bitarray)
 */
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedAddSorted(PetscInt nidx,const PetscInt indices[],PetscInt lnk[],PetscBT bt)
+static inline PetscErrorCode PetscLLCondensedAddSorted(PetscInt nidx,const PetscInt indices[],PetscInt lnk[],PetscBT bt)
 {
   PetscInt _k,_entry,_location,_next,_lnkdata,_nlnk,_newnode;
 
   PetscFunctionBegin;
   _nlnk     = lnk[0]; /* num of entries on the input lnk */
   _location = 2; /* head */
-    for (_k=0; _k<nidx; _k++){
+    for (_k=0; _k<nidx; _k++) {
       _entry = indices[_k];
-      if (!PetscBTLookupSet(bt,_entry)){  /* new entry */
+      if (!PetscBTLookupSet(bt,_entry)) {  /* new entry */
         /* search for insertion location */
         do {
           _next     = _location + 1; /* link from previous node to next node */
@@ -1455,7 +1459,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedAddSorted(PetscInt nidx,const
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedClean(PetscInt lnk_max,PetscInt nidx,PetscInt *indices,PetscInt lnk[],PetscBT bt)
+static inline PetscErrorCode PetscLLCondensedClean(PetscInt lnk_max,PetscInt nidx,PetscInt *indices,PetscInt lnk[],PetscBT bt)
 {
   PetscErrorCode ierr;
   PetscInt       _k,_next,_nlnk;
@@ -1463,7 +1467,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedClean(PetscInt lnk_max,PetscI
   PetscFunctionBegin;
   _next = lnk[3];       /* head node */
   _nlnk = lnk[0];       /* num of entries on the list */
-  for (_k=0; _k<_nlnk; _k++){
+  for (_k=0; _k<_nlnk; _k++) {
     indices[_k] = lnk[_next];
     _next       = lnk[_next + 1];
     ierr = PetscBTClear(bt,indices[_k]);CHKERRQ(ierr);
@@ -1474,15 +1478,14 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedClean(PetscInt lnk_max,PetscI
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedView(PetscInt *lnk)
+static inline PetscErrorCode PetscLLCondensedView(PetscInt *lnk)
 {
   PetscErrorCode ierr;
-  PetscInt       k;
 
   PetscFunctionBegin;
-  ierr = PetscPrintf(PETSC_COMM_SELF,"LLCondensed of size %D, (val,  next)\n",lnk[0]);CHKERRQ(ierr);
-  for (k=2; k< lnk[0]+2; k++){
-    ierr = PetscPrintf(PETSC_COMM_SELF," %D: (%D, %D)\n",2*k,lnk[2*k],lnk[2*k+1]);CHKERRQ(ierr);
+  ierr = PetscPrintf(PETSC_COMM_SELF,"LLCondensed of size %" PetscInt_FMT ", (val,  next)\n",lnk[0]);CHKERRQ(ierr);
+  for (PetscInt k = 2; k < lnk[0]+2; ++k) {
+    ierr = PetscPrintf(PETSC_COMM_SELF," %" PetscInt_FMT ": (%" PetscInt_FMT ", %" PetscInt_FMT")\n",2*k,lnk[2*k],lnk[2*k+1]);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
 }
@@ -1490,7 +1493,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedView(PetscInt *lnk)
 /*
   Free memories used by the list
 */
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedDestroy(PetscInt *lnk,PetscBT bt)
+static inline PetscErrorCode PetscLLCondensedDestroy(PetscInt *lnk,PetscBT bt)
 {
   PetscErrorCode ierr;
 
@@ -1508,7 +1511,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedDestroy(PetscInt *lnk,PetscBT
   Output Parameters:
     lnk       - list created and initialized
 */
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedCreate_Scalable(PetscInt nlnk_max,PetscInt **lnk)
+static inline PetscErrorCode PetscLLCondensedCreate_Scalable(PetscInt nlnk_max,PetscInt **lnk)
 {
   PetscErrorCode ierr;
   PetscInt       *llnk,lsize = 0;
@@ -1523,7 +1526,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedCreate_Scalable(PetscInt nlnk
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedExpand_Scalable(PetscInt nlnk_max,PetscInt **lnk)
+static inline PetscErrorCode PetscLLCondensedExpand_Scalable(PetscInt nlnk_max,PetscInt **lnk)
 {
   PetscErrorCode ierr;
   PetscInt       lsize = 0;
@@ -1534,12 +1537,12 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedExpand_Scalable(PetscInt nlnk
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedAddSorted_Scalable(PetscInt nidx,const PetscInt indices[],PetscInt lnk[])
+static inline PetscErrorCode PetscLLCondensedAddSorted_Scalable(PetscInt nidx,const PetscInt indices[],PetscInt lnk[])
 {
   PetscInt _k,_entry,_location,_next,_lnkdata,_nlnk,_newnode;
   _nlnk     = lnk[0]; /* num of entries on the input lnk */
   _location = 2; /* head */ \
-    for (_k=0; _k<nidx; _k++){
+    for (_k=0; _k<nidx; _k++) {
       _entry = indices[_k];
       /* search for insertion location */
       do {
@@ -1561,12 +1564,12 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedAddSorted_Scalable(PetscInt n
   return 0;
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedClean_Scalable(PetscInt nidx,PetscInt *indices,PetscInt *lnk)
+static inline PetscErrorCode PetscLLCondensedClean_Scalable(PetscInt nidx,PetscInt *indices,PetscInt *lnk)
 {
   PetscInt _k,_next,_nlnk;
   _next = lnk[3];       /* head node */
   _nlnk = lnk[0];
-  for (_k=0; _k<_nlnk; _k++){
+  for (_k=0; _k<_nlnk; _k++) {
     indices[_k] = lnk[_next];
     _next       = lnk[_next + 1];
   }
@@ -1575,7 +1578,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedClean_Scalable(PetscInt nidx,
   return 0;
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedDestroy_Scalable(PetscInt *lnk)
+static inline PetscErrorCode PetscLLCondensedDestroy_Scalable(PetscInt *lnk)
 {
   return PetscFree(lnk);
 }
@@ -1601,7 +1604,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedDestroy_Scalable(PetscInt *ln
       lnk[8]    next valid link (this is the same as lnk[0] but without the decreases)
 */
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedCreate_fast(PetscInt nlnk_max,PetscInt **lnk)
+static inline PetscErrorCode PetscLLCondensedCreate_fast(PetscInt nlnk_max,PetscInt **lnk)
 {
   PetscErrorCode ierr;
   PetscInt       *llnk,lsize = 0;
@@ -1621,12 +1624,12 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedCreate_fast(PetscInt nlnk_max
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedAddSorted_fast(PetscInt nidx,const PetscInt indices[],PetscInt lnk[])
+static inline PetscErrorCode PetscLLCondensedAddSorted_fast(PetscInt nidx,const PetscInt indices[],PetscInt lnk[])
 {
   PetscInt k,entry,prev,next;
   prev      = 3;      /* first value */
   next      = lnk[prev+2];
-  for (k=0; k<nidx; k++){
+  for (k=0; k<nidx; k++) {
     entry = indices[k];
     /* search for insertion location */
     while (entry >= lnk[next]) {
@@ -1666,13 +1669,13 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedAddSorted_fast(PetscInt nidx,
   return 0;
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedClean_fast(PetscInt nidx,PetscInt *indices,PetscInt *lnk)
+static inline PetscErrorCode PetscLLCondensedClean_fast(PetscInt nidx,PetscInt *indices,PetscInt *lnk)
 {
   PetscInt _k,_next,_nlnk,cnt,j;
   _next = lnk[5];       /* first node */
   _nlnk = lnk[0];
   cnt   = 0;
-  for (_k=0; _k<_nlnk; _k++){
+  for (_k=0; _k<_nlnk; _k++) {
     for (j=0; j<lnk[_next+1]; j++) {
       indices[cnt++] = lnk[_next] + j;
     }
@@ -1689,12 +1692,12 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedClean_fast(PetscInt nidx,Pets
   return 0;
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedView_fast(PetscInt *lnk)
+static inline PetscErrorCode PetscLLCondensedView_fast(PetscInt *lnk)
 {
   PetscInt k,next,nlnk;
   next = lnk[5];       /* first node */
   nlnk = lnk[0];
-  for (k=0; k<nlnk; k++){
+  for (k=0; k<nlnk; k++) {
 #if 0                           /* Debugging code */
     printf("%d value %d len %d next %d\n",next,lnk[next],lnk[next+1],lnk[next+2]);
 #endif
@@ -1703,7 +1706,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedView_fast(PetscInt *lnk)
   return 0;
 }
 
-PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedDestroy_fast(PetscInt *lnk)
+static inline PetscErrorCode PetscLLCondensedDestroy_fast(PetscInt *lnk)
 {
   return PetscFree(lnk);
 }
@@ -1714,10 +1717,8 @@ PETSC_EXTERN PetscErrorCode MatFDColoringApply_AIJ(Mat,MatFDColoring,Vec,void*);
 PETSC_EXTERN PetscLogEvent MAT_Mult;
 PETSC_EXTERN PetscLogEvent MAT_MultMatrixFree;
 PETSC_EXTERN PetscLogEvent MAT_Mults;
-PETSC_EXTERN PetscLogEvent MAT_MultConstrained;
 PETSC_EXTERN PetscLogEvent MAT_MultAdd;
 PETSC_EXTERN PetscLogEvent MAT_MultTranspose;
-PETSC_EXTERN PetscLogEvent MAT_MultTransposeConstrained;
 PETSC_EXTERN PetscLogEvent MAT_MultTransposeAdd;
 PETSC_EXTERN PetscLogEvent MAT_Solve;
 PETSC_EXTERN PetscLogEvent MAT_Solves;
@@ -1730,6 +1731,9 @@ PETSC_EXTERN PetscLogEvent MAT_BackwardSolve;
 PETSC_EXTERN PetscLogEvent MAT_LUFactor;
 PETSC_EXTERN PetscLogEvent MAT_LUFactorSymbolic;
 PETSC_EXTERN PetscLogEvent MAT_LUFactorNumeric;
+PETSC_EXTERN PetscLogEvent MAT_QRFactor;
+PETSC_EXTERN PetscLogEvent MAT_QRFactorSymbolic;
+PETSC_EXTERN PetscLogEvent MAT_QRFactorNumeric;
 PETSC_EXTERN PetscLogEvent MAT_CholeskyFactor;
 PETSC_EXTERN PetscLogEvent MAT_CholeskyFactorSymbolic;
 PETSC_EXTERN PetscLogEvent MAT_CholeskyFactorNumeric;
@@ -1814,5 +1818,9 @@ PETSC_EXTERN PetscLogEvent MATCOLORING_Local;
 PETSC_EXTERN PetscLogEvent MATCOLORING_ISCreate;
 PETSC_EXTERN PetscLogEvent MATCOLORING_SetUp;
 PETSC_EXTERN PetscLogEvent MATCOLORING_Weights;
+PETSC_EXTERN PetscLogEvent MAT_H2Opus_Build;
+PETSC_EXTERN PetscLogEvent MAT_H2Opus_Compress;
+PETSC_EXTERN PetscLogEvent MAT_H2Opus_Orthog;
+PETSC_EXTERN PetscLogEvent MAT_H2Opus_LR;
 
 #endif

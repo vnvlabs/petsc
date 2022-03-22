@@ -3,17 +3,20 @@
 #include <petscsf.h>
 #include <petscdmda.h>
 #include <petscdmplex.h>
+#include <petscdt.h>
 #include "../src/dm/impls/swarm/data_bucket.h"
 
+#include <petsc/private/petscfeimpl.h> /* For CoordinatesRefToReal() */
+
 /*
- Error chceking macto to ensure the swarm type is correct and that a cell DM has been set
+ Error checking to ensure the swarm type is correct and that a cell DM has been set
 */
 #define DMSWARMPICVALID(dm) \
 { \
   DM_Swarm *_swarm = (DM_Swarm*)(dm)->data; \
-  if (_swarm->swarm_type != DMSWARM_PIC) SETERRQ(PetscObjectComm((PetscObject)(dm)),PETSC_ERR_SUP,"Only valid for DMSwarm-PIC. You must call DMSwarmSetType(dm,DMSWARM_PIC)"); \
+  PetscCheckFalse(_swarm->swarm_type != DMSWARM_PIC,PetscObjectComm((PetscObject)(dm)),PETSC_ERR_SUP,"Valid only for DMSwarm-PIC. You must call DMSwarmSetType(dm,DMSWARM_PIC)"); \
   else \
-    if (!_swarm->dmcell) SETERRQ(PetscObjectComm((PetscObject)(dm)),PETSC_ERR_SUP,"Only valid for DMSwarmPIC if the cell DM is set. You must call DMSwarmSetCellDM(dm,celldm)"); \
+    PetscCheckFalse(!_swarm->dmcell,PetscObjectComm((PetscObject)(dm)),PETSC_ERR_SUP,"Valid only for DMSwarmPIC if the cell DM is set. You must call DMSwarmSetCellDM(dm,celldm)"); \
 }
 
 /* Coordinate insertition/addition API */
@@ -78,7 +81,6 @@ PETSC_EXTERN PetscErrorCode DMSwarmSetPointsUniformCoordinates(DM dm,PetscReal m
     } else {
       dx[b] = 0.0;
     }
-
     _npoints[b] = npoints[b];
   }
 
@@ -144,7 +146,6 @@ PETSC_EXTERN PetscErrorCode DMSwarmSetPointsUniformCoordinates(DM dm,PetscReal m
 
   /* locate points */
   ierr = DMLocatePoints(celldm,pos,DM_POINTLOCATION_NONE,&sfcell);CHKERRQ(ierr);
-
   ierr = PetscSFGetGraph(sfcell, NULL, NULL, NULL, &LA_sfcell);CHKERRQ(ierr);
   n_found = 0;
   for (p=0; p<n_estimate; p++) {
@@ -185,7 +186,6 @@ PETSC_EXTERN PetscErrorCode DMSwarmSetPointsUniformCoordinates(DM dm,PetscReal m
 
   ierr = PetscSFDestroy(&sfcell);CHKERRQ(ierr);
   ierr = VecDestroy(&pos);CHKERRQ(ierr);
-
   PetscFunctionReturn(0);
 }
 
@@ -349,7 +349,6 @@ PETSC_EXTERN PetscErrorCode DMSwarmSetPointCoordinates(DM dm,PetscInt npoints,Pe
   }
   ierr = PetscSFDestroy(&sfcell);CHKERRQ(ierr);
   ierr = VecDestroy(&pos);CHKERRQ(ierr);
-
   PetscFunctionReturn(0);
 }
 
@@ -397,10 +396,8 @@ PETSC_EXTERN PetscErrorCode DMSwarmInsertPointsUsingCellDM(DM dm,DMSwarmPICLayou
   } else if (isPLEX) {
     ierr = private_DMSwarmInsertPointsUsingCellDM_PLEX(dm,celldm,layout_type,fill_param);CHKERRQ(ierr);
   } else SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only supported for cell DMs of type DMDA and DMPLEX");
-
   PetscFunctionReturn(0);
 }
-
 
 extern PetscErrorCode private_DMSwarmSetPointCoordinatesCellwise_PLEX(DM,DM,PetscInt,PetscReal*);
 
@@ -440,14 +437,12 @@ PETSC_EXTERN PetscErrorCode DMSwarmSetPointCoordinatesCellwise(DM dm,PetscInt np
   ierr = DMSwarmGetCellDM(dm,&celldm);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)celldm,DMDA,&isDA);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)celldm,DMPLEX,&isPLEX);CHKERRQ(ierr);
-  if (isDA) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only supported for cell DMs of type DMPLEX. Recommended you use DMSwarmInsertPointsUsingCellDM()");
+  PetscCheckFalse(isDA,PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only supported for cell DMs of type DMPLEX. Recommended you use DMSwarmInsertPointsUsingCellDM()");
   else if (isPLEX) {
     ierr = private_DMSwarmSetPointCoordinatesCellwise_PLEX(dm,celldm,npoints,xi);CHKERRQ(ierr);
   } else SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only supported for cell DMs of type DMDA and DMPLEX");
-
   PetscFunctionReturn(0);
 }
-
 
 /* Field projection API */
 extern PetscErrorCode private_DMSwarmProjectFields_DA(DM swarm,DM celldm,PetscInt project_type,PetscInt nfields,DMSwarmDataField dfield[],Vec vecs[]);
@@ -496,7 +491,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmProjectFields(DM dm,PetscInt nfields,const ch
   Vec              *vecs;
   PetscInt         f,nvecs;
   PetscInt         project_type = 0;
-  PetscErrorCode ierr;
+  PetscErrorCode   ierr;
 
   PetscFunctionBegin;
   DMSWARMPICVALID(dm);
@@ -505,8 +500,8 @@ PETSC_EXTERN PetscErrorCode DMSwarmProjectFields(DM dm,PetscInt nfields,const ch
   nvecs = 0;
   for (f=0; f<nfields; f++) {
     ierr = DMSwarmDataBucketGetDMSwarmDataFieldByName(swarm->db,fieldnames[f],&gfield[f]);CHKERRQ(ierr);
-    if (gfield[f]->petsc_type != PETSC_REAL) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Projection only valid for fields using a data type = PETSC_REAL");
-    if (gfield[f]->bs != 1) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Projection only valid for fields with block size = 1");
+    PetscCheckFalse(gfield[f]->petsc_type != PETSC_REAL,PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Projection only valid for fields using a data type = PETSC_REAL");
+    PetscCheckFalse(gfield[f]->bs != 1,PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Projection only valid for fields with block size = 1");
     nvecs += gfield[f]->bs;
   }
   if (!reuse) {
@@ -531,7 +526,6 @@ PETSC_EXTERN PetscErrorCode DMSwarmProjectFields(DM dm,PetscInt nfields,const ch
   if (!reuse) {
     *fields = vecs;
   }
-
   PetscFunctionReturn(0);
 }
 
@@ -618,5 +612,297 @@ PETSC_EXTERN PetscErrorCode DMSwarmCreatePointPerCellCount(DM dm,PetscInt *ncell
   }
   if (ncells) { *ncells = nel; }
   *count  = sum;
+  PetscFunctionReturn(0);
+}
+
+/*@
+  DMSwarmGetNumSpecies - Get the number of particle species
+
+  Not collective
+
+  Input parameter:
+. dm - the DMSwarm
+
+  Output parameters:
+. Ns - the number of species
+
+  Level: intermediate
+
+.seealso: DMSwarmSetNumSpecies(), DMSwarmSetType(), DMSwarmType
+@*/
+PetscErrorCode DMSwarmGetNumSpecies(DM sw, PetscInt *Ns)
+{
+  DM_Swarm *swarm = (DM_Swarm *) sw->data;
+
+  PetscFunctionBegin;
+  *Ns = swarm->Ns;
+  PetscFunctionReturn(0);
+}
+
+/*@
+  DMSwarmSetNumSpecies - Set the number of particle species
+
+  Not collective
+
+  Input parameter:
++ dm - the DMSwarm
+- Ns - the number of species
+
+  Level: intermediate
+
+.seealso: DMSwarmGetNumSpecies(), DMSwarmSetType(), DMSwarmType
+@*/
+PetscErrorCode DMSwarmSetNumSpecies(DM sw, PetscInt Ns)
+{
+  DM_Swarm *swarm = (DM_Swarm *) sw->data;
+
+  PetscFunctionBegin;
+  swarm->Ns =  Ns;
+  PetscFunctionReturn(0);
+}
+
+/*@C
+  DMSwarmComputeLocalSize - Compute the local number and distribution of particles based upon a density function
+
+  Not collective
+
+  Input Parameters:
++ sw      - The DMSwarm
+. N       - The target number of particles
+- density - The density field for the particle layout, normalized to unity
+
+  Note: One particle will be created for each species.
+
+  Level: advanced
+
+.seealso: DMSwarmComputeLocalSizeFromOptions()
+@*/
+PetscErrorCode DMSwarmComputeLocalSize(DM sw, PetscInt N, PetscProbFunc density)
+{
+  DM               dm;
+  PetscQuadrature  quad;
+  const PetscReal *xq, *wq;
+  PetscInt        *npc, *cellid;
+  PetscReal        xi0[3], scale[1] = {.01};
+  PetscInt         Ns, cStart, cEnd, c, dim, d, Nq, q, Np = 0, p;
+  PetscBool        simplex;
+  PetscErrorCode   ierr;
+
+  PetscFunctionBegin;
+  ierr = DMSwarmGetNumSpecies(sw, &Ns);CHKERRQ(ierr);
+  ierr = DMSwarmGetCellDM(sw, &dm);CHKERRQ(ierr);
+  ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm, 0, &cStart, &cEnd);CHKERRQ(ierr);
+  ierr = DMPlexIsSimplex(dm, &simplex);CHKERRQ(ierr);
+  if (simplex) {ierr = PetscDTStroudConicalQuadrature(dim, 1, 5, -1.0, 1.0, &quad);CHKERRQ(ierr);}
+  else         {ierr = PetscDTGaussTensorQuadrature(dim, 1, 5, -1.0, 1.0, &quad);CHKERRQ(ierr);}
+  ierr = PetscQuadratureGetData(quad, NULL, NULL, &Nq, &xq, &wq);CHKERRQ(ierr);
+  ierr = PetscMalloc1(cEnd-cStart, &npc);CHKERRQ(ierr);
+  /* Integrate the density function to get the number of particles in each cell */
+  for (d = 0; d < dim; ++d) xi0[d] = -1.0;
+  for (c = 0; c < cEnd-cStart; ++c) {
+    const PetscInt cell = c + cStart;
+    PetscReal v0[3], J[9], invJ[9], detJ;
+    PetscReal n_int = 0.;
+
+    ierr = DMPlexComputeCellGeometryFEM(dm, cell, NULL, v0, J, invJ, &detJ);CHKERRQ(ierr);
+    for (q = 0; q < Nq; ++q) {
+      PetscReal xr[3], den[3];
+
+      CoordinatesRefToReal(dim, dim, xi0, v0, J, &xq[q*dim], xr);
+      ierr = density(xr, scale, den);CHKERRQ(ierr);
+      n_int += N*den[0]*wq[q];
+    }
+    npc[c]  = (PetscInt) n_int;
+    npc[c] *= Ns;
+    Np     += npc[c];
+  }
+  ierr = PetscQuadratureDestroy(&quad);CHKERRQ(ierr);
+  ierr = DMSwarmSetLocalSizes(sw, Np, 0);CHKERRQ(ierr);
+
+  ierr = DMSwarmGetField(sw, DMSwarmPICField_cellid, NULL, NULL, (void **) &cellid);CHKERRQ(ierr);
+  for (c = 0, p = 0; c < cEnd-cStart; ++c) {
+    for (q = 0; q < npc[c]; ++q, ++p) cellid[p] = c;
+  }
+  ierr = DMSwarmRestoreField(sw, DMSwarmPICField_cellid, NULL, NULL, (void **) &cellid);CHKERRQ(ierr);
+  ierr = PetscFree(npc);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+/*@
+  DMSwarmComputeLocalSizeFromOptions - Compute the local number and distribution of particles based upon a density function determined by options
+
+  Not collective
+
+  Input Parameters:
+, sw - The DMSwarm
+
+  Level: advanced
+
+.seealso: DMSwarmComputeLocalSize()
+@*/
+PetscErrorCode DMSwarmComputeLocalSizeFromOptions(DM sw)
+{
+  DTProbDensityType den = DTPROB_DENSITY_CONSTANT;
+  PetscProbFunc     pdf;
+  PetscInt          N, Ns, dim;
+  PetscBool         flg;
+  const char       *prefix;
+  PetscErrorCode    ierr;
+
+  PetscFunctionBegin;
+  ierr = PetscOptionsBegin(PetscObjectComm((PetscObject) sw), "", "DMSwarm Options", "DMSWARM");CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-dm_swarm_num_particles", "The target number of particles", "", N, &N, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-dm_swarm_num_species", "The number of species", "DMSwarmSetNumSpecies", Ns, &Ns, &flg);CHKERRQ(ierr);
+  if (flg) {ierr = DMSwarmSetNumSpecies(sw, Ns);CHKERRQ(ierr);}
+  ierr = PetscOptionsEnum("-dm_swarm_density", "Method to compute particle density <constant, gaussian>", "", DTProbDensityTypes, (PetscEnum) den, (PetscEnum *) &den, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
+
+  ierr = DMGetDimension(sw, &dim);CHKERRQ(ierr);
+  ierr = PetscObjectGetOptionsPrefix((PetscObject) sw, &prefix);CHKERRQ(ierr);
+  ierr = PetscProbCreateFromOptions(dim, prefix, "-dm_swarm_coordinate_density", &pdf, NULL, NULL);CHKERRQ(ierr);
+  ierr = DMSwarmComputeLocalSize(sw, N, pdf);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+/*@
+  DMSwarmInitializeCoordinates - Determine the initial coordinates of particles for a PIC method
+
+  Not collective
+
+  Input Parameters:
+, sw - The DMSwarm
+
+  Note: Currently, we randomly place particles in their assigned cell
+
+  Level: advanced
+
+.seealso: DMSwarmComputeLocalSize(), DMSwarmInitializeVelocities()
+@*/
+PetscErrorCode DMSwarmInitializeCoordinates(DM sw)
+{
+  DM             dm;
+  PetscRandom    rnd;
+  PetscScalar   *weight;
+  PetscReal     *x, xi0[3];
+  PetscInt      *species;
+  PetscBool      removePoints = PETSC_TRUE;
+  PetscDataType  dtype;
+  PetscInt       Ns, cStart, cEnd, c, dim, d, s, bs;
+  PetscErrorCode ierr;
+
+  PetscFunctionBeginUser;
+  ierr = DMSwarmGetNumSpecies(sw, &Ns);CHKERRQ(ierr);
+  ierr = DMSwarmGetCellDM(sw, &dm);CHKERRQ(ierr);
+  ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm, 0, &cStart, &cEnd);CHKERRQ(ierr);
+
+  /* Set particle position randomly in cell, set weights to 1 */
+  ierr = PetscRandomCreate(PetscObjectComm((PetscObject) dm), &rnd);CHKERRQ(ierr);
+  ierr = PetscRandomSetInterval(rnd, -1.0, 1.0);CHKERRQ(ierr);
+  ierr = PetscRandomSetFromOptions(rnd);CHKERRQ(ierr);
+  ierr = DMSwarmGetField(sw, "w_q", &bs, &dtype, (void **) &weight);CHKERRQ(ierr);
+  ierr = DMSwarmGetField(sw, "DMSwarmPIC_coor", &bs, &dtype, (void **) &x);CHKERRQ(ierr);
+  ierr = DMSwarmGetField(sw, "species", NULL, NULL, (void **) &species);
+  ierr = DMSwarmSortGetAccess(sw);CHKERRQ(ierr);
+  for (d = 0; d < dim; ++d) xi0[d] = -1.0;
+  for (c = cStart; c < cEnd; ++c) {
+    PetscReal v0[3], J[9], invJ[9], detJ;
+    PetscInt *pidx, Npc, q;
+
+    ierr = DMSwarmSortGetPointsPerCell(sw, c, &Npc, &pidx);CHKERRQ(ierr);
+    ierr = DMPlexComputeCellGeometryFEM(dm, c, NULL, v0, J, invJ, &detJ);CHKERRQ(ierr);
+    for (q = 0; q < Npc; ++q) {
+      const PetscInt p = pidx[q];
+      PetscReal      xref[3];
+
+      for (d = 0; d < dim; ++d) {ierr = PetscRandomGetValueReal(rnd, &xref[d]);CHKERRQ(ierr);}
+      CoordinatesRefToReal(dim, dim, xi0, v0, J, xref, &x[p*dim]);
+
+      weight[p] = 1.0;
+      for (s = 0; s < Ns; ++s) species[p] = p % Ns;
+    }
+    ierr = PetscFree(pidx);CHKERRQ(ierr);
+  }
+  ierr = PetscRandomDestroy(&rnd);CHKERRQ(ierr);
+  ierr = DMSwarmSortRestoreAccess(sw);CHKERRQ(ierr);
+  ierr = DMSwarmRestoreField(sw, "w_q", NULL, NULL, (void **) &weight);CHKERRQ(ierr);
+  ierr = DMSwarmRestoreField(sw, DMSwarmPICField_coor, NULL, NULL, (void **) &x);CHKERRQ(ierr);
+  ierr = DMSwarmRestoreField(sw, "species", NULL, NULL, (void **) &species);CHKERRQ(ierr);
+  ierr = DMSwarmMigrate(sw, removePoints);CHKERRQ(ierr);
+  ierr = DMLocalizeCoordinates(sw);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+/*@C
+  DMSwarmInitializeVelocities - Set the initial velocities of particles using a distribution.
+
+  Collective on dm
+
+  Input Parameters:
++ sw      - The DMSwarm object
+. sampler - A function which uniformly samples the velocity PDF
+- v0      - The velocity scale for nondimensionalization for each species
+
+  Level: advanced
+
+.seealso: DMSwarmComputeLocalSize(), DMSwarmInitializeCoordinates(), DMSwarmInitializeVelocitiesFromOptions()
+@*/
+PetscErrorCode DMSwarmInitializeVelocities(DM sw, PetscProbFunc sampler, const PetscReal v0[])
+{
+  PetscRandom    rnd;
+  PetscReal     *v;
+  PetscInt      *species;
+  PetscInt       dim, Np, p;
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  ierr = PetscRandomCreate(PetscObjectComm((PetscObject) sw), &rnd);CHKERRQ(ierr);
+  ierr = PetscRandomSetInterval(rnd, 0, 1.);CHKERRQ(ierr);
+  ierr = PetscRandomSetFromOptions(rnd);CHKERRQ(ierr);
+
+  ierr = DMGetDimension(sw, &dim);CHKERRQ(ierr);
+  ierr = DMSwarmGetLocalSize(sw, &Np);CHKERRQ(ierr);
+  ierr = DMSwarmGetField(sw, "velocity", NULL, NULL, (void **) &v);CHKERRQ(ierr);
+  ierr = DMSwarmGetField(sw, "species", NULL, NULL, (void **) &species);
+  for (p = 0; p < Np; ++p) {
+    PetscInt  s = species[p], d;
+    PetscReal a[3], vel[3];
+
+    for (d = 0; d < dim; ++d) {ierr = PetscRandomGetValueReal(rnd, &a[d]);CHKERRQ(ierr);}
+    ierr = sampler(a, NULL, vel);CHKERRQ(ierr);
+    for (d = 0; d < dim; ++d) {v[p*dim+d] = (v0[s] / v0[0]) * vel[d];}
+  }
+  ierr = DMSwarmRestoreField(sw, "velocity", NULL, NULL, (void **) &v);CHKERRQ(ierr);
+  ierr = DMSwarmRestoreField(sw, "species", NULL, NULL, (void **) &species);CHKERRQ(ierr);
+  ierr = PetscRandomDestroy(&rnd);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+/*@
+  DMSwarmInitializeVelocitiesFromOptions - Set the initial velocities of particles using a distribution determined from options.
+
+  Collective on dm
+
+  Input Parameters:
++ sw      - The DMSwarm object
+- v0      - The velocity scale for nondimensionalization for each species
+
+  Level: advanced
+
+.seealso: DMSwarmComputeLocalSize(), DMSwarmInitializeCoordinates(), DMSwarmInitializeVelocities()
+@*/
+PetscErrorCode DMSwarmInitializeVelocitiesFromOptions(DM sw, const PetscReal v0[])
+{
+  PetscProbFunc  sampler;
+  PetscInt       dim;
+  const char    *prefix;
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  ierr = DMGetDimension(sw, &dim);CHKERRQ(ierr);
+  ierr = PetscObjectGetOptionsPrefix((PetscObject) sw, &prefix);CHKERRQ(ierr);
+  ierr = PetscProbCreateFromOptions(dim, prefix, "-dm_swarm_velocity_density", NULL, NULL, &sampler);CHKERRQ(ierr);
+  ierr = DMSwarmInitializeVelocities(sw, sampler, v0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

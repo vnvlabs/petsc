@@ -8,6 +8,7 @@ PETSC_EXTERN PetscErrorCode PCCreate_VPBJacobi(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_ILU(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_None(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_LU(PC);
+PETSC_EXTERN PetscErrorCode PCCreate_QR(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_SOR(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_Shell(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_MG(PC);
@@ -16,6 +17,7 @@ PETSC_EXTERN PetscErrorCode PCCreate_ICC(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_ASM(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_GASM(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_KSP(PC);
+PETSC_EXTERN PetscErrorCode PCCreate_BJKOKKOS(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_Composite(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_Redundant(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_NN(PC);
@@ -61,8 +63,8 @@ PETSC_EXTERN PetscErrorCode PCCreate_Deflation(PC);
 #if defined(PETSC_HAVE_HPDDM) && defined(PETSC_HAVE_DYNAMIC_LIBRARIES) && defined(PETSC_USE_SHARED_LIBRARIES)
 PETSC_EXTERN PetscErrorCode PCCreate_HPDDM(PC);
 #endif
-#if defined(PETSC_HAVE_HARA)
-PETSC_EXTERN PetscErrorCode PCCreate_HARA(PC);
+#if defined(PETSC_HAVE_H2OPUS)
+PETSC_EXTERN PetscErrorCode PCCreate_H2OPUS(PC);
 #endif
 
 /*@C
@@ -92,6 +94,7 @@ PetscErrorCode  PCRegisterAll(void)
   ierr = PCRegister(PCBJACOBI      ,PCCreate_BJacobi);CHKERRQ(ierr);
   ierr = PCRegister(PCSOR          ,PCCreate_SOR);CHKERRQ(ierr);
   ierr = PCRegister(PCLU           ,PCCreate_LU);CHKERRQ(ierr);
+  ierr = PCRegister(PCQR           ,PCCreate_QR);CHKERRQ(ierr);
   ierr = PCRegister(PCSHELL        ,PCCreate_Shell);CHKERRQ(ierr);
   ierr = PCRegister(PCMG           ,PCCreate_MG);CHKERRQ(ierr);
   ierr = PCRegister(PCEISENSTAT    ,PCCreate_Eisenstat);CHKERRQ(ierr);
@@ -101,6 +104,9 @@ PetscErrorCode  PCRegisterAll(void)
   ierr = PCRegister(PCASM          ,PCCreate_ASM);CHKERRQ(ierr);
   ierr = PCRegister(PCGASM         ,PCCreate_GASM);CHKERRQ(ierr);
   ierr = PCRegister(PCKSP          ,PCCreate_KSP);CHKERRQ(ierr);
+#if defined(PETSC_HAVE_KOKKOS_KERNELS)
+  ierr = PCRegister(PCBJKOKKOS     ,PCCreate_BJKOKKOS);CHKERRQ(ierr);
+#endif
   ierr = PCRegister(PCCOMPOSITE    ,PCCreate_Composite);CHKERRQ(ierr);
   ierr = PCRegister(PCREDUNDANT    ,PCCreate_Redundant);CHKERRQ(ierr);
   ierr = PCRegister(PCNN           ,PCCreate_NN);CHKERRQ(ierr);
@@ -145,8 +151,8 @@ PetscErrorCode  PCRegisterAll(void)
 #if defined(PETSC_HAVE_HPDDM) && defined(PETSC_HAVE_DYNAMIC_LIBRARIES) && defined(PETSC_USE_SHARED_LIBRARIES)
   ierr = PCRegister(PCHPDDM        ,PCCreate_HPDDM);CHKERRQ(ierr);
 #endif
-#if defined(PETSC_HAVE_HARA)
-  ierr = PCRegister(PCHARA         ,PCCreate_HARA);CHKERRQ(ierr);
+#if defined(PETSC_HAVE_H2OPUS)
+  ierr = PCRegister(PCH2OPUS       ,PCCreate_H2OPUS);CHKERRQ(ierr);
 #endif
   PetscFunctionReturn(0);
 }

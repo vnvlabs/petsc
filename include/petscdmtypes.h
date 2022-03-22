@@ -35,7 +35,7 @@ typedef struct _p_DM* DM;
   as the 0th grid point where the physical boundary serves as the mirror?
 
   References:
-  https://scicomp.stackexchange.com/questions/5355/writing-the-poisson-equation-finite-difference-matrix-with-neumann-boundary-cond
+. * -  https://scicomp.stackexchange.com/questions/5355/writing-the-poisson-equation-finite-difference-matrix-with-neumann-boundary-cond
 
 .seealso: DMDASetBoundaryType(), DMDACreate1d(), DMDACreate2d(), DMDACreate3d(), DMDACreate()
 E*/
@@ -170,5 +170,7 @@ typedef struct _p_DMField* DMField;
     Level: developer
 S*/
 typedef struct _p_UniversalLabel* DMUniversalLabel;
+
+typedef struct _n_DMGeneratorFunctionList *DMGeneratorFunctionList;
 
 #endif

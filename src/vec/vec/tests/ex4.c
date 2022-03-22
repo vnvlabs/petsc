@@ -1,5 +1,5 @@
 
-static char help[] = "Scatters from a parallel vector into seqential vectors.\n\n";
+static char help[] = "Scatters from a parallel vector into sequential vectors.\n\n";
 
 #include <petscvec.h>
 
@@ -36,7 +36,7 @@ int main(int argc,char **argv)
   ierr = VecScatterEnd(ctx,x,y,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
   ierr = VecScatterDestroy(&ctx);CHKERRQ(ierr);
 
-  if (!rank) {ierr = VecView(y,PETSC_VIEWER_STDOUT_SELF);CHKERRQ(ierr);}
+  if (rank == 0) {ierr = VecView(y,PETSC_VIEWER_STDOUT_SELF);CHKERRQ(ierr);}
 
   ierr = ISDestroy(&is1);CHKERRQ(ierr);
   ierr = ISDestroy(&is2);CHKERRQ(ierr);
@@ -46,7 +46,6 @@ int main(int argc,char **argv)
   ierr = PetscFinalize();
   return ierr;
 }
-
 
 /*TEST
 
@@ -87,9 +86,10 @@ int main(int argc,char **argv)
       args: -vec_type kokkos
       output_file: output/ex4_1.out
       filter: grep -v type
-      requires: kokkos_kernels
+      requires: !sycl kokkos_kernels
 
    testset:
+      diff_args: -j
       requires: hip
       filter: grep -v type
       args: -vec_type hip

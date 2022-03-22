@@ -18,7 +18,6 @@ Without -user_set_subdomains, the general PCGASM options are meaningful:\n\
    and attempts to generate both subdomains straddling processors and multiple
    domains per processor.
 
-
    This matrix in this linear system arises from the discretized Laplacian,
    and thus is not very interesting in terms of experimenting with variants
    of the GASM preconditioner.
@@ -28,8 +27,6 @@ Without -user_set_subdomains, the general PCGASM options are meaningful:\n\
    Concepts: KSP^Additive Schwarz Method (GASM) with user-defined subdomains
    Processors: n
 T*/
-
-
 
 /*
   Include "petscksp.h" so that we can use KSP solvers.  Note that this file
@@ -225,7 +222,7 @@ int main(int argc,char **args)
        Flag an error if PCTYPE is changed from the runtime options
      */
     ierr = PetscObjectTypeCompare((PetscObject)pc,PCGASM,&isasm);CHKERRQ(ierr);
-    if (!isasm) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Cannot Change the PCTYPE when manually changing the subdomain solver settings");
+    PetscCheckFalse(!isasm,PETSC_COMM_WORLD,PETSC_ERR_SUP,"Cannot Change the PCTYPE when manually changing the subdomain solver settings");
 
     /*
        Call KSPSetUp() to set the block Jacobi data structures (including
@@ -317,7 +314,6 @@ PetscErrorCode AssembleMatrix(Mat A,PetscInt m,PetscInt n)
 
   PetscFunctionReturn(0);
 }
-
 
 /*TEST
 

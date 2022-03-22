@@ -9,7 +9,6 @@ This   Input parameters include\n\
    Processors: n
 T*/
 
-
 #include <petscksp.h>
 
 int main(int argc,char **args)
@@ -36,7 +35,7 @@ int main(int argc,char **args)
 
   /* Determine file from which we read the matrix.*/
   ierr = PetscOptionsGetString(NULL,NULL,"-f",file,sizeof(file),&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_USER_INPUT,"Must indicate binary file with the -f option");
+  PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_USER_INPUT,"Must indicate binary file with the -f option");
 
   /* - - - - - - - - - - - - - - - - - - - - - - - -
                            Load system
@@ -46,7 +45,7 @@ int main(int argc,char **args)
   ierr = MatLoad(A,fd);CHKERRQ(ierr);
   ierr = PetscViewerDestroy(&fd);CHKERRQ(ierr);
   ierr = MatGetLocalSize(A,&m,&n);CHKERRQ(ierr);
-  if (m != n) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ, "This example is not intended for rectangular matrices (%D, %D)", m, n);
+  PetscCheckFalse(m != n,PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ, "This example is not intended for rectangular matrices (%D, %D)", m, n);
 
   /* Create rhs vector of all ones */
   ierr = VecCreate(PETSC_COMM_WORLD,&b);CHKERRQ(ierr);
@@ -92,7 +91,7 @@ int main(int argc,char **args)
 
     ierr = ISPartitioningCount(mis,size,count);CHKERRQ(ierr);
     ierr = ISDestroy(&mis);CHKERRQ(ierr);
-    if (displayIS && !rank) {
+    if (displayIS && rank == 0) {
       PetscInt i;
       ierr = PetscPrintf(PETSC_COMM_SELF,"[ %d ] count:\n",rank);CHKERRQ(ierr);
       for (i=0; i<size; i++) {ierr = PetscPrintf(PETSC_COMM_WORLD," %d",count[i]);CHKERRQ(ierr);}
@@ -158,7 +157,7 @@ int main(int argc,char **args)
 
     test:
       args: -f ${DATAFILESPATH}/matrices/small -partition -mat_partitioning_type parmetis
-      requires: datafilespath !complex double !define(PETSC_USE_64BIT_INDICES) parmetis
+      requires: datafilespath !complex double !defined(PETSC_USE_64BIT_INDICES) parmetis
       output_file: output/ex31.out
       nsize: 3
 

@@ -13,7 +13,6 @@ typedef struct {
   PetscInt    *i,*j;    /* offsets of nonzeros by column, non-zero indices by column */
 } PC_CP;
 
-
 static PetscErrorCode PCSetUp_CP(PC pc)
 {
   PC_CP          *cp = (PC_CP*)pc->data;
@@ -24,10 +23,10 @@ static PetscErrorCode PCSetUp_CP(PC pc)
 
   PetscFunctionBegin;
   ierr = PetscObjectTypeCompare((PetscObject)pc->pmat,MATSEQAIJ,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Currently only handles SeqAIJ matrices");
+  PetscCheckFalse(!flg,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Currently only handles SeqAIJ matrices");
 
   ierr = MatGetLocalSize(pc->pmat,&cp->m,&cp->n);CHKERRQ(ierr);
-  if (cp->m != cp->n) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Currently only for square matrices");
+  PetscCheckFalse(cp->m != cp->n,PETSC_COMM_SELF,PETSC_ERR_SUP,"Currently only for square matrices");
 
   if (!cp->work) {ierr = MatCreateVecs(pc->pmat,&cp->work,NULL);CHKERRQ(ierr);}
   if (!cp->d) {ierr = PetscMalloc1(cp->n,&cp->d);CHKERRQ(ierr);}
@@ -185,5 +184,4 @@ PETSC_EXTERN PetscErrorCode PCCreate_CP(PC pc)
   pc->ops->applyrichardson = NULL;
   PetscFunctionReturn(0);
 }
-
 

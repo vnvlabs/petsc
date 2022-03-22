@@ -19,7 +19,7 @@ important. We use several conventions
 
 #. All enum elements and macro variables are named with all capital
    letters. When they consist of several complete words, there is an
-   underscore between each word. For example, ``MATFINALASSEMBLY``.
+   underscore between each word. For example, ``MAT_FINAL_ASSEMBLY``.
 
 #. Functions that are private to PETSc (not callable by the application
    code) either
@@ -208,15 +208,12 @@ C Formatting
 
 #. Do not leave sections of commented-out code in the source files.
 
-#. Use classic block comments (``/* Comment */``) for multi-line comments and
-   for *all* comments in headers.  Single-line comments in source files (*not*
-   headers) may use the C99/C++ style (``// Comment``).  The rationale is that
-   it must be possible for users to build applications using strict ``-std=c89``
-   even though PETSc (since v3.14) uses select C99 features internally.
+#. Use classic block comments (``/* Comment */``) for multi-line comments, and ``//
+   Comment`` for single-line comments in source files.
 
 #. All variables must be declared at the beginning of the code block (C89
-   style), never mixed in with code.  When variables are only used in a limited
-   scope, it is encouraged to declare them in that scope.  For example::
+   style), never mixed in with code. When variables are only used in a limited
+   scope, it is encouraged to declare them in that scope. For example::
 
      if (cond) {
        PetscScalar *tmp;
@@ -276,12 +273,22 @@ C Usage
 
 #. Do not use the ``register`` directive.
 
-#. Do not use ``if (rank == 0)`` or ``if (v == NULL)`` or
+#. Do not use ``if (v == NULL)`` or
    ``if (flg == PETSC_TRUE)`` or ``if (flg == PETSC_FALSE)``. Instead, use
-   ``if (!rank)`` or ``if (!v)`` or ``if (flg)`` or ``if (!flg)``.
+   ``if (!v)`` or ``if (flg)`` or ``if (!flg)``.
 
-#. Do not use ``#ifdef`` or ``#ifndef``. Rather, use ``#if defined(...``
-   or ``#if !defined(...``.  Better, use ``PetscDefined()`` (see below).
+#. Do not use ``#ifdef`` or ``#ifndef``. Rather, use ``#if defined(...`` or ``#if
+   !defined(...``.  Better, use ``PetscDefined()`` (see below). The only exception to this
+   rule is for header guards, where the ``#ifndef`` form is preferred (see below).
+
+#. Header guard macros should include the full name and end in ``_FILE_EXTENSION`` of the
+   file and be formed using ``#ifndef``. For example::
+
+     // my_petsc_header_file.h
+     #ifndef MY_PETSC_HEADER_FILE_H
+     #define MY_PETSC_HEADER_FILE_H
+
+     #endif // MY_PETSC_HEADER_FILE_H
 
 #. Never use system random number generators such as ``rand()`` in PETSc
    code or examples because these can produce different results on
@@ -289,30 +296,84 @@ C Usage
    use ``PetscRandom`` which produces the exact same results regardless
    of system it is used on.
 
-#. Variadic macros may be used in PETSc source files, but must work with MSVC
-   and must not be required in public headers (which must be usable with strict
-   ``-std=c89``).  Most compilers have conforming implementations of the
-   C99/C++11 rules for ``__VA_ARGS__``, but MSVC's implementation is not
-   conforming and may need workarounds.  See ``PetscDefined()`` for an example
-   of how to work around MSVC's limitations to write a macro that is usable in
-   both.
+#. Variadic macros may be used in PETSc, but must work with MSVC v1900+ (Visual Studio
+   2015). Most compilers have conforming implementations of the C99/C++11 rules for
+   ``__VA_ARGS__``, but MSVC's implementation is not conforming and may need workarounds.
+   See ``PetscDefined()`` for an example of how to work around MSVC's limitations to write
+   a macro that is usable in both.
 
-#. Do not use language features that are not in the intersection of C99, C++11,
-   and MSVC.  Examples of such features include designated initializers and
-   variable-length arrays.  Note that variable-length arrays (including
-   VLA-pointers) are not supported in C++ and were made optional in C11 and that
-   designated initializers are not in C++.
+#. Do not use language features that are not in the intersection of C99, C++11, and MSVC
+   v1900+ (Visual Studio 2015).  Examples of such features include variable-length arrays.
+   Note that variable-length arrays (including VLA-pointers) are not supported in C++ and
+   were made optional in C11. You may use designated initializers via the
+   ``PetscDesignatedInitializer()`` macro.
 
 .. _usage_of_petsc_functions_and_macros:
 
 Usage of PETSc Functions and Macros
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+#. Lengthy conditional preprocessor blocks should mark any ``#else`` or ``#endif``
+   directives with a comment containing (or explaining) either the boolean condition or
+   the name of the macro if the first directive is testing whether one is defined. One
+   should be able to read any part of the macro block and be able to find or deduce the
+   initial ``#if``. That is::
+
+     #if defined(MY_MACRO)
+     // many lines of code
+     #else // MY_MACRO (use name of macro)
+     // many more lines of code
+     #endif // MY_MACRO
+
+     #if MY_MACRO > 10
+     // code
+     #else // MY_MACRO < 10
+     // more code
+     #endif // MY_MACRO > 10
+
+#. Nested preprocessor blocks should be indent the text (*not* the ``#``) following the
+   normal indentation rules outlined above. For example::
+
+     // Right
+     #if MY_VARIABLE > 10
+     #  if MY_OTHER_VARIABLE > 15
+     #    define BIG_VARIABLE 1
+
+
+     // Wrong
+     #if MY_VARIABLE > 10
+       #if MY_OTHER_VARIABLE > 15
+         #define BIG_VARIABLE 1
+
+     // Wrong
+     #if MY_VARIABLE > 10
+     #if MY_OTHER_VARIABLE > 15
+     #define BIG_VARIABLE 1
+
 #. Public PETSc include files, ``petsc*.h``, should not reference
    private PETSc ``petsc/private/*impl.h`` include files.
 
 #. Public and private PETSc include files cannot reference include files
    located in the PETSc source tree.
+
+#. All public functions must sanity-check their arguments using the appropriate
+   ``PetscValidXXX()`` macros. These must appear between ``PetscFunctionBegin`` and
+   ``PetscFunctionReturn()`` For example
+
+   ::
+
+     PetscErrorCode PetscPublicFunction(Vec v, PetscScalar *array, PetscInt collectiveInt)
+     {
+       PetscFunctionBegin;
+       PetscValidHeaderSpecific(v,VEC_CLASSID,1);
+       PetscValidScalarPointer(array,2);
+       PetscValidLogicalCollectiveInt(v,collectiveInt,3);
+       ...
+       PetscFunctionReturn(0);
+     }
+
+   See ``include/petsc/private/petscimpl.h`` and search for "PetscValid" to see all
+   available checker macros.
 
 #. When possible, use ``PetscDefined()`` instead of preprocessor conditionals.
    For example use::
@@ -352,6 +413,7 @@ Usage of PETSc Functions and Macros
 
 #. Do not include ``assert.h`` in PETSc source code. Do not use
    ``assert()``, it doesn’t play well in the parallel MPI world.
+   You may use ``PetscAssert()`` where appropriate.
 
 #. The macros ``SETERRQ()`` and ``CHKERRQ()`` should be on the same line
    as the routine to be checked unless doing so violates the 150
@@ -375,19 +437,19 @@ Usage of PETSc Functions and Macros
    ``PetscCallocN()``, ``PetscNew()``, and ``PetscFree()``, not
    ``malloc()`` and ``free()``.
 
-#. MPI routines and macros that are not part of the 1.0 or 1.1 standard
+#. MPI routines and macros that are not part of the 2.1 standard
    should not be used in PETSc without appropriate ``configure``
-   checks and ``#if defined()`` checks. Code should also be provided
+   checks and ``#if PetscDefined()`` checks. Code should also be provided
    that works if the MPI feature is not available, for example,
+
 
    ::
 
-       #if defined(PETSC_HAVE_MPI_IN_PLACE)
-         ierr = MPI_Allgatherv(MPI_IN_PLACE,0,MPI_DATATYPE_NULL,lens,
-                               recvcounts,displs,MPIU_INT,comm);CHKERRQ(ierr);
+       #if PetscDefined(HAVE_MPI_REDUCE_LOCAL)
+         ierr = MPI_Reduce_local(inbuf,inoutbuf,count,MPIU_INT,MPI_SUM);CHKERRMPI(ierr);
        #else
-         ierr = MPI_Allgatherv(lens,sendcount,MPIU_INT,lens,recvcounts,
-                               displs,MPIU_INT,comm);CHKERRQ(ierr);
+         ierr = MPI_Reduce(inbuf,inoutbuf,count,MPIU_INT,
+                           MPI_SUM,0,PETSC_COMM_SELF);CHKERRMPI(ierr);
        #endif
 
 #. Do not introduce PETSc routines that provide essentially the same
@@ -419,28 +481,37 @@ Usage of PETSc Functions and Macros
 #. Before removing or renaming an API function, type, or enumerator,
    ``PETSC_DEPRECATED_XXX()`` should be used in the relevant header file
    to indicate the new, correct usage and the version number where the
-   deprecation will first appear. For example,
+   deprecation will first appear. The old function or type, with the
+   deprecation warning, should remain for at least one major release.
+   The function or type’s manual page should be updated (see :ref:`manual_page_format`).
+   For example,
 
    ::
 
        typedef NewType OldType PETSC_DEPRECATED_TYPEDEF("Use NewType (since version 3.9)");
+
        PETSC_DEPRECATED_FUNCTION("Use NewFunction() (since version 3.9)") PetscErrorCode OldFunction();
+
        #define OLD_ENUMERATOR_DEPRECATED  OLD_ENUMERATOR PETSC_DEPRECATED_ENUM("Use NEW_ENUMERATOR (since version 3.9)")
        typedef enum {
          OLD_ENUMERATOR_DEPRECATED = 3,
          NEW_ENUMERATOR = 3
        } MyEnum;
 
-   The old function or type, with the deprecation warning, should remain
-   for at least one major release. The function or type’s manual page
-   should be updated (see :ref:`manual_page_format`).
+   Note that after compiler preprocessing, the enum above would be transformed to something like
+   ::
+
+       typedef enum {
+         OLD_ENUMERATOR __attribute((deprecated)) = 3,
+         NEW_ENUMERATOR = 3
+       } MyEnum;
 
 #. Before removing or renaming an options database key,
    ``PetscOptionsDeprecated()`` should be used for at least one major
    release.
 
 #. The format strings in PETSc ASCII output routines, such as
-   ``PetscPrintf``, take a ``%D`` for all PETSc variables of type ``PetscInt``,
+   ``PetscPrintf``, take a ``%" PetscInt_FMT "`` for all PETSc variables of type ``PetscInt``,
    not a ``%d``.
 
 #. All arguments of type ``PetscReal`` to PETSc ASCII output routines,
@@ -461,34 +532,21 @@ http://wgropp.cs.illinois.edu/projects/software/sowing/; in particular,
 see the documentation for ``doctext``.
 
 -  | ``/*@``
-   | a formatted comment of a function that will be used for both
-   | documentation and a Fortran interface.
+   | a formatted comment of a function that will be used for both documentation and a Fortran interface.
 
 -  | ``/*@C``
-   | a formatted comment of a function that will be used only for
-   | documentation, not to generate a Fortran interface. In general, such
-   | labeled C functions should have a custom Fortran interface provided.
-   | Functions that take ``char*`` or function pointer arguments must have
-   | the ``C`` symbol and a custom Fortran interface provided.
+   | a formatted comment of a function that will be used only for documentation, not to generate a Fortran interface. In general, such labeled C functions should have a custom Fortran interface provided. Functions that take ``char*`` or function pointer arguments must have the ``C`` symbol and a custom Fortran interface provided.
 
 -  | ``/*E``
-   | a formatted comment of an enum used for documentation only. Note
-   | that each of these needs to be listed in
-   | ``lib/petsc/conf/bfort-petsc.txt`` as a native and defined in the
-   | corresponding ``include/petsc/finclude/petscxxx.h`` Fortran include
-   | file and the values set as parameters in the file
-   | ``src/SECTION/f90-mod/petscSUBSECTION.h``, for example,
-   | ``src/vec/f90-mod/petscis.h``.
+   | a formatted comment of an enum used for documentation only. Note that each of these needs to be listed in ``lib/petsc/conf/bfort-petsc.txt`` as a native and defined in the corresponding ``include/petsc/finclude/petscxxx.h`` Fortran include file and the values set as parameters in the file ``src/SECTION/f90-mod/petscSUBSECTION.h``, for example, ``src/vec/f90-mod/petscis.h``.
 
 -  | ``/*S``
-   | a formatted comment for a data type such as ``KSP``. Note that each
-   | of these needs to be listed in ``lib/petsc/conf/bfort-petsc.txt`` as
-   | a ``nativeptr``.
+   | a formatted comment for a data type such as ``KSP``. Note that each of these needs to be listed in ``lib/petsc/conf/bfort-petsc.txt`` as a ``nativeptr``.
 
 -  | ``/*MC``
    | a formatted comment of a CPP macro or enum value for documentation.
 
-The Fortran interface files supplied by the user go into the two
+The Fortran interface files supplied manually by developer go into the two
 directories ``ftn-custom`` and ``f90-custom``, while those generated by
 Sowing go into ``ftn-auto``.
 
@@ -530,13 +588,13 @@ where noted, add a newline after the section headings.
       MPI communicator should be noted here.
 
 #. If documenting a function with input parameters, a list of input
-   parameter descriptions in an ``Input Parameters:`` section.
+   parameter descriptions in an ``Input Parameter(s):`` section.
 
 #. If documenting a function with output parameters, a list of output
-   parameter descriptions in an ``Output Parameters:`` section.
+   parameter descriptions in an ``Output Parameter(s):`` section.
 
 #. If documenting a function that interacts with the options database, a
-   list of options database keys in an ``Options Database Keys:``
+   list of options database keys in an ``Options Database Key(s):``
    section.
 
 #. (Optional) a ``Notes:`` section containing in-depth discussion,
@@ -546,6 +604,10 @@ where noted, add a newline after the section headings.
 
 #. (If applicable) a ``Fortran Notes:`` section detailing any relevant
    differences in calling or using the item from Fortran.
+
+#. (If applicable) a ``Developer Notes:`` section detailing any relevant
+   information about the code for developers, for example, why a
+   particular algorithm was implemented.
 
 #. ``Level:`` (no newline) followed by ``beginner``,
    ``intermediate``, ``advanced``, ``developer``, or ``deprecated``.
@@ -557,11 +619,24 @@ where noted, add a newline after the section headings.
 .. [1]
    Type also refers to the string name of the subclass.
 
+Spelling and Capitalization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#. Proper nouns, including Unix, Linux, X Windows, and Microsoft Windows should be capitalized. This includes all operating systems.
+
+#. Company names and product names should be capitalized.
+
+#. Company names and terms that are traditionally all capitalized, for example, NVIDIA and CUDA should be all capitalized.
+
+#. Unix should not be all capitalized.
+
+#. Microsoft Windows should always be written out with two words. That is it should not be shortened to Windows.
+
+#. CMake should be capitalized as shown.
+
+
 References
 ----------
 
-.. bibliography:: /../src/docs/tex/petsc.bib
-   :filter: docname in docnames
-
-.. bibliography:: /../src/docs/tex/petscapp.bib
+.. bibliography:: /petsc.bib
    :filter: docname in docnames

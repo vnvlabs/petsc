@@ -10,7 +10,6 @@ static char help[] = "Transistor amplifier.\n";
      [            -C3  C3]
      [             C3 -C3]
 
-
         [ -(U(t) - y[0])/1000                    ]
         [ -6/R + y[1]/4500 + 0.01 * h(y[1]-y[2]) ]
 f(t,y)= [ y[2]/R - h(y[1]-y[2]) ]
@@ -100,7 +99,6 @@ static PetscErrorCode IJacobianImplicit(TS ts,PetscReal t,Vec Y,Vec Ydot,PetscRe
   J[4][3]= -(3*a)/1.e6;
   J[4][4]= (3*a)/1.e6 + 0.00011111111111111112 ;
 
-
   ierr = MatSetValues(B,5,rowcol,5,rowcol,&J[0][0],INSERT_VALUES);CHKERRQ(ierr);
 
   ierr = VecRestoreArrayRead(Y,&y);CHKERRQ(ierr);
@@ -130,7 +128,7 @@ int main(int argc,char **argv)
      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);if (ierr) return ierr;
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
-  if (size > 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Only for sequential runs");
+  PetscCheckFalse(size > 1,PETSC_COMM_WORLD,PETSC_ERR_SUP,"Only for sequential runs");
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Create necessary matrix and vectors

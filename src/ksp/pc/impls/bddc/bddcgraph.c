@@ -358,7 +358,6 @@ PetscErrorCode PCBDDCGraphComputeConnectedComponents(PCBDDCGraph graph)
         if (dist > mdist) { mdist = dist; point2 = j; }
       }
 
-
       /* find the third point maximizing the triangle area */
       point3 = point2;
       if (cdim > 2) {
@@ -506,7 +505,7 @@ PetscErrorCode PCBDDCGraphComputeConnectedComponents(PCBDDCGraph graph)
         ierr = PetscBTSet(subset_cc_adapt,i);CHKERRQ(ierr);
         continue;
       }
-      for (j=cum_recv_counts[i];j<cum_recv_counts[i+1];j++){
+      for (j=cum_recv_counts[i];j<cum_recv_counts[i+1];j++) {
          if (recv_buffer_bool[j]) {
           ierr = PetscBTSet(subset_cc_adapt,i);CHKERRQ(ierr);
           break;
@@ -671,8 +670,7 @@ PetscErrorCode PCBDDCGraphComputeConnectedComponents(PCBDDCGraph graph)
   PetscFunctionReturn(0);
 }
 
-
-PETSC_STATIC_INLINE PetscErrorCode PCBDDCGraphComputeCC_Private(PCBDDCGraph graph,PetscInt pid,PetscInt* queue_tip,PetscInt n_prev,PetscInt* n_added)
+static inline PetscErrorCode PCBDDCGraphComputeCC_Private(PCBDDCGraph graph,PetscInt pid,PetscInt* queue_tip,PetscInt n_prev,PetscInt* n_added)
 {
   PetscInt       i,j,n;
   PetscInt       *xadj = graph->xadj,*adjncy = graph->adjncy;
@@ -763,7 +761,7 @@ PetscErrorCode PCBDDCGraphComputeConnectedComponentsLocal(PCBDDCGraph graph)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (!graph->setupcalled) SETERRQ(PetscObjectComm((PetscObject)graph->l2gmap),PETSC_ERR_ORDER,"PCBDDCGraphSetUp should be called first");
+  PetscCheckFalse(!graph->setupcalled,PetscObjectComm((PetscObject)graph->l2gmap),PETSC_ERR_ORDER,"PCBDDCGraphSetUp should be called first");
   /* quiet return if there isn't any local info */
   if (!graph->xadj && !graph->n_local_subs) {
     PetscFunctionReturn(0);
@@ -1008,7 +1006,7 @@ PetscErrorCode PCBDDCGraphSetUp(PCBDDCGraph graph, PetscInt custom_minimal_size,
   if (dirichlet_is) {
     ierr = ISGetLocalSize(dirichlet_is,&is_size);CHKERRQ(ierr);
     ierr = ISGetIndices(dirichlet_is,(const PetscInt**)&is_indices);CHKERRQ(ierr);
-    for (i=0;i<is_size;i++){
+    for (i=0;i<is_size;i++) {
       if (is_indices[i] > -1 && is_indices[i] < graph->nvtxs) { /* out of bounds indices (if any) are skipped */
         if (commsize > graph->commsizelimit) { /* dirichlet nodes treated as internal */
           ierr = PetscBTSet(graph->touched,is_indices[i]);CHKERRQ(ierr);
@@ -1028,9 +1026,9 @@ PetscErrorCode PCBDDCGraphSetUp(PCBDDCGraph graph, PetscInt custom_minimal_size,
     if (graph->xadj) {
       PetscInt *new_xadj,*new_adjncy;
       /* sort CSR graph */
-      for (i=0;i<graph->nvtxs;i++)
+      for (i=0;i<graph->nvtxs;i++) {
         ierr = PetscSortInt(graph->xadj[i+1]-graph->xadj[i],&graph->adjncy[graph->xadj[i]]);CHKERRQ(ierr);
-
+      }
       /* adapt local CSR graph in case of local periodicity */
       k = 0;
       for (i=0;i<graph->nvtxs;i++)
@@ -1065,7 +1063,7 @@ PetscErrorCode PCBDDCGraphSetUp(PCBDDCGraph graph, PetscInt custom_minimal_size,
   if (custom_primal_vertices) {
     ierr = ISGetLocalSize(custom_primal_vertices,&is_size);CHKERRQ(ierr);
     ierr = ISGetIndices(custom_primal_vertices,(const PetscInt**)&is_indices);CHKERRQ(ierr);
-    for (i=0,j=0;i<is_size;i++){
+    for (i=0,j=0;i<is_size;i++) {
       if (is_indices[i] > -1 && is_indices[i] < graph->nvtxs  && graph->special_dof[is_indices[i]] != PCBDDCGRAPH_DIRICHLET_MARK) { /* out of bounds indices (if any) are skipped */
         graph->special_dof[is_indices[i]] = PCBDDCGRAPH_SPECIAL_MARK-j;
         j++;
@@ -1118,7 +1116,7 @@ PetscErrorCode PCBDDCGraphSetUp(PCBDDCGraph graph, PetscInt custom_minimal_size,
       if (!PetscBTLookup(graph->touched,j) && graph->count[i] == graph->count[j] && graph->which_dof[i] == graph->which_dof[j] && graph->special_dof[i] == graph->special_dof[j]) {
         /* check for same set of sharing subdomains */
         same_set = PETSC_TRUE;
-        for (k=0;k<graph->count[j];k++){
+        for (k=0;k<graph->count[j];k++) {
           if (graph->neighbours_set[i][k] != graph->neighbours_set[j][k]) {
             same_set = PETSC_FALSE;
           }
@@ -1176,7 +1174,7 @@ PetscErrorCode PCBDDCGraphSetUp(PCBDDCGraph graph, PetscInt custom_minimal_size,
   ierr = ISRenumber(subset,NULL,NULL,&subset_n);CHKERRQ(ierr);
   ierr = ISDestroy(&subset);CHKERRQ(ierr);
   ierr = ISGetLocalSize(subset_n,&k);CHKERRQ(ierr);
-  if (k != graph->ncc) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Invalid size of new subset! %D != %D",k,graph->ncc);
+  PetscCheckFalse(k != graph->ncc,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Invalid size of new subset! %D != %D",k,graph->ncc);
   ierr = ISGetIndices(subset_n,&is_indices);CHKERRQ(ierr);
   ierr = PetscArraycpy(graph->subset_ref_node,is_indices,graph->ncc);CHKERRQ(ierr);
   ierr = ISRestoreIndices(subset_n,&is_indices);CHKERRQ(ierr);
@@ -1274,7 +1272,7 @@ PetscErrorCode PCBDDCGraphInit(PCBDDCGraph graph, ISLocalToGlobalMapping l2gmap,
   PetscValidLogicalCollectiveInt(l2gmap,N,3);
   PetscValidLogicalCollectiveInt(l2gmap,maxcount,4);
   /* raise an error if already allocated */
-  if (graph->nvtxs_global) SETERRQ(PetscObjectComm((PetscObject)l2gmap),PETSC_ERR_PLIB,"BDDCGraph already initialized");
+  PetscCheckFalse(graph->nvtxs_global,PetscObjectComm((PetscObject)l2gmap),PETSC_ERR_PLIB,"BDDCGraph already initialized");
   /* set number of vertices */
   ierr = PetscObjectReference((PetscObject)l2gmap);CHKERRQ(ierr);
   graph->l2gmap = l2gmap;

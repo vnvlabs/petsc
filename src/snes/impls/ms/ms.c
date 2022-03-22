@@ -200,15 +200,15 @@ PetscErrorCode SNESMSRegister(SNESMSType name,PetscInt nstages,PetscInt nregiste
 
   PetscFunctionBegin;
   PetscValidCharPointer(name,1);
-  if (nstages < 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Must have at least one stage");
+  PetscCheckFalse(nstages < 1,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Must have at least one stage");
   if (gamma || delta) {
-    if (nregisters != 3) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Only support for methods written in 3-register form");
-    PetscValidRealPointer(gamma,4);
-    PetscValidRealPointer(delta,5);
+    PetscCheckFalse(nregisters != 3,PETSC_COMM_SELF,PETSC_ERR_SUP,"Only support for methods written in 3-register form");
+    PetscValidRealPointer(gamma,5);
+    PetscValidRealPointer(delta,6);
   } else {
-    if (nregisters != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Only support for methods written in 1-register form");
+    PetscCheckFalse(nregisters != 1,PETSC_COMM_SELF,PETSC_ERR_SUP,"Only support for methods written in 1-register form");
   }
-  PetscValidRealPointer(betasub,6);
+  PetscValidRealPointer(betasub,7);
 
   ierr          = SNESMSInitializePackage();CHKERRQ(ierr);
   ierr          = PetscNew(&link);CHKERRQ(ierr);
@@ -348,7 +348,7 @@ static PetscErrorCode SNESSolve_MS(SNES snes)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (snes->xl || snes->xu || snes->ops->computevariablebounds) SETERRQ1(PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
+  PetscCheckFalse(snes->xl || snes->xu || snes->ops->computevariablebounds,PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
   ierr = PetscCitationsRegister(SNESCitation,&SNEScite);CHKERRQ(ierr);
 
   snes->reason = SNES_CONVERGED_ITERATING;
@@ -501,7 +501,7 @@ static PetscErrorCode SNESMSSetType_MS(SNES snes,SNESMSType mstype)
       PetscFunctionReturn(0);
     }
   }
-  SETERRQ1(PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_UNKNOWN_TYPE,"Could not find '%s'",mstype);
+  SETERRQ(PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_UNKNOWN_TYPE,"Could not find '%s'",mstype);
 }
 
 /*@C
@@ -535,7 +535,7 @@ PetscErrorCode SNESMSGetType(SNES snes,SNESMSType *mstype)
 
   Logically collective
 
-  Input Parameter:
+  Input Parameters:
 +  snes - nonlinear solver context
 -  mstype - type of multistage method
 
@@ -603,7 +603,7 @@ PetscErrorCode SNESMSGetDamping(SNES snes,PetscReal *damping)
 
   Logically collective
 
-  Input Parameter:
+  Input Parameters:
 +  snes - nonlinear solver context
 -  damping - damping parameter
 
@@ -640,10 +640,10 @@ PetscErrorCode SNESMSSetDamping(SNES snes,PetscReal damping)
       The methods are specified in low storage form (Ketcheson 2010). New methods can be registered with SNESMSRegister().
 
       References:
-+   1. -   Ketcheson (2010) Runge Kutta methods with minimum storage implementations (https://doi.org/10.1016/j.jcp.2009.11.006).
-.   2. -   Jameson (1983) Solution of the Euler equations for two dimensional transonic flow by a multigrid method (https://doi.org/10.1016/0096-3003(83)90019-X).
-.   3. -   Pierce and Giles (1997) Preconditioned multigrid methods for compressible flow calculations on stretched meshes (https://doi.org/10.1006/jcph.1997.5772).
--   4. -   Van Leer, Tai, and Powell (1989) Design of optimally smoothing multi-stage schemes for the Euler equations (https://doi.org/10.2514/6.1989-1933).
++     * - Ketcheson (2010) Runge Kutta methods with minimum storage implementations (https://doi.org/10.1016/j.jcp.2009.11.006).
+.     * - Jameson (1983) Solution of the Euler equations for two dimensional transonic flow by a multigrid method (https://doi.org/10.1016/0096-3003(83)90019-X).
+.     * - Pierce and Giles (1997) Preconditioned multigrid methods for compressible flow calculations on stretched meshes (https://doi.org/10.1006/jcph.1997.5772).
+-     * - Van Leer, Tai, and Powell (1989) Design of optimally smoothing multi-stage schemes for the Euler equations (https://doi.org/10.2514/6.1989-1933).
 
       Level: beginner
 

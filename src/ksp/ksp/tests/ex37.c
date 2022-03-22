@@ -30,7 +30,7 @@ int main(int argc,char **args)
   ierr = PetscInitialize(&argc,&args,(char*)0,help);if (ierr) return ierr;
   /* Load the matrix */
   ierr = PetscOptionsGetString(NULL,NULL,"-f",file,sizeof(file),&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_USER_INPUT,"Must indicate binary file with the -f option");
+  PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_USER_INPUT,"Must indicate binary file with the -f option");
   ierr = PetscViewerBinaryOpen(PETSC_COMM_WORLD,file,FILE_MODE_READ,&fd);CHKERRQ(ierr);
 
   /* Load the matrix; then destroy the viewer.*/
@@ -63,7 +63,7 @@ int main(int argc,char **args)
     PetscMPIInt color,subrank,duprank,subsize;
     duprank = size-1 - rank;
     subsize = size/nsubcomm;
-    if (subsize*nsubcomm != size) SETERRQ2(comm,PETSC_ERR_SUP,"This example requires nsubcomm %D divides size %D",nsubcomm,size);
+    PetscCheckFalse(subsize*nsubcomm != size,comm,PETSC_ERR_SUP,"This example requires nsubcomm %D divides size %D",nsubcomm,size);
     color   = duprank/subsize;
     subrank = duprank - color*subsize;
     ierr    = PetscSubcommSetTypeGeneral(psubcomm,color,subrank);CHKERRQ(ierr);
@@ -71,7 +71,7 @@ int main(int argc,char **args)
     ierr = PetscSubcommSetType(psubcomm,PETSC_SUBCOMM_CONTIGUOUS);CHKERRQ(ierr);
   } else if (type == PETSC_SUBCOMM_INTERLACED) {
     ierr = PetscSubcommSetType(psubcomm,PETSC_SUBCOMM_INTERLACED);CHKERRQ(ierr);
-  } else SETERRQ1(psubcomm->parent,PETSC_ERR_SUP,"PetscSubcommType %D is not supported yet",type);
+  } else SETERRQ(psubcomm->parent,PETSC_ERR_SUP,"PetscSubcommType %D is not supported yet",type);
   ierr = PetscSubcommSetFromOptions(psubcomm);CHKERRQ(ierr);
   subcomm = PetscSubcommChild(psubcomm);
 
@@ -141,7 +141,7 @@ int main(int argc,char **args)
   ierr = MatMult(subA,subx,subu);CHKERRQ(ierr);
   ierr = VecAXPY(subu,-1.0,subb);CHKERRQ(ierr);
   ierr = VecNorm(u,NORM_2,&norm);CHKERRQ(ierr);
-  if (norm > 1.e-4 && !rank) {
+  if (norm > 1.e-4 && rank == 0) {
     ierr = PetscPrintf(PETSC_COMM_WORLD,"[%D]  Number of iterations = %3D\n",rank,its);CHKERRQ(ierr);
     ierr = PetscPrintf(PETSC_COMM_WORLD,"Error: Residual norm of each block |subb - subA*subx |= %g\n",(double)norm);CHKERRQ(ierr);
   }
@@ -184,20 +184,20 @@ int main(int argc,char **args)
 
     test:
       args: -f ${DATAFILESPATH}/matrices/small -nsubcomm 1
-      requires: datafilespath !complex double !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath !complex double !defined(PETSC_USE_64BIT_INDICES)
       output_file: output/ex37.out
 
     test:
       suffix: 2
       args: -f ${DATAFILESPATH}/matrices/small -nsubcomm 2
-      requires: datafilespath !complex double !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath !complex double !defined(PETSC_USE_64BIT_INDICES)
       nsize: 4
       output_file: output/ex37.out
 
     test:
       suffix: mumps
       args: -f ${DATAFILESPATH}/matrices/small -nsubcomm 2 -pc_factor_mat_solver_type mumps -pc_type lu
-      requires: datafilespath  mumps !complex double !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath  mumps !complex double !defined(PETSC_USE_64BIT_INDICES)
       nsize: 4
       output_file: output/ex37.out
 
@@ -205,21 +205,21 @@ int main(int argc,char **args)
       suffix: 3
       nsize: 4
       args: -f ${DATAFILESPATH}/matrices/small -nsubcomm 2 -subcomm_type 0
-      requires: datafilespath  !complex double !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath  !complex double !defined(PETSC_USE_64BIT_INDICES)
       output_file: output/ex37.out
 
     test:
       suffix: 4
       nsize: 4
       args: -f ${DATAFILESPATH}/matrices/small -nsubcomm 2 -subcomm_type 1
-      requires: datafilespath !complex double !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath !complex double !defined(PETSC_USE_64BIT_INDICES)
       output_file: output/ex37.out
 
     test:
       suffix: 5
       nsize: 4
       args: -f ${DATAFILESPATH}/matrices/small -nsubcomm 2 -subcomm_type 2
-      requires: datafilespath !complex double !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath !complex double !defined(PETSC_USE_64BIT_INDICES)
       output_file: output/ex37.out
 
 TEST*/

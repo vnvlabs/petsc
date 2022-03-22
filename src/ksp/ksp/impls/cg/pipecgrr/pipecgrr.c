@@ -33,7 +33,7 @@ static PetscErrorCode  KSPSolve_PIPECGRR(KSP ksp)
 
   PetscFunctionBegin;
   ierr = PCGetDiagonalScale(ksp->pc,&diagonalscale);CHKERRQ(ierr);
-  if (diagonalscale) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(diagonalscale,PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
 
   X = ksp->vec_sol;
   B = ksp->vec_rhs;
@@ -90,7 +90,7 @@ static PetscErrorCode  KSPSolve_PIPECGRR(KSP ksp)
     ierr = KSP_MatMult(ksp,Amat,U,W);CHKERRQ(ierr);
     dp   = 0.0;
     break;
-  default: SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"%s",KSPNormTypes[ksp->normtype]);
+  default: SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"%s",KSPNormTypes[ksp->normtype]);
   }
   ierr = KSPLogResidualHistory(ksp,dp);CHKERRQ(ierr);
   ierr = KSPMonitor(ksp,0,dp);CHKERRQ(ierr);
@@ -245,7 +245,6 @@ static PetscErrorCode  KSPSolve_PIPECGRR(KSP ksp)
   if (!ksp->reason) ksp->reason = KSP_DIVERGED_ITS;
   PetscFunctionReturn(0);
 }
-
 
 /*MC
    KSPPIPECGRR - Pipelined conjugate gradient method with automated residual replacements.

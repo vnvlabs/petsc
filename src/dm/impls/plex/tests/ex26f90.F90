@@ -100,14 +100,15 @@ program ex26f90
     end if
 
     ! Read the mesh in any supported format
-    call DMPlexCreateFromFile(PETSC_COMM_WORLD, ifilename,PETSC_TRUE,dm,ierr);CHKERRA(ierr)
+    call DMPlexCreateFromFile(PETSC_COMM_WORLD, ifilename,PETSC_NULL_CHARACTER,PETSC_TRUE,dm,ierr);CHKERRA(ierr)
+    call DMPlexDistributeSetDefault(dm,PETSC_FALSE,ierr);CHKERRA(ierr);
     call DMSetFromOptions(dm,ierr);CHKERRA(ierr);
     call DMGetDimension(dm, sdim,ierr);CHKERRA(ierr)
     call DMViewFromOptions(dm, PETSC_NULL_OPTIONS,"-dm_view",ierr);CHKERRA(ierr);
 
     ! Create the exodus result file
 
-    ! enable exodus debugging informations
+    ! enable exodus debugging information
     call exopts(EXVRBS+EXDEBG,ierr)
     ! Create the exodus file
     call PetscViewerExodusIIOpen(PETSC_COMM_WORLD,ofilename,FILE_MODE_WRITE,viewer,ierr);CHKERRA(ierr)
@@ -288,7 +289,6 @@ program ex26f90
     end if
     call DMViewFromOptions(dm,PETSC_NULL_OPTIONS,"-dm_view",ierr);CHKERRA(ierr)
 
-
     ! Get DM and IS for each field of dm
     call DMCreateSubDM(dm, 1_kPI, fieldU,  isU,  dmU,ierr);CHKERRA(ierr)
     call DMCreateSubDM(dm, 1_kPI, fieldA,  isA,  dmA,ierr);CHKERRA(ierr)
@@ -323,7 +323,6 @@ program ex26f90
     call DMGetCoordinateSection(dmUA, coordSection,ierr);CHKERRA(ierr)
     call DMGetCoordinatesLocal(dmUA, coord,ierr);CHKERRA(ierr)
     call DMPlexGetChart(dmUA, pStart, pEnd,ierr);CHKERRA(ierr)
-
 
     do p = pStart,pEnd-1
         call PetscSectionGetDof(sectionUA, p, dofUA,ierr);CHKERRA(ierr)

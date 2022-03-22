@@ -1,7 +1,6 @@
 #include <../src/tao/bound/impls/tron/tron.h>
 #include <../src/tao/matrix/submatfree.h>
 
-
 /* TRON Routines */
 static PetscErrorCode TronGradientProjections(Tao,TAO_TRON*);
 /*------------------------------------------------------------*/
@@ -36,7 +35,6 @@ static PetscErrorCode TaoSetFromOptions_TRON(PetscOptionItems *PetscOptionsObjec
   ierr = PetscOptionsHead(PetscOptionsObject,"Newton Trust Region Method for bound constrained optimization");CHKERRQ(ierr);
   ierr = PetscOptionsInt("-tao_tron_maxgpits","maximum number of gradient projections per TRON iterate","TaoSetMaxGPIts",tron->maxgpits,&tron->maxgpits,&flg);CHKERRQ(ierr);
   ierr = PetscOptionsTail();CHKERRQ(ierr);
-  ierr = TaoLineSearchSetFromOptions(tao->linesearch);CHKERRQ(ierr);
   ierr = KSPSetFromOptions(tao->ksp);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -104,7 +102,7 @@ static PetscErrorCode TaoSolve_TRON(Tao tao)
   /* Compute the objective function and gradient */
   ierr = TaoComputeObjectiveAndGradient(tao,tao->solution,&tron->f,tao->gradient);CHKERRQ(ierr);
   ierr = VecNorm(tao->gradient,NORM_2,&tron->gnorm);CHKERRQ(ierr);
-  if (PetscIsInfOrNanReal(tron->f) || PetscIsInfOrNanReal(tron->gnorm)) SETERRQ(PetscObjectComm((PetscObject)tao),PETSC_ERR_USER, "User provided compute function generated Inf or NaN");
+  PetscCheck(!PetscIsInfOrNanReal(tron->f) && !PetscIsInfOrNanReal(tron->gnorm),PetscObjectComm((PetscObject)tao),PETSC_ERR_USER, "User provided compute function generated Inf or NaN");
 
   /* Project the gradient and calculate the norm */
   ierr = VecBoundGradientProjection(tao->gradient,tao->solution,tao->XL,tao->XU,tao->gradient);CHKERRQ(ierr);
@@ -124,7 +122,7 @@ static PetscErrorCode TaoSolve_TRON(Tao tao)
   ierr = TaoLogConvergenceHistory(tao,tron->f,tron->gnorm,0.0,tao->ksp_its);CHKERRQ(ierr);
   ierr = TaoMonitor(tao,tao->niter,tron->f,tron->gnorm,0.0,tron->stepsize);CHKERRQ(ierr);
   ierr = (*tao->ops->convergencetest)(tao,tao->cnvP);CHKERRQ(ierr);
-  while (tao->reason==TAO_CONTINUE_ITERATING){
+  while (tao->reason==TAO_CONTINUE_ITERATING) {
     /* Call general purpose update function */
     if (tao->ops->update) {
       ierr = (*tao->ops->update)(tao, tao->niter, tao->user_update);CHKERRQ(ierr);
@@ -218,11 +216,11 @@ static PetscErrorCode TaoSolve_TRON(Tao tao)
         xdiff *= stepsize;
 
         /* Adjust trust region size */
-        if (rhok < tron->eta2){
+        if (rhok < tron->eta2) {
           delta = PetscMin(xdiff,delta)*tron->sigma1;
-        } else if (rhok > tron->eta4){
+        } else if (rhok > tron->eta4) {
           delta= PetscMin(xdiff,delta)*tron->sigma3;
-        } else if (rhok > tron->eta3){
+        } else if (rhok > tron->eta3) {
           delta=PetscMin(xdiff,delta)*tron->sigma2;
         }
         ierr = VecBoundGradientProjection(tron->G_New,tron->X_New, tao->XL, tao->XU, tao->gradient);CHKERRQ(ierr);
@@ -266,7 +264,7 @@ static PetscErrorCode TronGradientProjections(Tao tao,TAO_TRON *tron)
   */
   PetscFunctionBegin;
 
-  for (i=0;i<tron->maxgpits;++i){
+  for (i=0;i<tron->maxgpits;++i) {
 
     if (-actred <= (tron->pg_ftol)*actred_max) break;
 
@@ -302,7 +300,7 @@ static PetscErrorCode TaoComputeDual_TRON(Tao tao, Vec DXL, Vec DXU)
   PetscValidHeaderSpecific(tao,TAO_CLASSID,1);
   PetscValidHeaderSpecific(DXL,VEC_CLASSID,2);
   PetscValidHeaderSpecific(DXU,VEC_CLASSID,3);
-  if (!tron->Work || !tao->gradient) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ORDER,"Dual variables don't exist yet or no longer exist.\n");
+  PetscCheck(tron->Work && tao->gradient,PETSC_COMM_SELF,PETSC_ERR_ORDER,"Dual variables don't exist yet or no longer exist.");
 
   ierr = VecBoundGradientProjection(tao->gradient,tao->solution,tao->XL,tao->XU,tron->Work);CHKERRQ(ierr);
   ierr = VecCopy(tron->Work,DXL);CHKERRQ(ierr);

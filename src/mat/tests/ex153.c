@@ -20,14 +20,14 @@ int main(int argc,char **args)
   ierr = MPI_Comm_size(PETSC_COMM_WORLD, &size);CHKERRMPI(ierr);
   ierr = MPI_Comm_rank(PETSC_COMM_WORLD, &rank);CHKERRMPI(ierr);
 
-  if (size!=1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP, "This is a uni-processor example only");
+  PetscCheckFalse(size!=1,PETSC_COMM_WORLD,PETSC_ERR_SUP, "This is a uni-processor example only");
   ierr = PetscRandomCreate(PETSC_COMM_SELF, &rdm);CHKERRQ(ierr);
   ierr = PetscRandomSetFromOptions(rdm);CHKERRQ(ierr);
   ierr = VecCreate(PETSC_COMM_SELF,&input);CHKERRQ(ierr);
   ierr = VecSetSizes(input,N,N);CHKERRQ(ierr);
   ierr = VecSetFromOptions(input);CHKERRQ(ierr);
   ierr = VecSetRandom(input,rdm);CHKERRQ(ierr);
-  ierr = VecDuplicate(input,&output);
+  ierr = VecDuplicate(input,&output);CHKERRQ(ierr);
 
   DIM  = 5; dim[0] = N0; dim[1] = N1; dim[2] = N2; dim[3] = N3; dim[4] = N4;
   ierr = MatCreateFFT(PETSC_COMM_SELF,DIM,dim,MATFFTW,&A);CHKERRQ(ierr);

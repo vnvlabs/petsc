@@ -52,7 +52,6 @@
 
 .seealso: PetscMallocGetMaximumUsage(), PetscMemoryGetMaximumUsage(), PetscMallocGetCurrentUsage(), PetscMemorySetGetMaximumUsage(), PetscMemoryView()
 
-
 @*/
 PetscErrorCode  PetscMemoryGetCurrentUsage(PetscLogDouble *mem)
 {
@@ -76,8 +75,8 @@ PetscErrorCode  PetscMemoryGetCurrentUsage(PetscLogDouble *mem)
 #if defined(PETSC_USE_PROCFS_FOR_SIZE)
 
   sprintf(proc,"/proc/%d",(int)getpid());
-  if ((fd = open(proc,O_RDONLY)) == -1) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to access system file %s to get memory usage data",file);
-  if (ioctl(fd,PIOCPSINFO,&prusage) == -1) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to access system file %s to get memory usage data",file);
+  PetscCheckFalse((fd = open(proc,O_RDONLY)) == -1,PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to access system file %s to get memory usage data",file);
+  PetscCheckFalse(ioctl(fd,PIOCPSINFO,&prusage) == -1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to access system file %s to get memory usage data",file);
   *mem = (PetscLogDouble)prusage.pr_byrssize;
   close(fd);
 
@@ -87,11 +86,11 @@ PetscErrorCode  PetscMemoryGetCurrentUsage(PetscLogDouble *mem)
 
 #elif defined(PETSC_USE_PROC_FOR_SIZE) && defined(PETSC_HAVE_GETPAGESIZE)
   sprintf(proc,"/proc/%d/statm",(int)getpid());
-  if (!(file = fopen(proc,"r"))) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to access system file %s to get memory usage data",proc);
-  if (fscanf(file,"%d %d",&mm,&rss) != 2) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SYS,"Failed to read two integers (mm and rss) from %s",proc);
+  PetscCheckFalse(!(file = fopen(proc,"r")),PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to access system file %s to get memory usage data",proc);
+  PetscCheckFalse(fscanf(file,"%d %d",&mm,&rss) != 2,PETSC_COMM_SELF,PETSC_ERR_SYS,"Failed to read two integers (mm and rss) from %s",proc);
   *mem = ((PetscLogDouble)rss) * ((PetscLogDouble)getpagesize());
   err  = fclose(file);
-  if (err) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
+  PetscCheckFalse(err,PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
 
 #elif defined(PETSC_HAVE_GETRUSAGE)
   getrusage(RUSAGE_SELF,&temp);
@@ -140,12 +139,11 @@ PetscLogDouble PetscMemoryMaximumUsage        = 0;
 .seealso: PetscMallocGetMaximumUsage(), PetscMemoryGetCurrentUsage(), PetscMallocGetCurrentUsage(),
           PetscMemorySetGetMaximumUsage()
 
-
 @*/
 PetscErrorCode  PetscMemoryGetMaximumUsage(PetscLogDouble *mem)
 {
   PetscFunctionBegin;
-  if (!PetscMemoryCollectMaximumUsage) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"To use this function you must first call PetscMemorySetGetMaximumUsage()");
+  PetscCheckFalse(!PetscMemoryCollectMaximumUsage,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"To use this function you must first call PetscMemorySetGetMaximumUsage()");
   *mem = PetscMemoryMaximumUsage;
   PetscFunctionReturn(0);
 }
@@ -164,7 +162,6 @@ PetscErrorCode  PetscMemoryGetMaximumUsage(PetscLogDouble *mem)
 
 .seealso: PetscMallocGetMaximumUsage(), PetscMemoryGetCurrentUsage(), PetscMallocGetCurrentUsage(),
           PetscMemoryGetMaximumUsage()
-
 
 @*/
 PetscErrorCode  PetscMemorySetGetMaximumUsage(void)

@@ -4,7 +4,7 @@ This example is based on the 9-bus (node) example given in the book Power\n\
 Systems Dynamics and Stability (Chapter 7) by P. Sauer and M. A. Pai.\n\
 The power grid in this example consists of 9 buses (nodes), 3 generators,\n\
 3 loads, and 9 transmission lines. The network equations are written\n\
-in current balance form using rectangular coordiantes.\n\n";
+in current balance form using rectangular coordinates.\n\n";
 
 /*
    The equations for the stability analysis are described by the DAE
@@ -646,7 +646,6 @@ PetscErrorCode PostEvaluate(TS ts)
   PetscFunctionReturn(0);
 }
 
-
 PetscErrorCode PreallocateJacobian(Mat J, Userctx *user)
 {
   PetscErrorCode ierr;
@@ -721,7 +720,6 @@ PetscErrorCode ResidualJacobian(Vec X,Mat J,Mat B,void *ctx)
   const PetscScalar *v0;
   PetscScalar       dPD_dVr,dPD_dVi,dQD_dVr,dQD_dVi;
   PetscScalar       dIDr_dVr,dIDr_dVi,dIDi_dVr,dIDi_dVi;
-
 
   PetscFunctionBegin;
   ierr  = MatZeroEntries(B);CHKERRQ(ierr);
@@ -909,7 +907,6 @@ PetscErrorCode ResidualJacobian(Vec X,Mat J,Mat B,void *ctx)
     dIDi_dVr = (-dQD_dVr*Vr + dPD_dVr*Vi - QD)/Vm2 - ((-QD*Vr + PD*Vi)*2*Vr)/Vm4;
     dIDi_dVi = (-dQD_dVi*Vr + dPD_dVi*Vi + PD)/Vm2 - ((-QD*Vr + PD*Vi)*2*Vi)/Vm4;
 
-
     /*    fnet[2*lbus[i]]   += IDi; */
     row[0] = net_start + 2*lbus[i];
     col[0] = net_start + 2*lbus[i];  col[1] = net_start + 2*lbus[i]+1;
@@ -1025,10 +1022,9 @@ int main(int argc,char **argv)
   PetscScalar       *vatoli;
   PetscInt          k;
 
-
   ierr = PetscInitialize(&argc,&argv,"petscoptions",help);if (ierr) return ierr;
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
-  if (size > 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Only for sequential runs");
+  PetscCheckFalse(size > 1,PETSC_COMM_WORLD,PETSC_ERR_SUP,"Only for sequential runs");
 
   user.neqs_gen   = 9*ngen; /* # eqs. for generator subsystem */
   user.neqs_net   = 2*nbus; /* # eqs. for network subsystem   */
@@ -1176,7 +1172,6 @@ int main(int argc,char **argv)
     ierr = TSSetPostEvaluate(ts,PostEvaluate);CHKERRQ(ierr);
   }
 
-
   if (user.setisdiff) {
     /* Create vector of absolute tolerances and set the algebraic part to infinity */
     ierr = VecDuplicate(X,&vatol);CHKERRQ(ierr);
@@ -1244,7 +1239,7 @@ int main(int argc,char **argv)
 /*TEST
 
    build:
-      requires: double !complex !define(PETSC_USE_64BIT_INDICES)
+      requires: double !complex !defined(PETSC_USE_64BIT_INDICES)
 
    test:
       suffix: implicit

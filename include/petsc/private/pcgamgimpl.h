@@ -46,9 +46,7 @@ typedef struct gamg_TAG {
 
   void      *subctx;
 
-  char       esteig_type[32];
-  PetscInt   esteig_max_it;
-  PetscInt   use_sa_esteig;
+  PetscBool  use_sa_esteig;
   PetscReal  emin,emax;
 } PC_GAMG;
 
@@ -83,18 +81,17 @@ typedef struct _PCGAMGHashTable {
   PetscInt size;
 } PCGAMGHashTable;
 
-
 PETSC_INTERN PetscErrorCode PCGAMGHashTableCreate(PetscInt, PCGAMGHashTable*);
 PETSC_INTERN PetscErrorCode PCGAMGHashTableDestroy(PCGAMGHashTable*);
 PETSC_INTERN PetscErrorCode PCGAMGHashTableAdd(PCGAMGHashTable*,PetscInt,PetscInt);
 
 #define GAMG_HASH(key) (PetscInt)((((PetscInt64)7)*(PetscInt64)key)%(PetscInt64)a_tab->size)
-PETSC_STATIC_INLINE PetscErrorCode PCGAMGHashTableFind(PCGAMGHashTable *a_tab, PetscInt a_key, PetscInt *a_data)
+static inline PetscErrorCode PCGAMGHashTableFind(PCGAMGHashTable *a_tab, PetscInt a_key, PetscInt *a_data)
 {
   PetscInt kk,idx;
 
   PetscFunctionBegin;
-  if (a_key<0) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_USER,"Negative key %D.",a_key);
+  PetscCheck(a_key>=0,PETSC_COMM_SELF,PETSC_ERR_USER,"Negative key %" PetscInt_FMT,a_key);
   for (kk = 0, idx = GAMG_HASH(a_key); kk < a_tab->size; kk++, idx = (idx==(a_tab->size-1)) ? 0 : idx + 1) {
     if (a_tab->table[idx] == a_key) {
       *a_data = a_tab->data[idx];
@@ -105,7 +102,7 @@ PETSC_STATIC_INLINE PetscErrorCode PCGAMGHashTableFind(PCGAMGHashTable *a_tab, P
       break;
     }
   }
-  if (kk==a_tab->size) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_USER,"key %D not found in table",a_key);
+  PetscCheck(kk!=a_tab->size,PETSC_COMM_SELF,PETSC_ERR_USER,"key %" PetscInt_FMT " not found in table",a_key);
   PetscFunctionReturn(0);
 }
 

@@ -21,6 +21,10 @@ static const char citation[] =
   "   primaryClass={cs.CV}\n"
   "}  \n";
 
+const char *const TaoADMMRegularizerTypes[] = {"REGULARIZER_USER","REGULARIZER_SOFT_THRESH","TaoADMMRegularizerType","TAO_ADMM_",NULL};
+const char *const TaoADMMUpdateTypes[]      = {"UPDATE_BASIC","UPDATE_ADAPTIVE","UPDATE_ADAPTIVE_RELAXED","TaoADMMUpdateType","TAO_ADMM_",NULL};
+const char *const TaoALMMTypes[]            = {"CLASSIC","PHR","TaoALMMType","TAO_ALMM_",NULL};
+
 static PetscErrorCode TaoADMMToleranceUpdate(Tao tao)
 {
   TAO_ADMM       *am = (TAO_ADMM*)tao->data;
@@ -361,8 +365,8 @@ static PetscErrorCode TaoSolve_ADMM(Tao tao)
 
   PetscFunctionBegin;
   if (am->regswitch != TAO_ADMM_REGULARIZER_SOFT_THRESH) {
-    if (!am->subsolverX->ops->computejacobianequality) SETERRQ(PetscObjectComm((PetscObject)tao),PETSC_ERR_ARG_WRONGSTATE,"Must call TaoADMMSetMisfitConstraintJacobian() first");
-    if (!am->subsolverZ->ops->computejacobianequality) SETERRQ(PetscObjectComm((PetscObject)tao),PETSC_ERR_ARG_WRONGSTATE,"Must call TaoADMMSetRegularizerConstraintJacobian() first");
+    PetscCheck(am->subsolverX->ops->computejacobianequality,PetscObjectComm((PetscObject)tao),PETSC_ERR_ARG_WRONGSTATE,"Must call TaoADMMSetMisfitConstraintJacobian() first");
+    PetscCheck(am->subsolverZ->ops->computejacobianequality,PetscObjectComm((PetscObject)tao),PETSC_ERR_ARG_WRONGSTATE,"Must call TaoADMMSetRegularizerConstraintJacobian() first");
     if (am->constraint != NULL) {
       ierr = VecNorm(am->constraint,NORM_2,&am->const_norm);CHKERRQ(ierr);
     }
@@ -371,7 +375,7 @@ static PetscErrorCode TaoSolve_ADMM(Tao tao)
   ierr  = VecGetSize(tempL,&N);CHKERRQ(ierr);
 
   if (am->Hx && am->ops->misfithess) {
-    ierr = TaoSetHessianRoutine(am->subsolverX, am->Hx, am->Hx, SubHessianUpdate, tao);CHKERRQ(ierr);
+    ierr = TaoSetHessian(am->subsolverX, am->Hx, am->Hx, SubHessianUpdate, tao);CHKERRQ(ierr);
   }
 
   if (!am->zJI) {
@@ -390,17 +394,17 @@ static PetscErrorCode TaoSolve_ADMM(Tao tao)
   if (!is_reg_shell) {
     switch (am->regswitch) {
     case (TAO_ADMM_REGULARIZER_USER):
-      if (!am->ops->regobjgrad) SETERRQ(PetscObjectComm((PetscObject)tao),PETSC_ERR_ARG_WRONGSTATE,"Must call TaoADMMSetRegularizerObjectiveAndGradientRoutine() first if one wishes to use TAO_ADMM_REGULARIZER_USER with non-TAOSHELL type");
+      PetscCheck(am->ops->regobjgrad,PetscObjectComm((PetscObject)tao),PETSC_ERR_ARG_WRONGSTATE,"Must call TaoADMMSetRegularizerObjectiveAndGradientRoutine() first if one wishes to use TAO_ADMM_REGULARIZER_USER with non-TAOSHELL type");
       break;
     case (TAO_ADMM_REGULARIZER_SOFT_THRESH):
       /* Soft Threshold. */
       break;
     }
     if (am->ops->regobjgrad) {
-      ierr = TaoSetObjectiveAndGradientRoutine(am->subsolverZ, RegObjGradUpdate, tao);CHKERRQ(ierr);
+      ierr = TaoSetObjectiveAndGradient(am->subsolverZ, NULL, RegObjGradUpdate, tao);CHKERRQ(ierr);
     }
     if (am->Hz && am->ops->reghess) {
-      ierr = TaoSetHessianRoutine(am->subsolverZ, am->Hz, am->Hzpre, RegHessianUpdate, tao);CHKERRQ(ierr);
+      ierr = TaoSetHessian(am->subsolverZ, am->Hz, am->Hzpre, RegHessianUpdate, tao);CHKERRQ(ierr);
     }
   }
 
@@ -603,12 +607,12 @@ static PetscErrorCode TaoSetUp_ADMM(Tao tao)
   if (!tao->gradient) {
     ierr = VecDuplicate(tao->solution,&tao->gradient);CHKERRQ(ierr);
   }
-  ierr = TaoSetInitialVector(am->subsolverX, tao->solution);CHKERRQ(ierr);
+  ierr = TaoSetSolution(am->subsolverX, tao->solution);CHKERRQ(ierr);
   if (!am->z) {
     ierr = VecDuplicate(tao->solution,&am->z);CHKERRQ(ierr);
     ierr = VecSet(am->z,0.0);CHKERRQ(ierr);
   }
-  ierr = TaoSetInitialVector(am->subsolverZ, am->z);CHKERRQ(ierr);
+  ierr = TaoSetSolution(am->subsolverZ, am->z);CHKERRQ(ierr);
   if (!am->workLeft) {
     ierr = VecDuplicate(tao->solution,&am->workLeft);CHKERRQ(ierr);
   }
@@ -658,7 +662,7 @@ static PetscErrorCode TaoSetUp_ADMM(Tao tao)
     am->constraint = NULL;
   } else {
     ierr = VecGetSize(am->constraint,&M);CHKERRQ(ierr);
-    if (M != N) SETERRQ(PetscObjectComm((PetscObject)tao),PETSC_ERR_ARG_WRONGSTATE,"Solution vector and constraint vector must be of same size!");CHKERRQ(ierr);
+    PetscCheck(M == N,PetscObjectComm((PetscObject)tao),PETSC_ERR_ARG_WRONGSTATE,"Solution vector and constraint vector must be of same size!");
   }
 
   /* Save changed tao tolerance for adaptive tolerance */
@@ -670,7 +674,7 @@ static PetscErrorCode TaoSetUp_ADMM(Tao tao)
   }
 
   /*Update spectral and dual elements to X subsolver */
-  ierr = TaoSetObjectiveAndGradientRoutine(am->subsolverX, SubObjGradUpdate, tao);CHKERRQ(ierr);
+  ierr = TaoSetObjectiveAndGradient(am->subsolverX, NULL, SubObjGradUpdate, tao);CHKERRQ(ierr);
   ierr = TaoSetJacobianEqualityRoutine(am->subsolverX,am->JA,am->JApre, am->ops->misfitjac, am->misfitjacobianP);CHKERRQ(ierr);
   ierr = TaoSetJacobianEqualityRoutine(am->subsolverZ,am->JB,am->JBpre, am->ops->regjac, am->regjacobianP);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -727,19 +731,19 @@ static PetscErrorCode TaoDestroy_ADMM(Tao tao)
 
   TAOADMM - Alternating direction method of multipliers method fo solving linear problems with
             constraints. in a min_x f(x) + g(z)  s.t. Ax+Bz=c.
-            This algorithm employs two sub Tao solvers, of which type can be specificed
+            This algorithm employs two sub Tao solvers, of which type can be specified
             by the user. User need to provide ObjectiveAndGradient routine, and/or HessianRoutine for both subsolvers.
             Hessians can be given boolean flag determining whether they change with respect to a input vector. This can be set via
             TaoADMMSet{Misfit,Regularizer}HessianChangeStatus.
             Second subsolver does support TAOSHELL. It should be noted that L1-norm is used for objective value for TAOSHELL type.
             There is option to set regularizer option, and currently soft-threshold is implemented. For spectral penalty update,
-            currently there are baisc option and adaptive option.
+            currently there are basic option and adaptive option.
             Constraint is set at Ax+Bz=c, and A and B can be set with TaoADMMSet{Misfit,Regularizer}ConstraintJacobian.
             c can be set with TaoADMMSetConstraintVectorRHS.
             The user can also provide regularizer weight for second subsolver.
 
   References:
-.    1. - Xu, Zheng and Figueiredo, Mario A. T. and Yuan, Xiaoming and Studer, Christoph and Goldstein, Tom
+. * - Xu, Zheng and Figueiredo, Mario A. T. and Yuan, Xiaoming and Studer, Christoph and Goldstein, Tom
           "Adaptive Relaxed ADMM: Convergence Theory and Practical Implementation"
           The IEEE Conference on Computer Vision and Pattern Recognition (CVPR), July, 2017.
 
@@ -850,7 +854,6 @@ PetscErrorCode TaoADMMSetMisfitHessianChangeStatus(Tao tao, PetscBool b)
 
 /*@
   TaoADMMSetRegHessianChangeStatus - Set boolean that determines whether Hessian matrix of regularization subsolver changes with respect to input vector.
-
 
   Collective on Tao
 
@@ -1347,12 +1350,12 @@ PetscErrorCode TaoADMMGetDualVector(Tao tao, Vec *Y)
 
   Not Collective
 
-  Input Parameter:
+  Input Parameters:
 + tao  - the Tao context
 - type - regularizer type
 
   Options Database:
-.  -tao_admm_regularizer_type <admm_regularizer_user,admm_regularizer_soft_thresh>
+.  -tao_admm_regularizer_type <admm_regularizer_user,admm_regularizer_soft_thresh> - select the regularizer
 
   Level: intermediate
 
@@ -1380,9 +1383,6 @@ PetscErrorCode TaoADMMSetRegularizerType(Tao tao, TaoADMMRegularizerType type)
    Output Parameter:
 .  type - the type of regularizer
 
-  Options Database:
-.  -tao_admm_regularizer_type <admm_regularizer_user,admm_regularizer_soft_thresh>
-
    Level: intermediate
 
 .seealso: TaoADMMSetRegularizerType(), TaoADMMRegularizerType, TAOADMM
@@ -1402,7 +1402,7 @@ PetscErrorCode TaoADMMGetRegularizerType(Tao tao, TaoADMMRegularizerType *type)
 
   Not Collective
 
-  Input Parameter:
+  Input Parameters:
 + tao  - the Tao context
 - type - spectral parameter update type
 

@@ -28,7 +28,6 @@
     Fortran Note:
     This routine is not supported in Fortran.
 
-
 .seealso: PetscFClose(), PetscSynchronizedFGets(), PetscSynchronizedPrintf(), PetscSynchronizedFlush(),
           PetscFPrintf()
 @*/
@@ -41,7 +40,7 @@ PetscErrorCode  PetscFOpen(MPI_Comm comm,const char name[],const char mode[],FIL
 
   PetscFunctionBegin;
   ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
-  if (!rank) {
+  if (rank == 0) {
     PetscBool isstdout,isstderr;
     ierr = PetscStrcmp(name,"stdout",&isstdout);CHKERRQ(ierr);
     ierr = PetscStrcmp(name,"stderr",&isstderr);CHKERRQ(ierr);
@@ -55,9 +54,9 @@ PetscErrorCode  PetscFOpen(MPI_Comm comm,const char name[],const char mode[],FIL
       if (devnull) {
         ierr = PetscStrcpy(fname,"/dev/null");CHKERRQ(ierr);
       }
-      ierr = PetscInfo1(0,"Opening file %s\n",fname);CHKERRQ(ierr);
+      ierr = PetscInfo(0,"Opening file %s\n",fname);CHKERRQ(ierr);
       fd   = fopen(fname,mode);
-      if (!fd) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to open file %s\n",fname);
+      PetscCheckFalse(!fd,PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to open file %s",fname);
     }
   } else fd = NULL;
   *fp = fd;
@@ -79,7 +78,6 @@ PetscErrorCode  PetscFOpen(MPI_Comm comm,const char name[],const char mode[],FIL
     Fortran Note:
     This routine is not supported in Fortran.
 
-
 .seealso: PetscFOpen()
 @*/
 PetscErrorCode  PetscFClose(MPI_Comm comm,FILE *fd)
@@ -90,9 +88,9 @@ PetscErrorCode  PetscFClose(MPI_Comm comm,FILE *fd)
 
   PetscFunctionBegin;
   ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
-  if (!rank && fd != PETSC_STDOUT && fd != PETSC_STDERR) {
+  if (rank == 0 && fd != PETSC_STDOUT && fd != PETSC_STDERR) {
     err = fclose(fd);
-    if (err) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
+    PetscCheckFalse(err,PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
   }
   PetscFunctionReturn(0);
 }
@@ -124,14 +122,13 @@ PetscErrorCode PetscPClose(MPI_Comm comm,FILE *fd)
 
   PetscFunctionBegin;
   ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
-  if (!rank) {
+  if (rank == 0) {
     char buf[1024];
     while (fgets(buf,1024,fd)) ; /* wait till it prints everything */
     (void) pclose(fd);
   }
   PetscFunctionReturn(0);
 }
-
 
 /*@C
       PetscPOpen - Runs a program on processor zero and sends either its input or output to
@@ -158,7 +155,7 @@ PetscErrorCode PetscPClose(MPI_Comm comm,FILE *fd)
        will use the machine running node zero of the communicator
 
        The program string may contain ${DISPLAY}, ${HOMEDIRECTORY} or ${WORKINGDIRECTORY}; these
-    will be replaced with relevent values.
+    will be replaced with relevant values.
 
 .seealso: PetscFOpen(), PetscFClose(), PetscPClose(), PetscPOpenSetMachine()
 
@@ -200,9 +197,9 @@ PetscErrorCode  PetscPOpen(MPI_Comm comm,const char machine[],const char program
   ierr = PetscStrreplace(comm,command,commandt,1024);CHKERRQ(ierr);
 
   ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
-  if (!rank) {
-    ierr = PetscInfo1(NULL,"Running command :%s\n",commandt);CHKERRQ(ierr);
-    if (!(fd = popen(commandt,mode))) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"Cannot run command %s",commandt);
+  if (rank == 0) {
+    ierr = PetscInfo(NULL,"Running command :%s\n",commandt);CHKERRQ(ierr);
+    PetscCheckFalse(!(fd = popen(commandt,mode)),PETSC_COMM_SELF,PETSC_ERR_LIB,"Cannot run command %s",commandt);
     if (fp) *fp = fd;
   }
   PetscFunctionReturn(0);
@@ -214,15 +211,14 @@ PetscErrorCode  PetscPOpen(MPI_Comm comm,const char machine[],const char program
      Logically Collective, but only process 0 runs the command
 
    Input Parameter:
-.   machine - machine to run command on or NULL to remove previous entry
+.   machine - machine to run command on or NULL for the current machine
 
    Options Database:
-.   -popen_machine <machine>
+.   -popen_machine <machine> - run the process on this machine
 
    Level: intermediate
 
 .seealso: PetscFOpen(), PetscFClose(), PetscPClose(), PetscPOpen()
-
 @*/
 PetscErrorCode  PetscPOpenSetMachine(const char machine[])
 {

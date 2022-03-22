@@ -26,7 +26,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   ierr = PetscOptionsBool("-simplex", "Simplex or hex cells", "ex1.c", options->simplex, &options->simplex, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-its", "The number of replications for timing", "ex1.c", options->its, &options->its, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-cbs", "The number of cells in an integration block", "ex1.c", options->cbs, &options->cbs, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -242,7 +242,7 @@ static PetscErrorCode TestIntegration(DM dm, PetscInt cbs, PetscInt its)
       /* TODO Replace with DMPlexGetCellFields() */
       for (k = 0; k < chunkSize*totDim; ++k) u[k] = 1.0;
       for (f = 0; f < Nf; ++f) {
-        PetscHashFormKey key;
+        PetscFormKey key;
         PetscFEGeom     *geom = affineGeom ? affineGeom : geoms[f];
         /* PetscQuadrature quad = affineQuad ? affineQuad : quads[f]; */
 
@@ -325,10 +325,11 @@ int main(int argc, char **argv)
 
   ierr = PetscInitialize(&argc, &argv, NULL, help); if (ierr) return ierr;
   ierr = MPI_Comm_size(PETSC_COMM_WORLD, &size);CHKERRMPI(ierr);
-  if (size > 1) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_SUP, "This is a uniprocessor example only.");
+  PetscCheckFalse(size > 1,PETSC_COMM_WORLD, PETSC_ERR_SUP, "This is a uniprocessor example only.");
   ierr = ProcessOptions(PETSC_COMM_WORLD, &ctx);CHKERRQ(ierr);
   ierr = PetscLogDefaultBegin();CHKERRQ(ierr);
-  ierr = DMPlexCreateBoxMesh(PETSC_COMM_WORLD, ctx.dim, ctx.simplex, NULL, NULL, NULL, NULL, PETSC_TRUE, &dm);CHKERRQ(ierr);
+  ierr = DMCreate(PETSC_COMM_WORLD, &dm);CHKERRQ(ierr);
+  ierr = DMSetType(dm, DMPLEX);CHKERRQ(ierr);
   ierr = DMSetFromOptions(dm);CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject) dm, "Mesh");CHKERRQ(ierr);
   ierr = PetscObjectViewFromOptions((PetscObject) dm, NULL, "-dm_view");CHKERRQ(ierr);

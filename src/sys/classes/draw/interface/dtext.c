@@ -16,7 +16,6 @@
 
    Level: beginner
 
-
 .seealso: PetscDrawStringVertical(), PetscDrawStringCentered(), PetscDrawStringBoxed(), PetscDrawStringSetSize(),
           PetscDrawStringGetSize(), PetscDrawLine(), PetscDrawRectangle(), PetscDrawTriangle(), PetscDrawEllipse(),
           PetscDrawMarker(), PetscDrawPoint()
@@ -29,7 +28,7 @@ PetscErrorCode  PetscDrawString(PetscDraw draw,PetscReal xl,PetscReal yl,int cl,
   PetscFunctionBegin;
   PetscValidHeaderSpecific(draw,PETSC_DRAW_CLASSID,1);
   PetscValidCharPointer(text,5);
-  if (!draw->ops->string) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"This draw type %s does not support drawing strings",((PetscObject)draw)->type_name);
+  PetscCheckFalse(!draw->ops->string,PETSC_COMM_SELF,PETSC_ERR_SUP,"This draw type %s does not support drawing strings",((PetscObject)draw)->type_name);
   ierr = (*draw->ops->string)(draw,xl,yl,cl,text);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -87,7 +86,6 @@ PetscErrorCode  PetscDrawStringVertical(PetscDraw draw,PetscReal xl,PetscReal yl
 
    Level: beginner
 
-
 .seealso: PetscDrawStringVertical(), PetscDrawString(), PetscDrawStringBoxed(), PetscDrawStringSetSize(),
           PetscDrawStringGetSize()
 
@@ -127,7 +125,6 @@ PetscErrorCode  PetscDrawStringCentered(PetscDraw draw,PetscReal xc,PetscReal yl
 
    Level: beginner
 
-
 .seealso: PetscDrawStringVertical(), PetscDrawString(), PetscDrawStringCentered(), PetscDrawStringSetSize(),
           PetscDrawStringGetSize()
 
@@ -142,7 +139,7 @@ PetscErrorCode  PetscDrawStringBoxed(PetscDraw draw,PetscReal sxl,PetscReal syl,
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(draw,PETSC_DRAW_CLASSID,1);
-  PetscValidCharPointer(text,5);
+  PetscValidCharPointer(text,6);
 
   if (draw->ops->boxedstring) {
     ierr = (*draw->ops->boxedstring)(draw,sxl,syl,sc,bc,text,w,h);CHKERRQ(ierr);
@@ -237,7 +234,7 @@ PetscErrorCode  PetscDrawStringGetSize(PetscDraw draw,PetscReal *width,PetscReal
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(draw,PETSC_DRAW_CLASSID,1);
-  if (!draw->ops->stringgetsize) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"This draw type %s does not support getting string size",((PetscObject)draw)->type_name);
+  PetscCheckFalse(!draw->ops->stringgetsize,PETSC_COMM_SELF,PETSC_ERR_SUP,"This draw type %s does not support getting string size",((PetscObject)draw)->type_name);
   ierr = (*draw->ops->stringgetsize)(draw,width,height);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

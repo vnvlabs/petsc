@@ -7,8 +7,6 @@ static char help[] = "Introductory example that illustrates printing.\n\n";
    Processors: n
 T*/
 
-
-
 #include <petscsys.h>
 int main(int argc,char **argv)
 {
@@ -16,12 +14,12 @@ int main(int argc,char **argv)
   PetscMPIInt    rank,size;
 
   /*
-    Every PETSc routine should begin with the PetscInitialize() routine.
+    Every PETSc program should begin with the PetscInitialize() routine.
     argc, argv - These command line arguments are taken to extract the options
                  supplied to PETSc and options supplied to MPI.
     help       - When PETSc executable is invoked with the option -help,
                  it prints the various options that can be applied at
-                 runtime.  The user can use the "help" variable place
+                 runtime.  The user can use the "help" variable to place
                  additional help messages in this printout.
   */
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);if (ierr) return ierr;
@@ -65,7 +63,6 @@ int main(int argc,char **argv)
   ierr = PetscFinalize();
   return ierr;
 }
-
 
 /*TEST
 

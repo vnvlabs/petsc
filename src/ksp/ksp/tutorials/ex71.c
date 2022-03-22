@@ -124,7 +124,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   ierr = PetscOptionsBool("-use_composite_pc","Multiplicative composite with BDDC + Richardson/Jacobi",__FILE__,options->use_composite_pc,&options->use_composite_pc,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-random_initial_guess","Solve A x = 0 with random initial guess, instead of A x = b with random b",__FILE__,options->random_initial_guess,&options->random_initial_guess,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-random_real","Use real-valued b (or x, if -random_initial_guess) instead of default scalar type",__FILE__,options->random_real,&options->random_real,NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   for (n=options->dim;n<3;n++) options->cells[n] = 0;
   if (options->per[0]) options->dirbc = PETSC_FALSE;
@@ -143,7 +143,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
     case 3:
       options->elemMat = elast_3D_emat;
       break;
-    default: SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported dimension %D",options->dim);
+    default: SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported dimension %D",options->dim);
     }
     break;
   case PDE_POISSON:
@@ -158,10 +158,10 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
     case 3:
       options->elemMat = poiss_3D_emat;
       break;
-    default: SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported dimension %D",options->dim);
+    default: SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported dimension %D",options->dim);
     }
     break;
-  default: SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported PDE %D",options->pde);
+  default: SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported PDE %D",options->pde);
   }
   PetscFunctionReturn(0);
 }
@@ -211,7 +211,7 @@ int main(int argc,char **args)
     ierr = DMDACreate1d(PETSC_COMM_WORLD,user.per[0] ? DM_BOUNDARY_PERIODIC : DM_BOUNDARY_NONE,
                         nodes[0],user.dof,1,PETSC_NULL,&da);CHKERRQ(ierr);
     break;
-  default: SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported dimension %D",user.dim);
+  default: SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported dimension %D",user.dim);
   }
 
   ierr = PetscLogStageRegister("KSPSetUp",&stages[0]);CHKERRQ(ierr);
@@ -232,7 +232,7 @@ int main(int argc,char **args)
     case 1:
       user.cells[0] = M - !user.per[0];
       break;
-    default: SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported dimension %D",user.dim);
+    default: SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Unsupported dimension %D",user.dim);
     }
   }
   ierr = DMDASetUniformCoordinates(da,0.0,1.0*user.cells[0],0.0,1.0*user.cells[1],0.0,1.0*user.cells[2]);CHKERRQ(ierr);
@@ -258,7 +258,7 @@ int main(int argc,char **args)
     PetscInt ord[8] = {0,1,3,2,4,5,7,6};
     PetscInt j,idxs[8];
 
-    if (nen > 8) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Not coded");
+    PetscCheckFalse(nen > 8,PETSC_COMM_WORLD,PETSC_ERR_SUP,"Not coded");
     if (!e_glo) {
       for (j=0;j<nen;j++) idxs[j] = e_loc[i*nen+ord[j]];
       ierr = MatSetValuesBlockedLocal(A,nen,idxs,nen,idxs,user.elemMat,ADD_VALUES);CHKERRQ(ierr);
@@ -479,7 +479,7 @@ int main(int argc,char **args)
    args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_levels 1 -pc_bddc_coarsening_ratio 1 -ksp_error_if_not_converged -pc_bddc_monolithic -pc_bddc_use_faces -pc_bddc_coarse_pc_bddc_corner_selection
  testset:
    nsize: 8
-   requires: hpddm slepc define(PETSC_HAVE_DYNAMIC_LIBRARIES) define(PETSC_USE_SHARED_LIBRARIES)
+   requires: hpddm slepc defined(PETSC_HAVE_DYNAMIC_LIBRARIES) defined(PETSC_USE_SHARED_LIBRARIES)
    # on some architectures, this test will converge in 19 or 21 iterations
    filter: grep -v "variant HERMITIAN" | grep -v " tolerance"  | sed -e "s/CONVERGED_RTOL iterations [1-2][91]\{0,1\}$/CONVERGED_RTOL iterations 20/g"
    args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_levels 1 -pc_bddc_coarsening_ratio 1 -ksp_error_if_not_converged -pc_bddc_monolithic -pc_bddc_use_faces -pc_bddc_coarse_pc_type hpddm -prefix_push pc_bddc_coarse_ -pc_hpddm_levels_1_sub_pc_type cholesky -pc_hpddm_levels_1_eps_nev 6 -pc_hpddm_levels_1_st_pc_factor_shift_type INBLOCKS -prefix_pop -ksp_type fgmres -ksp_max_it 50 -ksp_converged_reason
@@ -504,17 +504,17 @@ int main(int argc,char **args)
    nsize: 8
    filter: grep -v "variant HERMITIAN" | sed -e "s/iterations 1[0-9]/iterations 10/g"
    suffix: bddc_elast_dir_approx
-   args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -pc_bddc_dirichlet_pc_type gamg -ksp_converged_reason -pc_bddc_dirichlet_approximate
+   args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -pc_bddc_dirichlet_pc_type gamg -pc_bddc_dirichlet_pc_gamg_esteig_ksp_max_it 10 -ksp_converged_reason -pc_bddc_dirichlet_approximate
  test:
    nsize: 8
    filter: grep -v "variant HERMITIAN" | sed -e "s/iterations 1[0-9]/iterations 10/g"
    suffix: bddc_elast_neu_approx
-   args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -pc_bddc_neumann_pc_type gamg -ksp_converged_reason -pc_bddc_neumann_approximate
+   args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -pc_bddc_neumann_pc_type gamg -pc_bddc_neumann_pc_gamg_esteig_ksp_max_it 10 -ksp_converged_reason -pc_bddc_neumann_approximate
  test:
    nsize: 8
    filter: grep -v "variant HERMITIAN" | sed -e "s/iterations 1[0-9]/iterations 10/g"
    suffix: bddc_elast_both_approx
-   args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -pc_bddc_dirichlet_pc_type gamg -pc_bddc_neumann_pc_type gamg -ksp_converged_reason -pc_bddc_neumann_approximate -pc_bddc_dirichlet_approximate
+   args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -pc_bddc_dirichlet_pc_type gamg -pc_bddc_dirichlet_pc_gamg_esteig_ksp_max_it 10 -pc_bddc_neumann_pc_type gamg -pc_bddc_neumann_pc_gamg_esteig_ksp_max_it 10 -ksp_converged_reason -pc_bddc_neumann_approximate -pc_bddc_dirichlet_approximate
  test:
    nsize: 8
    filter: grep -v "variant HERMITIAN"
@@ -532,7 +532,7 @@ int main(int argc,char **args)
    args: -pde_type Elasticity -cells 9,7,8 -dim 3 -ksp_view -ksp_type fetidp -fetidp_ksp_type cg -fetidp_bddc_pc_bddc_coarse_redundant_pc_type svd -ksp_fetidp_fullyredundant -ksp_error_if_not_converged -fetidp_bddc_pc_bddc_monolithic
  testset:
    nsize: 8
-   requires: hpddm slepc define(PETSC_HAVE_DYNAMIC_LIBRARIES) define(PETSC_USE_SHARED_LIBRARIES)
+   requires: hpddm slepc defined(PETSC_HAVE_DYNAMIC_LIBRARIES) defined(PETSC_USE_SHARED_LIBRARIES)
    args: -pde_type Elasticity -cells 12,12 -dim 2 -ksp_converged_reason -pc_type hpddm -pc_hpddm_coarse_correction balanced -pc_hpddm_levels_1_pc_type asm -pc_hpddm_levels_1_pc_asm_overlap 1 -pc_hpddm_levels_1_pc_asm_type basic -pc_hpddm_levels_1_sub_pc_type cholesky -pc_hpddm_levels_1_eps_nev 10 -matis_localmat_type {{aij baij sbaij}shared output} -pc_hpddm_coarse_mat_type {{baij sbaij}shared output} -pc_hpddm_levels_1_st_pc_factor_shift_type INBLOCKS
    test:
      suffix: hpddm
@@ -617,18 +617,18 @@ int main(int argc,char **args)
    nsize: 8
    filter: grep -v "variant HERMITIAN"
    suffix: bddc_elast_deluxe_layers_adapt_cuda
-   requires: !complex mumps cuda define(PETSC_HAVE_CUSOLVERDNDPOTRI)
+   requires: !complex mumps cuda defined(PETSC_HAVE_CUSOLVERDNDPOTRI)
    args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_converged_reason -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -sub_schurs_mat_solver_type mumps -pc_bddc_use_deluxe_scaling -pc_bddc_adaptive_threshold 2.0 -pc_bddc_schur_layers {{1 10}separate_output} -pc_bddc_adaptive_userdefined {{0 1}separate output} -matis_localmat_type seqaijcusparse -sub_schurs_schur_mat_type {{seqdensecuda seqdense}}
  test:
    nsize: 8
    filter: grep -v "variant HERMITIAN" | grep -v "I-node routines" | sed -e "s/seqaijcusparse/seqaij/g"
    suffix: bddc_elast_deluxe_layers_adapt_cuda_approx
-   requires: !complex mumps cuda define(PETSC_HAVE_CUSOLVERDNDPOTRI)
-   args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -sub_schurs_mat_solver_type mumps -pc_bddc_use_deluxe_scaling -pc_bddc_adaptive_threshold 2.0 -pc_bddc_schur_layers 1 -matis_localmat_type {{seqaij seqaijcusparse}separate output} -sub_schurs_schur_mat_type {{seqdensecuda seqdense}} -pc_bddc_dirichlet_pc_type gamg -pc_bddc_dirichlet_approximate -pc_bddc_neumann_pc_type gamg -pc_bddc_neumann_approximate
+   requires: !complex mumps cuda defined(PETSC_HAVE_CUSOLVERDNDPOTRI)
+   args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_view -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -sub_schurs_mat_solver_type mumps -pc_bddc_use_deluxe_scaling -pc_bddc_adaptive_threshold 2.0 -pc_bddc_schur_layers 1 -matis_localmat_type {{seqaij seqaijcusparse}separate output} -sub_schurs_schur_mat_type {{seqdensecuda seqdense}} -pc_bddc_dirichlet_pc_type gamg -pc_bddc_dirichlet_approximate -pc_bddc_neumann_pc_type gamg -pc_bddc_neumann_approximate -pc_bddc_dirichlet_pc_gamg_esteig_ksp_max_it 10 -pc_bddc_neumann_pc_gamg_esteig_ksp_max_it 10
  test:
    nsize: 8
    suffix: bddc_elast_deluxe_layers_adapt_mkl_pardiso_cuda
-   requires: !complex mkl_pardiso cuda define(PETSC_HAVE_CUSOLVERDNDPOTRI)
+   requires: !complex mkl_pardiso cuda defined(PETSC_HAVE_CUSOLVERDNDPOTRI)
    filter: sed -e "s/CONVERGED_RTOL iterations 6/CONVERGED_RTOL iterations 5/g"
    args: -pde_type Elasticity -cells 7,9,8 -dim 3 -ksp_converged_reason -pc_bddc_coarse_redundant_pc_type svd -ksp_error_if_not_converged -pc_bddc_monolithic -sub_schurs_mat_solver_type mkl_pardiso -sub_schurs_mat_mkl_pardiso_65 1 -pc_bddc_use_deluxe_scaling -pc_bddc_adaptive_threshold 2.0 -pc_bddc_schur_layers {{1 10}separate_output} -pc_bddc_adaptive_userdefined {{0 1}separate output} -matis_localmat_type seqaijcusparse -sub_schurs_schur_mat_type {{seqdensecuda seqdense}}
 
@@ -659,6 +659,5 @@ int main(int argc,char **args)
      requires: !single
      args: -sub_0_pc_bddc_interface_ext_type dirichlet
      suffix: composite_bddc_dirichlet
-
 
 TEST*/

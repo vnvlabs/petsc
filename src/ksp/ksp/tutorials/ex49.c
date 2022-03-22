@@ -74,7 +74,6 @@ Options: \n"
 static PetscErrorCode DMDABCApplyCompression(DM,Mat,Vec);
 static PetscErrorCode DMDABCApplySymmetricCompression(DM elas_da,Mat A,Vec f,IS *dofs,Mat *AA,Vec *ff);
 
-
 #define NSD            2 /* number of spatial dimensions */
 #define NODES_PER_EL   4 /* nodes per element */
 #define U_DOFS         2 /* degrees of freedom per displacement node */
@@ -98,7 +97,6 @@ typedef struct {
   PetscScalar ux_dof;
   PetscScalar uy_dof;
 } ElasticityDOF;
-
 
 /*
 
@@ -169,7 +167,6 @@ static void ConstructQ12D_GNx(PetscScalar GNi[][NODES_PER_EL],PetscScalar GNx[][
   iJ01 = -J01/J;
   iJ10 = -J10/J;
   iJ11 =  J00/J;
-
 
   for (i = 0; i < NODES_PER_EL; i++) {
     GNx[0][i] = GNi[0][i]*iJ00+GNi[1][i]*iJ01;
@@ -271,7 +268,7 @@ static PetscErrorCode DMDACoordViewGnuplot2d(DM da,const char prefix[])
   ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
   ierr = PetscSNPrintf(fname,sizeof(fname),"%s-p%1.4d.dat",prefix,rank);CHKERRQ(ierr);
   ierr = PetscFOpen(PETSC_COMM_SELF,fname,"w",&fp);CHKERRQ(ierr);
-  if (!fp) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_USER,"Cannot open file");
+  PetscCheckFalse(!fp,PETSC_COMM_SELF,PETSC_ERR_USER,"Cannot open file");
   ierr = PetscFPrintf(PETSC_COMM_SELF,fp,"### Element geometry for processor %1.4d ### \n",rank);CHKERRQ(ierr);
 
   ierr = DMGetCoordinateDM(da,&cda);CHKERRQ(ierr);
@@ -311,7 +308,7 @@ static PetscErrorCode DMDAViewGnuplot2d(DM da,Vec fields,const char comment[],co
   MPI_Comm_rank(PETSC_COMM_WORLD,&rank);
   ierr = PetscSNPrintf(fname,sizeof(fname),"%s-p%1.4d.dat",prefix,rank);CHKERRQ(ierr);
   ierr = PetscFOpen(PETSC_COMM_SELF,fname,"w",&fp);CHKERRQ(ierr);
-  if (!fp) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_USER,"Cannot open file");
+  PetscCheckFalse(!fp,PETSC_COMM_SELF,PETSC_ERR_USER,"Cannot open file");
 
   ierr = PetscFPrintf(PETSC_COMM_SELF,fp,"### %s (processor %1.4d) ### \n",comment,rank);CHKERRQ(ierr);
   ierr = DMDAGetInfo(da,0,0,0,0,0,0,0,&n_dofs,0,0,0,0,0);CHKERRQ(ierr);
@@ -321,7 +318,6 @@ static PetscErrorCode DMDAViewGnuplot2d(DM da,Vec fields,const char comment[],co
     ierr = PetscFPrintf(PETSC_COMM_SELF,fp,"%s ",field_name);CHKERRQ(ierr);
   }
   ierr = PetscFPrintf(PETSC_COMM_SELF,fp,"###\n");CHKERRQ(ierr);
-
 
   ierr = DMGetCoordinateDM(da,&cda);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(da,&coords);CHKERRQ(ierr);
@@ -375,7 +371,7 @@ static PetscErrorCode DMDAViewCoefficientsGnuplot2d(DM da,Vec fields,const char 
   ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
   ierr = PetscSNPrintf(fname,sizeof(fname),"%s-p%1.4d.dat",prefix,rank);CHKERRQ(ierr);
   ierr = PetscFOpen(PETSC_COMM_SELF,fname,"w",&fp);CHKERRQ(ierr);
-  if (!fp) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_USER,"Cannot open file");
+  PetscCheckFalse(!fp,PETSC_COMM_SELF,PETSC_ERR_USER,"Cannot open file");
 
   ierr = PetscFPrintf(PETSC_COMM_SELF,fp,"### %s (processor %1.4d) ### \n",comment,rank);CHKERRQ(ierr);
   ierr = DMDAGetInfo(da,0,0,0,0,0,0,0,&n_dofs,0,0,0,0,0);CHKERRQ(ierr);
@@ -385,7 +381,6 @@ static PetscErrorCode DMDAViewCoefficientsGnuplot2d(DM da,Vec fields,const char 
     ierr = PetscFPrintf(PETSC_COMM_SELF,fp,"%s ",field_name);CHKERRQ(ierr);
   }
   ierr = PetscFPrintf(PETSC_COMM_SELF,fp,"###\n");CHKERRQ(ierr);
-
 
   ierr = DMGetCoordinateDM(da,&cda);CHKERRQ(ierr);
   ierr = DMDAGetGhostCorners(cda,&si,&sj,0,&nx,&ny,0);CHKERRQ(ierr);
@@ -602,7 +597,6 @@ static PetscErrorCode AssembleA_Elasticity(Mat A,DM elas_da,DM properties_da,Vec
   PetscFunctionReturn(0);
 }
 
-
 static PetscErrorCode DMDASetValuesLocalStencil_ADD_VALUES(ElasticityDOF **fields_F,MatStencil u_eqn[],PetscScalar Fe_u[])
 {
   PetscInt n;
@@ -644,7 +638,7 @@ static PetscErrorCode AssembleF_Elasticity(Vec F,DM elas_da,DM properties_da,Vec
   ierr = DMGlobalToLocalEnd(properties_da,properties,INSERT_VALUES,local_properties);CHKERRQ(ierr);
   ierr = DMDAVecGetArray(properties_da,local_properties,&props);CHKERRQ(ierr);
 
-  /* get acces to the vector */
+  /* get access to the vector */
   ierr = DMGetLocalVector(elas_da,&local_F);CHKERRQ(ierr);
   ierr = VecZeroEntries(local_F);CHKERRQ(ierr);
   ierr = DMDAVecGetArray(elas_da,local_F,&ff);CHKERRQ(ierr);
@@ -871,13 +865,13 @@ static PetscErrorCode solve_elasticity_2d(PetscInt mx,PetscInt my)
         maxnbricks = 10;
         ierr       = PetscOptionsGetRealArray(NULL,NULL, "-brick_E",values_E,&maxnbricks,&flg);CHKERRQ(ierr);
         nbricks    = maxnbricks;
-        if (!flg) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_USER,"User must supply a list of E values for each brick");
+        PetscCheckFalse(!flg,PETSC_COMM_SELF,PETSC_ERR_USER,"User must supply a list of E values for each brick");
 
         flg        = PETSC_FALSE;
         maxnbricks = 10;
         ierr       = PetscOptionsGetRealArray(NULL,NULL, "-brick_nu",values_nu,&maxnbricks,&flg);CHKERRQ(ierr);
-        if (!flg) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_USER,"User must supply a list of nu values for each brick");
-        if (maxnbricks != nbricks) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_USER,"User must supply equal numbers of values for E and nu");
+        PetscCheckFalse(!flg,PETSC_COMM_SELF,PETSC_ERR_USER,"User must supply a list of nu values for each brick");
+        PetscCheckFalse(maxnbricks != nbricks,PETSC_COMM_SELF,PETSC_ERR_USER,"User must supply equal numbers of values for E and nu");
 
         span = 1;
         ierr = PetscOptionsGetInt(NULL,NULL,"-brick_span",&span,&flg);CHKERRQ(ierr);
@@ -1279,7 +1273,6 @@ static PetscErrorCode DMDABCApplySymmetricCompression(DM elas_da,Mat A,Vec f,IS 
   PetscFunctionReturn(0);
 }
 
-
 /*TEST
 
    build:
@@ -1327,8 +1320,8 @@ static PetscErrorCode DMDABCApplySymmetricCompression(DM elas_da,Mat A,Vec f,IS 
 
    test:
       suffix: hypre_nullspace
-      requires: hypre
-      args: -elas_ksp_monitor_short -elas_ksp_converged_reason -elas_ksp_type cg -elas_ksp_norm_type natural -mx 22 -my 22 -c_str 2 -brick_E 1,1e-6,1e-2 -brick_nu .3,.2,.4 -brick_span 8 -elas_pc_type hypre -elas_pc_hypre_boomeramg_nodal_coarsen 6 -elas_pc_hypre_boomeramg_vec_interp_variant 3 -elas_ksp_view
+      requires: hypre !defined(PETSC_HAVE_HYPRE_DEVICE)
+      args: -elas_ksp_monitor_short -elas_ksp_converged_reason -elas_ksp_type cg -elas_ksp_norm_type natural -mx 22 -my 22 -c_str 2 -brick_E 1,1e-6,1e-2 -brick_nu .3,.2,.4 -brick_span 8 -elas_pc_type hypre -elas_pc_hypre_boomeramg_nodal_coarsen 6 -elas_pc_hypre_boomeramg_vec_interp_variant 3 -elas_pc_hypre_boomeramg_interp_type ext+i -elas_ksp_view
 
    test:
       nsize: 4

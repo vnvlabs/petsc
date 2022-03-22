@@ -32,7 +32,7 @@ PetscErrorCode PCISSetUseStiffnessScaling(PC pc, PetscBool use)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
-  PetscValidLogicalCollectiveInt(pc,use,2);
+  PetscValidLogicalCollectiveBool(pc,use,2);
   ierr = PetscTryMethod(pc,"PCISSetUseStiffnessScaling_C",(PC,PetscBool),(pc,use));CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -56,7 +56,7 @@ static PetscErrorCode PCISSetSubdomainDiagonalScaling_IS(PC pc, Vec scaling_fact
       ierr = VecDestroy(&pcis->D);CHKERRQ(ierr);
       ierr = VecDuplicate(pcis->vec1_B,&pcis->D);CHKERRQ(ierr);
       ierr = VecCopy(pcis->vec1_B,pcis->D);CHKERRQ(ierr);
-    } else if (sn != pcis->n_B) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Invalid size for scaling vector. Expected %D (or full %D), found %D",pcis->n_B,pcis->n,sn);
+    } else PetscCheckFalse(sn != pcis->n_B,PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Invalid size for scaling vector. Expected %D (or full %D), found %D",pcis->n_B,pcis->n,sn);
   }
   PetscFunctionReturn(0);
 }
@@ -128,7 +128,6 @@ PetscErrorCode PCISSetSubdomainScalingFactor(PC pc, PetscScalar scal)
   PetscFunctionReturn(0);
 }
 
-
 /* -------------------------------------------------------------------------- */
 /*
    PCISSetUp -
@@ -143,11 +142,11 @@ PetscErrorCode  PCISSetUp(PC pc, PetscBool computematrices, PetscBool computesol
 
   PetscFunctionBegin;
   ierr = PetscObjectTypeCompare((PetscObject)pc->pmat,MATIS,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Requires preconditioning matrix of type MATIS");
+  PetscCheckFalse(!flg,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Requires preconditioning matrix of type MATIS");
   matis = (Mat_IS*)pc->pmat->data;
   if (pc->useAmat) {
     ierr = PetscObjectTypeCompare((PetscObject)pc->mat,MATIS,&flg);CHKERRQ(ierr);
-    if (!flg) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Requires linear system matrix of type MATIS");
+    PetscCheckFalse(!flg,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Requires linear system matrix of type MATIS");
   }
 
   /* first time creation, get info on substructuring */
@@ -158,9 +157,9 @@ PetscErrorCode  PCISSetUp(PC pc, PetscBool computematrices, PetscBool computesol
     PetscInt    i,j;
 
     /* get info on mapping */
-    ierr = PetscObjectReference((PetscObject)pc->pmat->rmap->mapping);CHKERRQ(ierr);
+    ierr = PetscObjectReference((PetscObject)matis->rmapping);CHKERRQ(ierr);
     ierr = ISLocalToGlobalMappingDestroy(&pcis->mapping);CHKERRQ(ierr);
-    pcis->mapping = pc->pmat->rmap->mapping;
+    pcis->mapping = matis->rmapping;
     ierr = ISLocalToGlobalMappingGetSize(pcis->mapping,&pcis->n);CHKERRQ(ierr);
     ierr = ISLocalToGlobalMappingGetInfo(pcis->mapping,&(pcis->n_neigh),&(pcis->neigh),&(pcis->n_shared),&(pcis->shared));CHKERRQ(ierr);
 
@@ -243,7 +242,7 @@ PetscErrorCode  PCISSetUp(PC pc, PetscBool computematrices, PetscBool computesol
       ierr = VecDestroy(&pcis->D);CHKERRQ(ierr);
       ierr = VecDuplicate(pcis->vec1_B,&pcis->D);CHKERRQ(ierr);
       ierr = VecCopy(pcis->vec1_B,pcis->D);CHKERRQ(ierr);
-    } else if (sn != pcis->n_B) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Invalid size for scaling vector. Expected %D (or full %D), found %D",pcis->n_B,pcis->n,sn);
+    } else PetscCheckFalse(sn != pcis->n_B,PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Invalid size for scaling vector. Expected %D (or full %D), found %D",pcis->n_B,pcis->n,sn);
   }
 
   /*

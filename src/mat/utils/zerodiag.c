@@ -31,7 +31,7 @@
     Only works for SeqAIJ matrices
 
     Options Database Keys (When using KSP):
-.      -pc_factor_nonzeros_along_diagonal
+.      -pc_factor_nonzeros_along_diagonal - Reorder to remove zeros from diagonal
 
     Algorithm Notes:
     Column pivoting is used.
@@ -45,7 +45,6 @@
        its corresponding row has a non-zero in the column it is being
        swapped with; to make sure the previous nonzero diagonal remains
        nonzero
-
 
 @*/
 PetscErrorCode  MatReorderForNonzeroDiagonal(Mat mat,PetscReal abstol,IS ris,IS cis)
@@ -142,6 +141,4 @@ found:;
   ierr = ISDestroy(&icis);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
-
 

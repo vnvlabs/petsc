@@ -14,7 +14,6 @@ typedef struct {
   PetscInt        bs,mbs;
 } PC_PBJacobi;
 
-
 static PetscErrorCode PCApply_PBJacobi_1(PC pc,Vec x,Vec y)
 {
   PC_PBJacobi       *jac = (PC_PBJacobi*)pc->data;
@@ -207,9 +206,9 @@ static PetscErrorCode PCApply_PBJacobi_N(PC pc,Vec x,Vec y)
   ierr = VecGetArrayRead(x,&xx);CHKERRQ(ierr);
   ierr = VecGetArray(y,&yy);CHKERRQ(ierr);
   for (i=0; i<m; i++) {
-    for (ib=0; ib<bs; ib++){
+    for (ib=0; ib<bs; ib++) {
       PetscScalar rowsum = 0;
-      for (jb=0; jb<bs; jb++){
+      for (jb=0; jb<bs; jb++) {
         rowsum += diag[ib+jb*bs] * xx[bs*i+jb];
       }
       yy[bs*i+ib] = rowsum;
@@ -326,28 +325,26 @@ static PetscErrorCode PCView_PBJacobi(PC pc,PetscViewer viewer)
 /*MC
      PCPBJACOBI - Point block Jacobi preconditioner
 
-
    Notes:
-    See PCJACOBI for point Jacobi preconditioning
+     See PCJACOBI for point Jacobi preconditioning, PCVPBJACOBI for variable size point block Jacobi and PCBJACOBI for large blocks
 
-   This works for AIJ and BAIJ matrices and uses the blocksize provided to the matrix
+     This works for AIJ and BAIJ matrices and uses the blocksize provided to the matrix
 
-   Uses dense LU factorization with partial pivoting to invert the blocks; if a zero pivot
-   is detected a PETSc error is generated.
+     Uses dense LU factorization with partial pivoting to invert the blocks; if a zero pivot
+     is detected a PETSc error is generated.
 
    Developer Notes:
-    This should support the PCSetErrorIfFailure() flag set to PETSC_TRUE to allow
-   the factorization to continue even after a zero pivot is found resulting in a Nan and hence
-   terminating KSP with a KSP_DIVERGED_NANORIF allowing
-   a nonlinear solver/ODE integrator to recover without stopping the program as currently happens.
+     This should support the PCSetErrorIfFailure() flag set to PETSC_TRUE to allow
+     the factorization to continue even after a zero pivot is found resulting in a Nan and hence
+     terminating KSP with a KSP_DIVERGED_NANORIF allowing
+     a nonlinear solver/ODE integrator to recover without stopping the program as currently happens.
 
-   Developer Note: Perhaps should provide an option that allows generation of a valid preconditioner
-   even if a block is singular as the PCJACOBI does.
+     Perhaps should provide an option that allows generation of a valid preconditioner
+     even if a block is singular as the PCJACOBI does.
 
    Level: beginner
 
-
-.seealso:  PCCreate(), PCSetType(), PCType (for list of available types), PC, PCJACOBI
+.seealso:  PCCreate(), PCSetType(), PCType (for list of available types), PC, PCJACOBI, PCVPBJACOBI, PCBJACOBI
 
 M*/
 

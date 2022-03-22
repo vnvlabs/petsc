@@ -76,7 +76,7 @@ PetscErrorCode  PetscViewerFileSetName_ADIOS(PetscViewer viewer, const char name
   case FILE_MODE_UNDEFINED:
     SETERRQ(PetscObjectComm((PetscObject)viewer),PETSC_ERR_ORDER,"Must call PetscViewerFileSetMode() before PetscViewerFileSetName()");
   default:
-    SETERRQ1(PetscObjectComm((PetscObject)viewer),PETSC_ERR_SUP,"Unsupported file mode %s",PetscFileModes[adios->btype]);
+    SETERRQ(PetscObjectComm((PetscObject)viewer),PETSC_ERR_SUP,"Unsupported file mode %s",PetscFileModes[adios->btype]);
   }
   PetscFunctionReturn(0);
 }
@@ -92,7 +92,6 @@ static PetscErrorCode PetscViewerFileGetName_ADIOS(PetscViewer viewer,const char
 
 /*MC
    PETSCVIEWERADIOS - A viewer that writes to an ADIOS file
-
 
 .seealso:  PetscViewerADIOSOpen(), PetscViewerStringSPrintf(), PetscViewerSocketOpen(), PetscViewerDrawOpen(), PETSCVIEWERSOCKET,
            PetscViewerCreate(), PetscViewerASCIIOpen(), PetscViewerBinaryOpen(), PETSCVIEWERBINARY, PETSCVIEWERDRAW, PETSCVIEWERSTRING,
@@ -144,7 +143,6 @@ $    FILE_MODE_APPEND - open existing file for binary output
 
    Note:
    This PetscViewer should be destroyed with PetscViewerDestroy().
-
 
 .seealso: PetscViewerASCIIOpen(), PetscViewerPushFormat(), PetscViewerDestroy(), PetscViewerHDF5Open(),
           VecView(), MatView(), VecLoad(), PetscViewerSetType(), PetscViewerFileSetMode(), PetscViewerFileSetName()

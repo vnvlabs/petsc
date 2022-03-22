@@ -39,7 +39,6 @@ static PetscErrorCode MatDestroy_STRUMPACK(Mat A)
   PetscFunctionReturn(0);
 }
 
-
 static PetscErrorCode MatSTRUMPACKSetReordering_STRUMPACK(Mat F,MatSTRUMPACKReordering reordering)
 {
   STRUMPACK_SparseSolver *S = (STRUMPACK_SparseSolver*)F->spptr;
@@ -63,7 +62,7 @@ static PetscErrorCode MatSTRUMPACKSetReordering_STRUMPACK(Mat F,MatSTRUMPACKReor
    Level: beginner
 
    References:
-.      STRUMPACK manual
+.  * - STRUMPACK manual
 
 .seealso: MatGetFactor()
 @*/
@@ -89,19 +88,20 @@ static PetscErrorCode MatSTRUMPACKSetColPerm_STRUMPACK(Mat F,PetscBool cperm)
 
 /*@
   MatSTRUMPACKSetColPerm - Set whether STRUMPACK should try to permute the columns of the matrix in order to get a nonzero diagonal
+
    Logically Collective on Mat
 
    Input Parameters:
 +  F - the factored matrix obtained by calling MatGetFactor() from PETSc-STRUMPACK interface
--  cperm - whether or not to permute (internally) the columns of the matrix
+-  cperm - PETSC_TRUE to permute (internally) the columns of the matrix
 
   Options Database:
-.   -mat_strumpack_colperm <cperm>
+.   -mat_strumpack_colperm <cperm> - true to use the permutation
 
    Level: beginner
 
    References:
-.      STRUMPACK manual
+.  * - STRUMPACK manual
 
 .seealso: MatGetFactor()
 @*/
@@ -127,7 +127,8 @@ static PetscErrorCode MatSTRUMPACKSetHSSRelTol_STRUMPACK(Mat F,PetscReal rtol)
 
 /*@
   MatSTRUMPACKSetHSSRelTol - Set STRUMPACK relative tolerance for HSS compression
-   Logically Collective on Mat
+
+  Logically Collective on Mat
 
    Input Parameters:
 +  F - the factored matrix obtained by calling MatGetFactor() from PETSc-STRUMPACK interface
@@ -139,7 +140,7 @@ static PetscErrorCode MatSTRUMPACKSetHSSRelTol_STRUMPACK(Mat F,PetscReal rtol)
    Level: beginner
 
    References:
-.      STRUMPACK manual
+.  * - STRUMPACK manual
 
 .seealso: MatGetFactor()
 @*/
@@ -165,6 +166,7 @@ static PetscErrorCode MatSTRUMPACKSetHSSAbsTol_STRUMPACK(Mat F,PetscReal atol)
 
 /*@
   MatSTRUMPACKSetHSSAbsTol - Set STRUMPACK absolute tolerance for HSS compression
+
    Logically Collective on Mat
 
    Input Parameters:
@@ -177,7 +179,7 @@ static PetscErrorCode MatSTRUMPACKSetHSSAbsTol_STRUMPACK(Mat F,PetscReal atol)
    Level: beginner
 
    References:
-.      STRUMPACK manual
+.  * - STRUMPACK manual
 
 .seealso: MatGetFactor()
 @*/
@@ -203,6 +205,7 @@ static PetscErrorCode MatSTRUMPACKSetHSSMaxRank_STRUMPACK(Mat F,PetscInt hssmaxr
 
 /*@
   MatSTRUMPACKSetHSSMaxRank - Set STRUMPACK maximum HSS rank
+
    Logically Collective on Mat
 
    Input Parameters:
@@ -215,7 +218,7 @@ static PetscErrorCode MatSTRUMPACKSetHSSMaxRank_STRUMPACK(Mat F,PetscInt hssmaxr
    Level: beginner
 
    References:
-.      STRUMPACK manual
+.  * - STRUMPACK manual
 
 .seealso: MatGetFactor()
 @*/
@@ -241,6 +244,7 @@ static PetscErrorCode MatSTRUMPACKSetHSSLeafSize_STRUMPACK(Mat F,PetscInt leaf_s
 
 /*@
   MatSTRUMPACKSetHSSLeafSize - Set STRUMPACK HSS leaf size
+
    Logically Collective on Mat
 
    Input Parameters:
@@ -253,7 +257,7 @@ static PetscErrorCode MatSTRUMPACKSetHSSLeafSize_STRUMPACK(Mat F,PetscInt leaf_s
    Level: beginner
 
    References:
-.      STRUMPACK manual
+.  * - STRUMPACK manual
 
 .seealso: MatGetFactor()
 @*/
@@ -279,6 +283,7 @@ static PetscErrorCode MatSTRUMPACKSetHSSMinSepSize_STRUMPACK(Mat F,PetscInt hssm
 
 /*@
   MatSTRUMPACKSetHSSMinSepSize - Set STRUMPACK minimum separator size for low-rank approximation
+
    Logically Collective on Mat
 
    Input Parameters:
@@ -286,12 +291,12 @@ static PetscErrorCode MatSTRUMPACKSetHSSMinSepSize_STRUMPACK(Mat F,PetscInt hssm
 -  hssminsize - minimum dense matrix size for low-rank approximation
 
   Options Database:
-.   -mat_strumpack_hss_min_sep_size <hssminsize>
+.   -mat_strumpack_hss_min_sep_size <hssminsize> - set the minimum separator size
 
    Level: beginner
 
    References:
-.      STRUMPACK manual
+.  * - STRUMPACK manual
 
 .seealso: MatGetFactor()
 @*/
@@ -337,9 +342,9 @@ static PetscErrorCode MatMatSolve_STRUMPACK(Mat A,Mat B_mpi,Mat X)
 
   PetscFunctionBegin;
   ierr = PetscObjectTypeCompareAny((PetscObject)B_mpi,&flg,MATSEQDENSE,MATMPIDENSE,NULL);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_WRONG,"Matrix B must be MATDENSE matrix");
+  PetscCheckFalse(!flg,PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_WRONG,"Matrix B must be MATDENSE matrix");
   ierr = PetscObjectTypeCompareAny((PetscObject)X,&flg,MATSEQDENSE,MATMPIDENSE,NULL);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_WRONG,"Matrix X must be MATDENSE matrix");
+  PetscCheckFalse(!flg,PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_WRONG,"Matrix X must be MATDENSE matrix");
   SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"MatMatSolve_STRUMPACK() is not implemented yet");
   PetscFunctionReturn(0);
 }
@@ -444,7 +449,7 @@ static PetscErrorCode MatFactorGetSolverType_aij_strumpack(Mat A,MatSolverType *
   Works with AIJ matrices
 
   Options Database Keys:
-+ -mat_strumpack_verbose
++ -mat_strumpack_verbose                    - verbose info
 . -mat_strumpack_hss_rel_tol <1e-2>         - Relative compression tolerance (None)
 . -mat_strumpack_hss_abs_tol <1e-8>         - Absolute compression tolerance (None)
 . -mat_strumpack_colperm <TRUE>             - Permute matrix to make diagonal nonzeros (None)
@@ -484,8 +489,9 @@ static PetscErrorCode MatGetFactor_aij_strumpack(Mat A,MatFactorType ftype,Mat *
   ierr = MatCreate(PetscObjectComm((PetscObject)A),&B);CHKERRQ(ierr);
   ierr = MatSetSizes(B,A->rmap->n,A->cmap->n,M,N);CHKERRQ(ierr);
   ierr = MatSetType(B,((PetscObject)A)->type_name);CHKERRQ(ierr);
-  ierr = MatSeqAIJSetPreallocation(B,0,NULL);
+  ierr = MatSeqAIJSetPreallocation(B,0,NULL);CHKERRQ(ierr);
   ierr = MatMPIAIJSetPreallocation(B,0,NULL,0,NULL);CHKERRQ(ierr);
+  B->trivialsymbolic = PETSC_TRUE;
   if (ftype == MAT_FACTOR_LU || ftype == MAT_FACTOR_ILU) {
     B->ops->lufactorsymbolic  = MatLUFactorSymbolic_STRUMPACK;
     B->ops->ilufactorsymbolic = MatLUFactorSymbolic_STRUMPACK;
@@ -505,7 +511,7 @@ static PetscErrorCode MatGetFactor_aij_strumpack(Mat A,MatFactorType ftype,Mat *
   ierr     = PetscNewLog(B,&S);CHKERRQ(ierr);
   B->spptr = S;
 
-  ierr = PetscObjectTypeCompare((PetscObject)A,MATSEQAIJ,&flg);
+  ierr = PetscObjectTypeCompare((PetscObject)A,MATSEQAIJ,&flg);CHKERRQ(ierr);
   iface = flg ? STRUMPACK_MT : STRUMPACK_MPI_DIST;
 
   ierr = PetscOptionsBegin(PetscObjectComm((PetscObject)A),((PetscObject)A)->prefix,"STRUMPACK Options","Mat");CHKERRQ(ierr);
@@ -540,7 +546,7 @@ static PetscErrorCode MatGetFactor_aij_strumpack(Mat A,MatFactorType ftype,Mat *
   if (set) PetscStackCall("STRUMPACK_set_HSS_leaf_size",STRUMPACK_set_HSS_leaf_size(*S,(int)leaf_size));
 
   PetscStackCall("STRUMPACK_reordering_method",ndcurrent = STRUMPACK_reordering_method(*S));
-  PetscOptionsEnum("-mat_strumpack_reordering","Sparsity reducing matrix reordering","None",STRUMPACKNDTypes,(PetscEnum)ndcurrent,(PetscEnum*)&ndvalue,&set);CHKERRQ(ierr);
+  ierr = PetscOptionsEnum("-mat_strumpack_reordering","Sparsity reducing matrix reordering","None",STRUMPACKNDTypes,(PetscEnum)ndcurrent,(PetscEnum*)&ndvalue,&set);CHKERRQ(ierr);
   if (set) PetscStackCall("STRUMPACK_set_reordering_method",STRUMPACK_set_reordering_method(*S,ndvalue));
 
   if (ftype == MAT_FACTOR_ILU) {
@@ -557,7 +563,7 @@ static PetscErrorCode MatGetFactor_aij_strumpack(Mat A,MatFactorType ftype,Mat *
   PetscStackCall("STRUMPACK_set_Krylov_solver", STRUMPACK_set_Krylov_solver(*S, STRUMPACK_DIRECT));
 
   PetscStackCall("STRUMPACK_Krylov_solver",itcurrent = STRUMPACK_Krylov_solver(*S));
-  PetscOptionsEnum("-mat_strumpack_iterative_solver","Select iterative solver from STRUMPACK","None",SolverTypes,(PetscEnum)itcurrent,(PetscEnum*)&itsolver,&set);CHKERRQ(ierr);
+  ierr = PetscOptionsEnum("-mat_strumpack_iterative_solver","Select iterative solver from STRUMPACK","None",SolverTypes,(PetscEnum)itcurrent,(PetscEnum*)&itsolver,&set);CHKERRQ(ierr);
   if (set) PetscStackCall("STRUMPACK_set_Krylov_solver",STRUMPACK_set_Krylov_solver(*S,itsolver));
 
   PetscOptionsEnd();

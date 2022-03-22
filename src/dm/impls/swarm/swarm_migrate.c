@@ -196,7 +196,7 @@ PetscErrorCode DMSwarmMigrate_CellDMScatter(DM dm,PetscBool remove_sent_points)
 
   PetscFunctionBegin;
   ierr = DMSwarmGetCellDM(dm,&dmcell);CHKERRQ(ierr);
-  if (!dmcell) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only valid if cell DM provided");
+  PetscCheckFalse(!dmcell,PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only valid if cell DM provided");
 
   ierr = MPI_Comm_size(PetscObjectComm((PetscObject)dm),&size);CHKERRMPI(ierr);
   ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm),&rank);CHKERRMPI(ierr);
@@ -206,7 +206,6 @@ PetscErrorCode DMSwarmMigrate_CellDMScatter(DM dm,PetscBool remove_sent_points)
     PetscInt *p_cellid;
     PetscInt npoints_curr,range = 0;
     PetscSFNode *sf_cells;
-
 
     ierr = DMSwarmDataBucketGetSizes(swarm->db,&npoints_curr,NULL,NULL);CHKERRQ(ierr);
     ierr = PetscMalloc1(npoints_curr, &sf_cells);CHKERRQ(ierr);
@@ -311,7 +310,7 @@ PetscErrorCode DMSwarmMigrate_CellDMScatter(DM dm,PetscBool remove_sent_points)
   }
 #endif
 
-  { /* this performs two point locations: (i) on the initial points set prior to communication; and (ii) on the new (received) points */
+  { /* perform two point locations: (i) on the initial points set prior to communication; and (ii) on the new (received) points */
     PetscScalar      *LA_coor;
     PetscInt         npoints_from_neighbours,bs;
     DMSwarmDataField PField;
@@ -366,7 +365,7 @@ PetscErrorCode DMSwarmMigrate_CellDMScatter(DM dm,PetscBool remove_sent_points)
   /* check for error on removed points */
   if (error_check) {
     ierr = DMSwarmGetSize(dm,&npoints2g);CHKERRQ(ierr);
-    if (npointsg != npoints2g) SETERRQ2(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Points from the DMSwarm must remain constant during migration (initial %D - final %D)",npointsg,npoints2g);
+    PetscCheckFalse(npointsg != npoints2g,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Points from the DMSwarm must remain constant during migration (initial %D - final %D)",npointsg,npoints2g);
   }
   PetscFunctionReturn(0);
 }
@@ -469,10 +468,10 @@ PETSC_EXTERN PetscErrorCode DMSwarmCollect_DMDABoundingBox(DM dm,PetscInt *globa
   ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm),&rank);CHKERRMPI(ierr);
 
   ierr = DMSwarmGetCellDM(dm,&dmcell);CHKERRQ(ierr);
-  if (!dmcell) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only valid if cell DM provided");
+  PetscCheckFalse(!dmcell,PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only valid if cell DM provided");
   isdmda = PETSC_FALSE;
   PetscObjectTypeCompare((PetscObject)dmcell,DMDA,&isdmda);
-  if (!isdmda) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only DMDA support for CollectBoundingBox");
+  PetscCheckFalse(!isdmda,PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only DMDA support for CollectBoundingBox");
 
   ierr = DMGetDimension(dm,&dim);CHKERRQ(ierr);
   sizeof_bbox_ctx = sizeof(CollectBBox);
@@ -601,7 +600,6 @@ PETSC_EXTERN PetscErrorCode DMSwarmCollect_DMDABoundingBox(DM dm,PetscInt *globa
   PetscFunctionReturn(0);
 }
 
-
 /* General collection when no order, or neighbour information is provided */
 /*
  User provides context and collect() method
@@ -615,7 +613,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmCollect_General(DM dm,PetscErrorCode (*collec
 {
   DM_Swarm       *swarm = (DM_Swarm*)dm->data;
   PetscErrorCode ierr;
-  DMSwarmDataEx         de;
+  DMSwarmDataEx  de;
   PetscInt       p,r,npoints,n_points_recv;
   PetscMPIInt    size,rank;
   void           *point_buffer,*recv_points;

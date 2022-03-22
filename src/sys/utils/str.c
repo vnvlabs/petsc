@@ -18,7 +18,7 @@
 +  s - pointer to string
 -  sp - separator character
 
-   Output Parameter:
+   Output Parameters:
 +   argc - the number of entries in the array
 -   args - an array of the entries with a null at the end
 
@@ -316,7 +316,7 @@ PetscErrorCode PetscStrNArrayDestroy(PetscInt n,char ***list)
 
   PetscFunctionBegin;
   if (!*list) PetscFunctionReturn(0);
-  for (i=0; i<n; i++){
+  for (i=0; i<n; i++) {
     ierr = PetscFree((*list)[i]);CHKERRQ(ierr);
   }
   ierr = PetscFree(*list);CHKERRQ(ierr);
@@ -350,7 +350,7 @@ PetscErrorCode PetscStrNArrayDestroy(PetscInt n,char ***list)
 PetscErrorCode  PetscStrcpy(char s[],const char t[])
 {
   PetscFunctionBegin;
-  if (t && !s) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"Trying to copy string into null pointer");
+  PetscCheckFalse(t && !s,PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"Trying to copy string into null pointer");
   if (t) strcpy(s,t);
   else if (s) s[0] = 0;
   PetscFunctionReturn(0);
@@ -385,8 +385,8 @@ PetscErrorCode  PetscStrcpy(char s[],const char t[])
 PetscErrorCode  PetscStrncpy(char s[],const char t[],size_t n)
 {
   PetscFunctionBegin;
-  if (t && !s) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"Trying to copy string into null pointer");
-  if (s && !n) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"Requires an output string of length at least 1 to hold the termination character");
+  PetscCheckFalse(t && !s,PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"Trying to copy string into null pointer");
+  PetscCheckFalse(s && !n,PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"Requires an output string of length at least 1 to hold the termination character");
   if (t) {
     if (n > 1) {
       strncpy(s,t,n-1);
@@ -453,7 +453,7 @@ PetscErrorCode  PetscStrlcat(char s[],const char t[],size_t n)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (t && !n) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ,"String buffer length must be positive");
+  PetscCheckFalse(t && !n,PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ,"String buffer length must be positive");
   if (!t) PetscFunctionReturn(0);
   ierr = PetscStrlen(t,&len);CHKERRQ(ierr);
   strncat(s,t,n - len);
@@ -492,20 +492,13 @@ void  PetscStrcmpNoError(const char a[],const char b[],PetscBool  *flg)
     Not for use in Fortran
 
 .seealso: PetscStrgrt(), PetscStrncmp(), PetscStrcasecmp()
-
 @*/
-PetscErrorCode  PetscStrcmp(const char a[],const char b[],PetscBool  *flg)
+PetscErrorCode  PetscStrcmp(const char a[],const char b[],PetscBool *flg)
 {
-  int c;
-
   PetscFunctionBegin;
   if (!a && !b)      *flg = PETSC_TRUE;
   else if (!a || !b) *flg = PETSC_FALSE;
-  else {
-    c = strcmp(a,b);
-    if (c) *flg = PETSC_FALSE;
-    else   *flg = PETSC_TRUE;
-  }
+  else               *flg = (PetscBool)!strcmp(a,b);
   PetscFunctionReturn(0);
 }
 
@@ -601,8 +594,6 @@ PetscErrorCode  PetscStrcasecmp(const char a[],const char b[],PetscBool  *t)
   PetscFunctionReturn(0);
 }
 
-
-
 /*@C
    PetscStrncmp - Compares two strings, up to a certain length
 
@@ -636,7 +627,7 @@ PetscErrorCode  PetscStrncmp(const char a[],const char b[],size_t n,PetscBool  *
 }
 
 /*@C
-   PetscStrchr - Locates first occurance of a character in a string
+   PetscStrchr - Locates first occurrence of a character in a string
 
    Not Collective
 
@@ -645,7 +636,7 @@ PetscErrorCode  PetscStrncmp(const char a[],const char b[],size_t n,PetscBool  *
 -  b - character
 
    Output Parameter:
-.  c - location of occurance, NULL if not found
+.  c - location of occurrence, NULL if not found
 
    Level: intermediate
 
@@ -661,7 +652,7 @@ PetscErrorCode  PetscStrchr(const char a[],char b,char *c[])
 }
 
 /*@C
-   PetscStrrchr - Locates one location past the last occurance of a character in a string,
+   PetscStrrchr - Locates one location past the last occurrence of a character in a string,
       if the character is not found then returns entire string
 
    Not Collective
@@ -671,7 +662,7 @@ PetscErrorCode  PetscStrchr(const char a[],char b,char *c[])
 -  b - character
 
    Output Parameter:
-.  tmp - location of occurance, a if not found
+.  tmp - location of occurrence, a if not found
 
    Level: intermediate
 
@@ -804,7 +795,6 @@ PetscErrorCode  PetscStrbeginswith(const char a[],const char b[],PetscBool *flg)
   PetscFunctionReturn(0);
 }
 
-
 /*@C
    PetscStrendswithwhich - Determines if a string ends with one of several possible strings
 
@@ -839,7 +829,7 @@ PetscErrorCode  PetscStrendswithwhich(const char a[],const char *const *bs,Petsc
 }
 
 /*@C
-   PetscStrrstr - Locates last occurance of string in another string
+   PetscStrrstr - Locates last occurrence of string in another string
 
    Not Collective
 
@@ -848,7 +838,7 @@ PetscErrorCode  PetscStrendswithwhich(const char a[],const char *const *bs,Petsc
 -  b - string to find
 
    Output Parameter:
-.  tmp - location of occurance
+.  tmp - location of occurrence
 
    Notes:
     Not for use in Fortran
@@ -870,7 +860,7 @@ PetscErrorCode  PetscStrrstr(const char a[],const char b[],char *tmp[])
 }
 
 /*@C
-   PetscStrstr - Locates first occurance of string in another string
+   PetscStrstr - Locates first occurrence of string in another string
 
    Not Collective
 
@@ -879,7 +869,7 @@ PetscErrorCode  PetscStrrstr(const char a[],const char b[],char *tmp[])
 -  needle - string to find
 
    Output Parameter:
-.  tmp - location of occurance, is a NULL if the string is not found
+.  tmp - location of occurrence, is a NULL if the string is not found
 
    Notes:
     Not for use in Fortran
@@ -887,7 +877,7 @@ PetscErrorCode  PetscStrrstr(const char a[],const char b[],char *tmp[])
    Level: intermediate
 
 @*/
-PetscErrorCode  PetscStrstr(const char haystack[],const char needle[],char *tmp[])
+PetscErrorCode PetscStrstr(const char haystack[],const char needle[],char *tmp[])
 {
   PetscFunctionBegin;
   *tmp = (char*)strstr(haystack,needle);
@@ -905,7 +895,7 @@ struct _p_PetscToken {char token;char *array;char *current;};
 .  a - pointer to token
 
    Output Parameter:
-.  result - location of occurance, NULL if not found
+.  result - location of occurrence, NULL if not found
 
    Notes:
 
@@ -923,7 +913,6 @@ struct _p_PetscToken {char token;char *array;char *current;};
     Not for use in Fortran
 
    Level: intermediate
-
 
 .seealso: PetscTokenCreate(), PetscTokenDestroy()
 @*/
@@ -1110,7 +1099,7 @@ PetscErrorCode  PetscStrreplace(MPI_Comm comm,const char aa[],char b[],size_t le
   static size_t  DISPLAY_LENGTH = 265,USER_LENGTH = 256, HOST_LENGTH = 256;
 
   PetscFunctionBegin;
-  if (!a || !b) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"a and b strings must be nonnull");
+  PetscCheckFalse(!a || !b,PETSC_COMM_SELF,PETSC_ERR_ARG_NULL,"a and b strings must be nonnull");
   if (aa == b) {
     ierr = PetscStrallocpy(aa,(char**)&a);CHKERRQ(ierr);
   }
@@ -1150,7 +1139,7 @@ PetscErrorCode  PetscStrreplace(MPI_Comm comm,const char aa[],char b[],size_t le
       ierr = PetscStrlen(b,&l1);CHKERRQ(ierr);
       ierr = PetscStrlen(r[i],&l2);CHKERRQ(ierr);
       ierr = PetscStrlen(par,&l3);CHKERRQ(ierr);
-      if (l1 + l2 + l3 >= len) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ,"b len is not long enough to hold new values");
+      PetscCheckFalse(l1 + l2 + l3 >= len,PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ,"b len is not long enough to hold new values");
       ierr = PetscStrncpy(work,b,len);CHKERRQ(ierr);
       ierr = PetscStrlcat(work,r[i],len);CHKERRQ(ierr);
       ierr = PetscStrlcat(work,par,len);CHKERRQ(ierr);
@@ -1176,7 +1165,7 @@ PetscErrorCode  PetscStrreplace(MPI_Comm comm,const char aa[],char b[],size_t le
     *epar = 0;
     epar += 1;
     ierr  = PetscOptionsGetenv(comm,par,env,sizeof(env),&flag);CHKERRQ(ierr);
-    if (!flag) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Substitution string ${%s} not found as environmental variable",par);
+    PetscCheckFalse(!flag,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Substitution string ${%s} not found as environmental variable",par);
     ierr = PetscStrlcat(work,env,len);CHKERRQ(ierr);
     ierr = PetscStrlcat(work,epar,len);CHKERRQ(ierr);
     ierr = PetscStrncpy(b,work,len);CHKERRQ(ierr);
@@ -1252,8 +1241,8 @@ PetscErrorCode PetscEnumFind(const char *const *enumlist,const char *str,PetscEn
   PetscBool efound;
 
   PetscFunctionBegin;
-  while (enumlist[n++]) if (n > 50) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"List argument appears to be wrong or have more than 50 entries");
-  if (n < 3) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"List argument must have at least two entries: typename and type prefix");
+  while (enumlist[n++]) PetscCheckFalse(n > 50,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"List argument appears to be wrong or have more than 50 entries");
+  PetscCheckFalse(n < 3,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"List argument must have at least two entries: typename and type prefix");
   n -= 3; /* drop enum name, prefix, and null termination */
   ierr = PetscEListFind(n,enumlist,str,&evalue,&efound);CHKERRQ(ierr);
   if (efound) *value = (PetscEnum)evalue;

@@ -8,10 +8,9 @@
     DMCompositeSetCoupling - Sets user provided routines that compute the coupling between the
       separate components (DMs) in a DMto build the correct matrix nonzero structure.
 
-
     Logically Collective
 
-    Input Parameter:
+    Input Parameters:
 +   dm - the composite object
 -   formcouplelocations - routine to set the nonzero locations in the matrix
 
@@ -32,7 +31,7 @@ PetscErrorCode  DMCompositeSetCoupling(DM dm,PetscErrorCode (*FormCoupleLocation
 
   PetscFunctionBegin;
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   com->FormCoupleLocations = FormCoupleLocations;
   PetscFunctionReturn(0);
 }
@@ -95,7 +94,7 @@ PetscErrorCode  DMSetUp_Composite(DM dm)
   PetscLayout            map;
 
   PetscFunctionBegin;
-  if (com->setup) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONGSTATE,"Packer has already been setup");
+  PetscCheckFalse(com->setup,PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONGSTATE,"Packer has already been setup");
   ierr = PetscLayoutCreate(PetscObjectComm((PetscObject)dm),&map);CHKERRQ(ierr);
   ierr = PetscLayoutSetLocalSize(map,com->n);CHKERRQ(ierr);
   ierr = PetscLayoutSetSize(map,PETSC_DETERMINE);CHKERRQ(ierr);
@@ -146,11 +145,10 @@ PetscErrorCode  DMCompositeGetNumberDM(DM dm,PetscInt *nDM)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   *nDM = com->nDM;
   PetscFunctionReturn(0);
 }
-
 
 /*@C
     DMCompositeGetAccess - Allows one to access the individual packed vectors in their global
@@ -190,7 +188,7 @@ PetscErrorCode  DMCompositeGetAccess(DM dm,Vec gvec,...)
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidHeaderSpecific(gvec,VEC_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   next = com->next;
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
@@ -258,7 +256,7 @@ PetscErrorCode  DMCompositeGetAccessArray(DM dm,Vec pvec,PetscInt nwanted,const 
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidHeaderSpecific(pvec,VEC_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
   }
@@ -324,7 +322,7 @@ PetscErrorCode  DMCompositeGetLocalAccessArray(DM dm,Vec pvec,PetscInt nwanted,c
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidHeaderSpecific(pvec,VEC_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
   }
@@ -338,6 +336,7 @@ PetscErrorCode  DMCompositeGetLocalAccessArray(DM dm,Vec pvec,PetscInt nwanted,c
         const PetscScalar *array;
         ierr = VecGetArrayRead(pvec,&array);CHKERRQ(ierr);
         ierr = VecPlaceArray(v,array+nlocal);CHKERRQ(ierr);
+        // this method does not make sense. The local vectors are not updated with a global-to-local and the user can not do it because it is locked
         ierr = VecLockReadPush(v);CHKERRQ(ierr);
         ierr = VecRestoreArrayRead(pvec,&array);CHKERRQ(ierr);
       } else {
@@ -386,7 +385,7 @@ PetscErrorCode  DMCompositeRestoreAccess(DM dm,Vec gvec,...)
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidHeaderSpecific(gvec,VEC_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   next = com->next;
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
@@ -440,7 +439,7 @@ PetscErrorCode  DMCompositeRestoreAccessArray(DM dm,Vec pvec,PetscInt nwanted,co
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidHeaderSpecific(pvec,VEC_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
   }
@@ -494,7 +493,7 @@ PetscErrorCode  DMCompositeRestoreLocalAccessArray(DM dm,Vec pvec,PetscInt nwant
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidHeaderSpecific(pvec,VEC_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
   }
@@ -548,7 +547,7 @@ PetscErrorCode  DMCompositeScatter(DM dm,Vec gvec,...)
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidHeaderSpecific(gvec,VEC_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
   }
@@ -561,7 +560,7 @@ PetscErrorCode  DMCompositeScatter(DM dm,Vec gvec,...)
     if (local) {
       Vec               global;
       const PetscScalar *array;
-      PetscValidHeaderSpecific(local,VEC_CLASSID,cnt);
+      PetscDisableStaticAnalyzerForExpressionUnderstandingThatThisIsDangerousAndBugprone(PetscValidHeaderSpecific(local,VEC_CLASSID,cnt));
       ierr = DMGetGlobalVector(next->dm,&global);CHKERRQ(ierr);
       ierr = VecGetArrayRead(gvec,&array);CHKERRQ(ierr);
       ierr = VecPlaceArray(global,array+next->rstart);CHKERRQ(ierr);
@@ -608,7 +607,7 @@ PetscErrorCode  DMCompositeScatterArray(DM dm,Vec gvec,Vec *lvecs)
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidHeaderSpecific(gvec,VEC_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
   }
@@ -637,7 +636,7 @@ PetscErrorCode  DMCompositeScatterArray(DM dm,Vec gvec,Vec *lvecs)
 
     Collective on dm
 
-    Input Parameter:
+    Input Parameters:
 +    dm - the packer object
 .    gvec - the global vector
 .    imode - INSERT_VALUES or ADD_VALUES
@@ -663,9 +662,9 @@ PetscErrorCode  DMCompositeGather(DM dm,InsertMode imode,Vec gvec,...)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
-  PetscValidHeaderSpecific(gvec,VEC_CLASSID,2);
+  PetscValidHeaderSpecific(gvec,VEC_CLASSID,3);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
   }
@@ -678,7 +677,7 @@ PetscErrorCode  DMCompositeGather(DM dm,InsertMode imode,Vec gvec,...)
     if (local) {
       PetscScalar *array;
       Vec         global;
-      PetscValidHeaderSpecific(local,VEC_CLASSID,cnt);
+      PetscDisableStaticAnalyzerForExpressionUnderstandingThatThisIsDangerousAndBugprone(PetscValidHeaderSpecific(local,VEC_CLASSID,cnt));
       ierr = DMGetGlobalVector(next->dm,&global);CHKERRQ(ierr);
       ierr = VecGetArray(gvec,&array);CHKERRQ(ierr);
       ierr = VecPlaceArray(global,array+next->rstart);CHKERRQ(ierr);
@@ -698,7 +697,7 @@ PetscErrorCode  DMCompositeGather(DM dm,InsertMode imode,Vec gvec,...)
 
     Collective on dm
 
-    Input Parameter:
+    Input Parameters:
 +    dm - the packer object
 .    gvec - the global vector
 .    imode - INSERT_VALUES or ADD_VALUES
@@ -723,9 +722,9 @@ PetscErrorCode  DMCompositeGatherArray(DM dm,InsertMode imode,Vec gvec,Vec *lvec
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
-  PetscValidHeaderSpecific(gvec,VEC_CLASSID,2);
+  PetscValidHeaderSpecific(gvec,VEC_CLASSID,3);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   if (!com->setup) {
     ierr = DMSetUp(dm);CHKERRQ(ierr);
   }
@@ -735,7 +734,7 @@ PetscErrorCode  DMCompositeGatherArray(DM dm,InsertMode imode,Vec gvec,Vec *lvec
     if (lvecs[i]) {
       PetscScalar *array;
       Vec         global;
-      PetscValidHeaderSpecific(lvecs[i],VEC_CLASSID,3);
+      PetscValidHeaderSpecific(lvecs[i],VEC_CLASSID,4);
       ierr = DMGetGlobalVector(next->dm,&global);CHKERRQ(ierr);
       ierr = VecGetArray(gvec,&array);CHKERRQ(ierr);
       ierr = VecPlaceArray(global,array+next->rstart);CHKERRQ(ierr);
@@ -754,7 +753,7 @@ PetscErrorCode  DMCompositeGatherArray(DM dm,InsertMode imode,Vec gvec,Vec *lvec
 
     Collective on dm
 
-    Input Parameter:
+    Input Parameters:
 +    dmc - the DMComposite (packer) object
 -    dm - the DM object
 
@@ -778,9 +777,9 @@ PetscErrorCode  DMCompositeAddDM(DM dmc,DM dm)
   PetscValidHeaderSpecific(dmc,DM_CLASSID,1);
   PetscValidHeaderSpecific(dm,DM_CLASSID,2);
   ierr = PetscObjectTypeCompare((PetscObject)dmc,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   next = com->next;
-  if (com->setup) SETERRQ(PetscObjectComm((PetscObject)dmc),PETSC_ERR_ARG_WRONGSTATE,"Cannot add a DM once you have used the DMComposite");
+  PetscCheckFalse(com->setup,PetscObjectComm((PetscObject)dmc),PETSC_ERR_ARG_WRONGSTATE,"Cannot add a DM once you have used the DMComposite");
 
   /* create new link */
   ierr = PetscNew(&mine);CHKERRQ(ierr);
@@ -822,7 +821,7 @@ PetscErrorCode  VecView_DMComposite(Vec gvec,PetscViewer viewer)
 
   PetscFunctionBegin;
   ierr = VecGetDM(gvec, &dm);CHKERRQ(ierr);
-  if (!dm) SETERRQ(PetscObjectComm((PetscObject)gvec),PETSC_ERR_ARG_WRONG,"Vector not generated from a DMComposite");
+  PetscCheck(dm,PetscObjectComm((PetscObject)gvec),PETSC_ERR_ARG_WRONG,"Vector not generated from a DMComposite");
   com  = (DM_Composite*)dm->data;
   next = com->next;
 
@@ -928,7 +927,7 @@ PetscErrorCode  DMCompositeGetISLocalToGlobalMappings(DM dm,ISLocalToGlobalMappi
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   ierr = DMSetUp(dm);CHKERRQ(ierr);
   ierr = PetscMalloc1(com->nDM,ltogs);CHKERRQ(ierr);
   next = com->next;
@@ -981,10 +980,10 @@ PetscErrorCode  DMCompositeGetISLocalToGlobalMappings(DM dm,ISLocalToGlobalMappi
 
    Not Collective
 
-   Input Arguments:
+   Input Parameter:
 . dm - composite DM
 
-   Output Arguments:
+   Output Parameter:
 . is - array of serial index sets for each each component of the DMComposite
 
    Level: intermediate
@@ -1016,7 +1015,7 @@ PetscErrorCode  DMCompositeGetLocalISs(DM dm,IS **is)
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   PetscValidPointer(is,2);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   ierr = PetscMalloc1(com->nmine,is);CHKERRQ(ierr);
   for (cnt=0,start=0,link=com->next; link; start+=link->nlocal,cnt++,link=link->next) {
     PetscInt bs;
@@ -1070,8 +1069,8 @@ PetscErrorCode  DMCompositeGetGlobalISs(DM dm,IS *is[])
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
-  if (!dm->setupcalled) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONGSTATE,"Must call DMSetUp() before");
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(dm->setupcalled,PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONGSTATE,"Must call DMSetUp() before");
   ierr = PetscMalloc1(com->nDM,is);CHKERRQ(ierr);
   next = com->next;
   ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)dm),&rank);CHKERRMPI(ierr);
@@ -1172,8 +1171,6 @@ PetscErrorCode DMCreateFieldDecomposition_Composite(DM dm, PetscInt *len,char **
   PetscFunctionReturn(0);
 }
 
-
-
 /* -------------------------------------------------------------------------------------*/
 /*@C
     DMCompositeGetLocalVectors - Gets local vectors for each part of a DMComposite.
@@ -1207,7 +1204,7 @@ PetscErrorCode  DMCompositeGetLocalVectors(DM dm,...)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   next = com->next;
   /* loop over packed objects, handling one at at time */
   va_start(Argp,dm);
@@ -1252,7 +1249,7 @@ PetscErrorCode  DMCompositeRestoreLocalVectors(DM dm,...)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   next = com->next;
   /* loop over packed objects, handling one at at time */
   va_start(Argp,dm);
@@ -1300,7 +1297,7 @@ PetscErrorCode  DMCompositeGetEntries(DM dm,...)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   next = com->next;
   /* loop over packed objects, handling one at at time */
   va_start(Argp,dm);
@@ -1344,7 +1341,7 @@ PetscErrorCode DMCompositeGetEntriesArray(DM dm,DM dms[])
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMCOMPOSITE,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
+  PetscCheck(flg,PetscObjectComm((PetscObject)dm),PETSC_ERR_USER,"Not for type %s",((PetscObject)dm)->type_name);
   /* loop over packed objects, handling one at at time */
   for (next=com->next,i=0; next; next=next->next,i++) dms[i] = next->dm;
   PetscFunctionReturn(0);
@@ -1529,7 +1526,7 @@ PetscErrorCode  DMCreateInterpolation_Composite(DM coarse,DM fine,Mat *A,Vec *v)
   ierr = DMRestoreGlobalVector(fine,&gfine);CHKERRQ(ierr);
 
   nDM = comfine->nDM;
-  if (nDM != comcoarse->nDM) SETERRQ2(PetscObjectComm((PetscObject)fine),PETSC_ERR_ARG_INCOMP,"Fine DMComposite has %D entries, but coarse has %D",nDM,comcoarse->nDM);
+  PetscCheckFalse(nDM != comcoarse->nDM,PetscObjectComm((PetscObject)fine),PETSC_ERR_ARG_INCOMP,"Fine DMComposite has %D entries, but coarse has %D",nDM,comcoarse->nDM);
   ierr = PetscCalloc1(nDM*nDM,&mats);CHKERRQ(ierr);
   if (v) {
     ierr = PetscCalloc1(nDM,&vecs);CHKERRQ(ierr);
@@ -1572,7 +1569,6 @@ static PetscErrorCode DMGetLocalToGlobalMapping_Composite(DM dm)
   PetscFunctionReturn(0);
 }
 
-
 PetscErrorCode  DMCreateColoring_Composite(DM dm,ISColoringType ctype,ISColoring *coloring)
 {
   PetscErrorCode  ierr;
@@ -1584,7 +1580,7 @@ PetscErrorCode  DMCreateColoring_Composite(DM dm,ISColoringType ctype,ISColoring
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
-  if (ctype == IS_COLORING_LOCAL) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only global coloring supported");
+  PetscCheckFalse(ctype == IS_COLORING_LOCAL,PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Only global coloring supported");
   else if (ctype == IS_COLORING_GLOBAL) {
     n = com->n;
   } else SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_OUTOFRANGE,"Unknown ISColoringType");
@@ -1790,7 +1786,6 @@ PetscErrorCode  DMLocalToLocalEnd_Composite(DM dm,Vec lvec,InsertMode mode,Vec g
 
 .seealso: DMType, DM, DMDACreate(), DMCreate(), DMSetType(), DMCompositeCreate()
 M*/
-
 
 PETSC_EXTERN PetscErrorCode DMCreate_Composite(DM p)
 {

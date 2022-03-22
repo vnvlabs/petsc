@@ -12,7 +12,6 @@
  *
  */
 
-
 /*
  * Take the processes that own the vectors and Organize them on a virtual ring.
  */
@@ -32,7 +31,7 @@ PetscErrorCode KSPAGMRESRoddecInitNeighboor(KSP ksp)
   ierr = MPIU_Allreduce(&rank, &First, 1, MPI_INT, MPI_MIN, comm);CHKERRMPI(ierr);
   ierr = MPIU_Allreduce(&rank, &Last, 1, MPI_INT, MPI_MAX, comm);CHKERRMPI(ierr);
 
-  if ((rank != Last) && (!rank)) {
+  if ((rank != Last) && (rank == 0)) {
     agmres->Ileft  = rank - 1;
     agmres->Iright = rank + 1;
   } else {
@@ -133,16 +132,15 @@ PetscErrorCode KSPAGMRESRoddec(KSP ksp, PetscInt nvec)
   MPI_Status     status;
   PetscBLASInt   N = MAXKSPSIZE + 1;
 
-
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)ksp,&comm);CHKERRQ(ierr);
   ierr = PetscLogEventBegin(KSP_AGMRESRoddec,ksp,0,0,0);CHKERRQ(ierr);
   ierr = PetscArrayzero(agmres->Rloc, N*N);CHKERRQ(ierr);
   /* check input arguments */
-  if (nvec < 1) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE, "The number of input vectors shoud be positive");
+  PetscCheckFalse(nvec < 1,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE, "The number of input vectors shoud be positive");
   ierr = VecGetLocalSize(VEC_V(0), &nloc);CHKERRQ(ierr);
   ierr = PetscBLASIntCast(nloc,&bnloc);CHKERRQ(ierr);
-  if (nvec > nloc) SETERRQ(PetscObjectComm((PetscObject)ksp), PETSC_ERR_ARG_WRONG, "In QR factorization, the number of local rows should be greater or equal to the number of columns");
+  PetscCheckFalse(nvec > nloc,PetscObjectComm((PetscObject)ksp), PETSC_ERR_ARG_WRONG, "In QR factorization, the number of local rows should be greater or equal to the number of columns");
   pas = 1;
   /* Copy the vectors of the basis */
   for (j = 0; j < nvec; j++) {
@@ -228,7 +226,6 @@ PetscErrorCode KSPAGMRESRoddec(KSP ksp, PetscInt nvec)
   ierr = PetscLogEventEnd(KSP_AGMRESRoddec,ksp,0,0,0);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*
  *  Computes Out <-- Q * In where Q is the orthogonal matrix from AGMRESRoddec

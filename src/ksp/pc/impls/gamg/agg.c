@@ -5,6 +5,7 @@
 #include <../src/ksp/pc/impls/gamg/gamg.h>        /*I "petscpc.h" I*/
 #include <petscblaslapack.h>
 #include <petscdm.h>
+#include <petsc/private/kspimpl.h>
 
 typedef struct {
   PetscInt  nsmooths;
@@ -188,14 +189,14 @@ static PetscErrorCode PCSetCoordinates_AGG(PC pc, PetscInt ndm, PetscInt a_nloc,
   ierr = MatGetBlockSize(mat, &ndf);CHKERRQ(ierr); /* this does not work for Stokes */
   if (coords && ndf==1) pc_gamg->data_cell_cols = 1; /* scalar w/ coords and SA (not needed) */
   else if (coords) {
-    if (ndm > ndf) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"degrees of motion %D > block size %D",ndm,ndf);
+    PetscCheckFalse(ndm > ndf,PETSC_COMM_SELF,PETSC_ERR_PLIB,"degrees of motion %D > block size %D",ndm,ndf);
     pc_gamg->data_cell_cols = (ndm==2 ? 3 : 6); /* displacement elasticity */
     if (ndm != ndf) {
-      if (pc_gamg->data_cell_cols != ndf) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Don't know how to create null space for ndm=%D, ndf=%D.  Use MatSetNearNullSpace().",ndm,ndf);
+      PetscCheckFalse(pc_gamg->data_cell_cols != ndf,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Don't know how to create null space for ndm=%D, ndf=%D.  Use MatSetNearNullSpace().",ndm,ndf);
     }
   } else pc_gamg->data_cell_cols = ndf; /* no data, force SA with constant null space vectors */
   pc_gamg->data_cell_rows = ndatarows = ndf;
-  if (pc_gamg->data_cell_cols <= 0) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"pc_gamg->data_cell_cols %D <= 0",pc_gamg->data_cell_cols);
+  PetscCheckFalse(pc_gamg->data_cell_cols <= 0,PETSC_COMM_SELF,PETSC_ERR_PLIB,"pc_gamg->data_cell_cols %D <= 0",pc_gamg->data_cell_cols);
   arrsz = nloc*pc_gamg->data_cell_rows*pc_gamg->data_cell_cols;
 
   if (!pc_gamg->data || (pc_gamg->data_sz != arrsz)) {
@@ -291,12 +292,12 @@ static PetscErrorCode smoothAggs(PC pc,Mat Gmat_2, Mat Gmat_1,PetscCoarsenData *
   } else {
     PetscBool isAIJ;
     ierr = PetscStrbeginswith(((PetscObject)Gmat_1)->type_name,MATSEQAIJ,&isAIJ);CHKERRQ(ierr);
-    if (!isAIJ) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_USER,"Require AIJ matrix.");
+    PetscCheckFalse(!isAIJ,PETSC_COMM_SELF,PETSC_ERR_USER,"Require AIJ matrix.");
     matA_1        = (Mat_SeqAIJ*)Gmat_1->data;
     lid_cprowID_1 = NULL;
   }
   if (nloc>0) {
-    if (matB_1 && !matB_1->compressedrow.use) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"matB_1 && !matB_1->compressedrow.use: PETSc bug???");
+    PetscCheckFalse(matB_1 && !matB_1->compressedrow.use,PETSC_COMM_SELF,PETSC_ERR_PLIB,"matB_1 && !matB_1->compressedrow.use: PETSc bug???");
   }
   /* get state of locals and selected gid for deleted */
   ierr = PetscMalloc2(nloc, &lid_state,nloc, &lid_parent_gid);CHKERRQ(ierr);
@@ -313,7 +314,7 @@ static PetscErrorCode smoothAggs(PC pc,Mat Gmat_2, Mat Gmat_1,PetscCoarsenData *
       PetscInt gid1;
 
       ierr = PetscCDIntNdGetID(pos, &gid1);CHKERRQ(ierr);
-      if (gid1 != lid+my0) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_PLIB,"gid1 %D != lid %D + my0 %D",gid1,lid,my0);
+      PetscCheckFalse(gid1 != lid+my0,PETSC_COMM_SELF,PETSC_ERR_PLIB,"gid1 %D != lid %D + my0 %D",gid1,lid,my0);
       lid_state[lid] = gid1;
     }
   }
@@ -384,7 +385,7 @@ static PetscErrorCode smoothAggs(PC pc,Mat Gmat_2, Mat Gmat_1,PetscCoarsenData *
               PetscInt gid;
               ierr = PetscCDIntNdGetID(pos, &gid);CHKERRQ(ierr);
               if (gid == gidj) {
-                if (!last) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"last cannot be null");
+                PetscCheckFalse(!last,PETSC_COMM_SELF,PETSC_ERR_PLIB,"last cannot be null");
                 ierr = PetscCDRemoveNextNode(aggs_2, slid, last);CHKERRQ(ierr);
                 ierr = PetscCDAppendNode(aggs_2, lid, pos);CHKERRQ(ierr);
                 hav  = 1;
@@ -393,11 +394,11 @@ static PetscErrorCode smoothAggs(PC pc,Mat Gmat_2, Mat Gmat_1,PetscCoarsenData *
               ierr = PetscCDGetNextPos(aggs_2,slid,&pos);CHKERRQ(ierr);
             }
             if (hav != 1) {
-              if (!hav) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"failed to find adj in 'selected' lists - structurally unsymmetric matrix");
-              SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"found node %D times???",hav);
+              PetscCheckFalse(!hav,PETSC_COMM_SELF,PETSC_ERR_PLIB,"failed to find adj in 'selected' lists - structurally unsymmetric matrix");
+              SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"found node %D times???",hav);
             }
           } else {            /* I'm stealing this local, owned by a ghost */
-            if (sgid != -1) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Mat has an un-symmetric graph. Use '-%spc_gamg_sym_graph true' to symmetrize the graph or '-%spc_gamg_threshold -1' if the matrix is structurally symmetric.",((PetscObject)pc)->prefix ? ((PetscObject)pc)->prefix : "",((PetscObject)pc)->prefix ? ((PetscObject)pc)->prefix : "");
+            PetscCheckFalse(sgid != -1,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Mat has an un-symmetric graph. Use '-%spc_gamg_sym_graph true' to symmetrize the graph or '-%spc_gamg_threshold -1' if the matrix is structurally symmetric.",((PetscObject)pc)->prefix ? ((PetscObject)pc)->prefix : "",((PetscObject)pc)->prefix ? ((PetscObject)pc)->prefix : "");
             ierr = PetscCDAppendID(aggs_2, lid, lidj+my0);CHKERRQ(ierr);
           }
         }
@@ -423,7 +424,7 @@ static PetscErrorCode smoothAggs(PC pc,Mat Gmat_2, Mat Gmat_1,PetscCoarsenData *
                 ierr = PetscCDIntNdGetID(pos, &gid);CHKERRQ(ierr);
                 if (lid+my0 == gid) {
                   /* id_llist_2[lastid] = id_llist_2[flid];   /\* remove lid from oldslidj list *\/ */
-                  if (!last) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"last cannot be null");
+                  PetscCheckFalse(!last,PETSC_COMM_SELF,PETSC_ERR_PLIB,"last cannot be null");
                   ierr = PetscCDRemoveNextNode(aggs_2, oldslidj, last);CHKERRQ(ierr);
                   /* ghost (PetscScalar)statej will add this later */
                   hav = 1;
@@ -432,8 +433,8 @@ static PetscErrorCode smoothAggs(PC pc,Mat Gmat_2, Mat Gmat_1,PetscCoarsenData *
                 ierr = PetscCDGetNextPos(aggs_2,oldslidj,&pos);CHKERRQ(ierr);
               }
               if (hav != 1) {
-                if (!hav) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"failed to find adj in 'selected' lists - structurally unsymmetric matrix");
-                SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"found node %D times???",hav);
+                PetscCheckFalse(!hav,PETSC_COMM_SELF,PETSC_ERR_PLIB,"failed to find adj in 'selected' lists - structurally unsymmetric matrix");
+                SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"found node %D times???",hav);
               }
             } else {
               /* TODO: ghosts remove this later */
@@ -599,7 +600,7 @@ static PetscErrorCode PCSetData_AGG(PC pc, Mat a_A)
     PetscInt bs,NN,MM;
     ierr = MatGetBlockSize(a_A, &bs);CHKERRQ(ierr);
     ierr = MatGetLocalSize(a_A, &MM, &NN);CHKERRQ(ierr);
-    if (MM % bs) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"MM %D must be divisible by bs %D",MM,bs);
+    PetscCheckFalse(MM % bs,PETSC_COMM_SELF,PETSC_ERR_PLIB,"MM %D must be divisible by bs %D",MM,bs);
     ierr = PCSetCoordinates_AGG(pc, bs, MM/bs, NULL);CHKERRQ(ierr);
   } else {
     PetscReal         *nullvec;
@@ -645,7 +646,7 @@ static PetscErrorCode PCSetData_AGG(PC pc, Mat a_A)
 static PetscErrorCode formProl0(PetscCoarsenData *agg_llists,PetscInt bs,PetscInt nSAvec,PetscInt my0crs,PetscInt data_stride,PetscReal data_in[],const PetscInt flid_fgid[],PetscReal **a_data_out,Mat a_Prol)
 {
   PetscErrorCode  ierr;
-  PetscInt        Istart,my0,Iend,nloc,clid,flid = 0,aggID,kk,jj,ii,mm,ndone,nSelected,minsz,nghosts,out_data_stride;
+  PetscInt        Istart,my0,Iend,nloc,clid,flid = 0,aggID,kk,jj,ii,mm,nSelected,minsz,nghosts,out_data_stride;
   MPI_Comm        comm;
   PetscReal       *out_data;
   PetscCDIntNd    *pos;
@@ -655,7 +656,7 @@ static PetscErrorCode formProl0(PetscCoarsenData *agg_llists,PetscInt bs,PetscIn
   ierr = PetscObjectGetComm((PetscObject)a_Prol,&comm);CHKERRQ(ierr);
   ierr = MatGetOwnershipRange(a_Prol, &Istart, &Iend);CHKERRQ(ierr);
   nloc = (Iend-Istart)/bs; my0 = Istart/bs;
-  if ((Iend-Istart) % bs) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Iend %D - Istart %D must be divisible by bs %D",Iend,Istart,bs);
+  PetscCheckFalse((Iend-Istart) % bs,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Iend %D - Istart %D must be divisible by bs %D",Iend,Istart,bs);
   Iend   /= bs;
   nghosts = data_stride/bs - nloc;
 
@@ -671,8 +672,8 @@ static PetscErrorCode formProl0(PetscCoarsenData *agg_llists,PetscInt bs,PetscIn
     if (!ise) nSelected++;
   }
   ierr = MatGetOwnershipRangeColumn(a_Prol, &ii, &jj);CHKERRQ(ierr);
-  if ((ii/nSAvec) != my0crs) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_PLIB,"ii %D /nSAvec %D  != my0crs %D",ii,nSAvec,my0crs);
-  if (nSelected != (jj-ii)/nSAvec) SETERRQ4(PETSC_COMM_SELF,PETSC_ERR_PLIB,"nSelected %D != (jj %D - ii %D)/nSAvec %D",nSelected,jj,ii,nSAvec);
+  PetscCheckFalse((ii/nSAvec) != my0crs,PETSC_COMM_SELF,PETSC_ERR_PLIB,"ii %D /nSAvec %D  != my0crs %D",ii,nSAvec,my0crs);
+  PetscCheckFalse(nSelected != (jj-ii)/nSAvec,PETSC_COMM_SELF,PETSC_ERR_PLIB,"nSelected %D != (jj %D - ii %D)/nSAvec %D",nSelected,jj,ii,nSAvec);
 
   /* aloc space for coarse point data (output) */
   out_data_stride = nSelected*nSAvec;
@@ -683,7 +684,6 @@ static PetscErrorCode formProl0(PetscCoarsenData *agg_llists,PetscInt bs,PetscIn
 
   /* find points and set prolongation */
   minsz = 100;
-  ndone = 0;
   for (mm = clid = 0; mm < nloc; mm++) {
     ierr = PetscCDSizeAt(agg_llists, mm, &jj);CHKERRQ(ierr);
     if (jj > 0) {
@@ -711,7 +711,7 @@ static PetscErrorCode formProl0(PetscCoarsenData *agg_llists,PetscInt bs,PetscIn
         if (gid1 >= my0 && gid1 < Iend) flid = gid1 - my0;
         else {
           ierr = PCGAMGHashTableFind(&fgid_flid, gid1, &flid);CHKERRQ(ierr);
-          if (flid < 0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Cannot find gid1 in table");
+          PetscCheckFalse(flid < 0,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Cannot find gid1 in table");
         }
         /* copy in B_i matrix - column oriented */
         data = &data_in[flid*bs];
@@ -733,18 +733,17 @@ static PetscErrorCode formProl0(PetscCoarsenData *agg_llists,PetscInt bs,PetscIn
         }
       }
 
-      ndone += aggID;
       /* QR */
       ierr = PetscFPTrapPush(PETSC_FP_TRAP_OFF);CHKERRQ(ierr);
       PetscStackCallBLAS("LAPACKgeqrf",LAPACKgeqrf_(&Mdata, &N, qqc, &LDA, TAU, WORK, &LWORK, &INFO));
       ierr = PetscFPTrapPop();CHKERRQ(ierr);
-      if (INFO != 0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"xGEQRF error");
+      PetscCheckFalse(INFO != 0,PETSC_COMM_SELF,PETSC_ERR_PLIB,"xGEQRF error");
       /* get R - column oriented - output B_{i+1} */
       {
         PetscReal *data = &out_data[clid*nSAvec];
         for (jj = 0; jj < nSAvec; jj++) {
           for (ii = 0; ii < nSAvec; ii++) {
-            if (data[jj*out_data_stride + ii] != PETSC_MAX_REAL) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"data[jj*out_data_stride + ii] != %e",(double)PETSC_MAX_REAL);
+            PetscCheckFalse(data[jj*out_data_stride + ii] != PETSC_MAX_REAL,PETSC_COMM_SELF,PETSC_ERR_PLIB,"data[jj*out_data_stride + ii] != %e",(double)PETSC_MAX_REAL);
            if (ii <= jj) data[jj*out_data_stride + ii] = PetscRealPart(qqc[jj*Mdata + ii]);
            else data[jj*out_data_stride + ii] = 0.;
           }
@@ -753,7 +752,7 @@ static PetscErrorCode formProl0(PetscCoarsenData *agg_llists,PetscInt bs,PetscIn
 
       /* get Q - row oriented */
       PetscStackCallBLAS("LAPACKorgqr",LAPACKorgqr_(&Mdata, &N, &N, qqc, &LDA, TAU, WORK, &LWORK, &INFO));
-      if (INFO != 0) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"xORGQR error arg %d",-INFO);
+      PetscCheckFalse(INFO != 0,PETSC_COMM_SELF,PETSC_ERR_PLIB,"xORGQR error arg %d",-INFO);
 
       for (ii = 0; ii < M; ii++) {
         for (jj = 0; jj < N; jj++) {
@@ -859,7 +858,7 @@ static PetscErrorCode PCGAMGCoarsen_AGG(PC a_pc,Mat *a_Gmat1,PetscCoarsenData **
   ierr = PetscObjectGetComm((PetscObject)Gmat1,&comm);CHKERRQ(ierr);
   ierr = MatGetLocalSize(Gmat1, &n, &m);CHKERRQ(ierr);
   ierr = MatGetBlockSize(Gmat1, &bs);CHKERRQ(ierr);
-  if (bs != 1) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"bs %D must be 1",bs);
+  PetscCheckFalse(bs != 1,PETSC_COMM_SELF,PETSC_ERR_PLIB,"bs %D must be 1",bs);
   nloc = n/bs;
 
   if (pc_gamg->current_level < pc_gamg_agg->square_graph) {
@@ -906,7 +905,7 @@ static PetscErrorCode PCGAMGCoarsen_AGG(PC a_pc,Mat *a_Gmat1,PetscCoarsenData **
     ierr     = MatDestroy(&Gmat1);CHKERRQ(ierr);
     *a_Gmat1 = Gmat2; /* output */
     ierr     = PetscCDGetMat(llist, &mat);CHKERRQ(ierr);
-    if (mat) SETERRQ(comm,PETSC_ERR_ARG_WRONG, "Auxilary matrix with squared graph????");
+    PetscCheckFalse(mat,comm,PETSC_ERR_ARG_WRONG, "Auxilary matrix with squared graph????");
   } else {
     const PetscCoarsenData *llist = *agg_lists;
     /* see if we have a matrix that takes precedence (returned from MatCoarsenApply) */
@@ -948,13 +947,13 @@ static PetscErrorCode PCGAMGProlongator_AGG(PC pc,Mat Amat,Mat Gmat,PetscCoarsen
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)Amat,&comm);CHKERRQ(ierr);
-  if (col_bs < 1) SETERRQ(comm,PETSC_ERR_PLIB,"Column bs cannot be less than 1");
+  PetscCheckFalse(col_bs < 1,comm,PETSC_ERR_PLIB,"Column bs cannot be less than 1");
   ierr = PetscLogEventBegin(PC_GAMGProlongator_AGG,0,0,0,0);CHKERRQ(ierr);
   ierr = MPI_Comm_size(comm, &size);CHKERRMPI(ierr);
   ierr = MatGetOwnershipRange(Amat, &Istart, &Iend);CHKERRQ(ierr);
   ierr = MatGetBlockSize(Amat, &bs);CHKERRQ(ierr);
   nloc = (Iend-Istart)/bs; my0 = Istart/bs;
-  if ((Iend-Istart) % bs) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_PLIB,"(Iend %D - Istart %D) not divisible by bs %D",Iend,Istart,bs);
+  PetscCheckFalse((Iend-Istart) % bs,PETSC_COMM_SELF,PETSC_ERR_PLIB,"(Iend %D - Istart %D) not divisible by bs %D",Iend,Istart,bs);
 
   /* get 'nLocalSelected' */
   for (ii=0, nLocalSelected = 0; ii < nloc; ii++) {
@@ -976,18 +975,18 @@ static PetscErrorCode PCGAMGProlongator_AGG(PC pc,Mat Amat,Mat Gmat,PetscCoarsen
   /* can get all points "removed" */
   ierr =  MatGetSize(Prol, &kk, &ii);CHKERRQ(ierr);
   if (!ii) {
-    ierr = PetscInfo(pc,"No selected points on coarse grid\n");CHKERRQ(ierr);
+    ierr = PetscInfo(pc,"%s: No selected points on coarse grid\n");CHKERRQ(ierr);
     ierr = MatDestroy(&Prol);CHKERRQ(ierr);
     *a_P_out = NULL;  /* out */
     ierr = PetscLogEventEnd(PC_GAMGProlongator_AGG,0,0,0,0);CHKERRQ(ierr);
     PetscFunctionReturn(0);
   }
-  ierr = PetscInfo1(pc,"New grid %D nodes\n",ii/col_bs);CHKERRQ(ierr);
+  ierr = PetscInfo(pc,"%s: New grid %D nodes\n",((PetscObject)pc)->prefix,ii/col_bs);CHKERRQ(ierr);
   ierr = MatGetOwnershipRangeColumn(Prol, &myCrs0, &kk);CHKERRQ(ierr);
 
-  if ((kk-myCrs0) % col_bs) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_PLIB,"(kk %D -myCrs0 %D) not divisible by col_bs %D",kk,myCrs0,col_bs);
+  PetscCheckFalse((kk-myCrs0) % col_bs,PETSC_COMM_SELF,PETSC_ERR_PLIB,"(kk %D -myCrs0 %D) not divisible by col_bs %D",kk,myCrs0,col_bs);
   myCrs0 = myCrs0/col_bs;
-  if ((kk/col_bs-myCrs0) != nLocalSelected) SETERRQ4(PETSC_COMM_SELF,PETSC_ERR_PLIB,"(kk %D/col_bs %D - myCrs0 %D) != nLocalSelected %D)",kk,col_bs,myCrs0,nLocalSelected);
+  PetscCheckFalse((kk/col_bs-myCrs0) != nLocalSelected,PETSC_COMM_SELF,PETSC_ERR_PLIB,"(kk %D/col_bs %D - myCrs0 %D) != nLocalSelected %D)",kk,col_bs,myCrs0,nLocalSelected);
 
   /* create global vector of data in 'data_w_ghost' */
   ierr = PetscLogEventBegin(petsc_gamg_setup_events[SET7],0,0,0,0);CHKERRQ(ierr);
@@ -1029,7 +1028,7 @@ static PetscErrorCode PCGAMGProlongator_AGG(PC pc,Mat Amat,Mat Gmat,PetscCoarsen
     for (kk=0; kk<stride; kk++) flid_fgid[kk] = (PetscInt)fiddata[kk];
     ierr = PetscFree(fiddata);CHKERRQ(ierr);
 
-    if (stride != nbnodes/bs) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_PLIB,"stride %D != nbnodes %D/bs %D",stride,nbnodes,bs);
+    PetscCheckFalse(stride != nbnodes/bs,PETSC_COMM_SELF,PETSC_ERR_PLIB,"stride %D != nbnodes %D/bs %D",stride,nbnodes,bs);
     ierr = PetscFree(fid_glid_loc);CHKERRQ(ierr);
   } else {
     ierr = PetscMalloc1(nloc, &flid_fgid);CHKERRQ(ierr);
@@ -1095,27 +1094,20 @@ static PetscErrorCode PCGAMGOptProlongator_AGG(PC pc,Mat Amat,Mat *a_P)
 
       ierr = MatCreateVecs(Amat, &bb, NULL);CHKERRQ(ierr);
       ierr = MatCreateVecs(Amat, &xx, NULL);CHKERRQ(ierr);
-      ierr = VecSetRandom(bb,NULL);CHKERRQ(ierr);
+      ierr = KSPSetNoisy_Private(bb);CHKERRQ(ierr);
 
       ierr = KSPCreate(comm,&eksp);CHKERRQ(ierr);
       ierr = PCGetOptionsPrefix(pc,&prefix);CHKERRQ(ierr);
       ierr = KSPSetOptionsPrefix(eksp,prefix);CHKERRQ(ierr);
-      ierr = KSPAppendOptionsPrefix(eksp,"pc_gamg_smoothprolongator_");CHKERRQ(ierr);
-      if (pc_gamg->esteig_type[0] == '\0') {
-        PetscBool flg;
-        ierr = MatGetOption(Amat, MAT_SPD, &flg);CHKERRQ(ierr);
-        if (flg) {
-          ierr = KSPGetOptionsPrefix(eksp,&prefix);CHKERRQ(ierr);
-          ierr = PetscOptionsHasName(NULL,prefix,"-ksp_type",&flg);CHKERRQ(ierr);
-          if (!flg) {
-            ierr = KSPSetType(eksp, KSPCG);CHKERRQ(ierr);
-          }
+      ierr = KSPAppendOptionsPrefix(eksp,"pc_gamg_esteig_");CHKERRQ(ierr);
+      {
+        PetscBool sflg;
+        ierr = MatGetOption(Amat, MAT_SPD, &sflg);CHKERRQ(ierr);
+        if (sflg) {
+          ierr = KSPSetType(eksp, KSPCG);CHKERRQ(ierr);
         }
-      } else {
-        ierr = KSPSetType(eksp, pc_gamg->esteig_type);CHKERRQ(ierr);
       }
       ierr = KSPSetErrorIfNotConverged(eksp,pc->erroriffailure);CHKERRQ(ierr);
-      ierr = KSPSetTolerances(eksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,pc_gamg->esteig_max_it);CHKERRQ(ierr);
       ierr = KSPSetNormType(eksp, KSP_NORM_NONE);CHKERRQ(ierr);
 
       ierr = KSPSetInitialGuessNonzero(eksp, PETSC_FALSE);CHKERRQ(ierr);
@@ -1124,13 +1116,15 @@ static PetscErrorCode PCGAMGOptProlongator_AGG(PC pc,Mat Amat,Mat *a_P)
       ierr = KSPGetPC(eksp, &epc);CHKERRQ(ierr);
       ierr = PCSetType(epc, PCJACOBI);CHKERRQ(ierr);  /* smoother in smoothed agg. */
 
+      ierr = KSPSetTolerances(eksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT, 10);CHKERRQ(ierr); // 10 is safer, but 5 is often fine, can override with -pc_gamg_esteig_ksp_max_it -mg_levels_ksp_chebyshev_esteig 0,0.25,0,1.2
+
       ierr = KSPSetFromOptions(eksp);CHKERRQ(ierr);
       ierr = KSPSetComputeSingularValues(eksp,PETSC_TRUE);CHKERRQ(ierr);
       ierr = KSPSolve(eksp, bb, xx);CHKERRQ(ierr);
       ierr = KSPCheckSolve(eksp,pc,xx);CHKERRQ(ierr);
 
       ierr = KSPComputeExtremeSingularValues(eksp, &emax, &emin);CHKERRQ(ierr);
-      ierr = PetscInfo3(pc,"Smooth P0: max eigen=%e min=%e PC=%s\n",(double)emax,(double)emin,PCJACOBI);CHKERRQ(ierr);
+      ierr = PetscInfo(pc,"%s: Smooth P0: max eigen=%e min=%e PC=%s\n",((PetscObject)pc)->prefix,(double)emax,(double)emin,PCJACOBI);CHKERRQ(ierr);
       ierr = VecDestroy(&xx);CHKERRQ(ierr);
       ierr = VecDestroy(&bb);CHKERRQ(ierr);
       ierr = KSPDestroy(&eksp);CHKERRQ(ierr);
@@ -1138,7 +1132,7 @@ static PetscErrorCode PCGAMGOptProlongator_AGG(PC pc,Mat Amat,Mat *a_P)
     if (pc_gamg->use_sa_esteig) {
       mg->min_eigen_DinvA[pc_gamg->current_level] = emin;
       mg->max_eigen_DinvA[pc_gamg->current_level] = emax;
-      ierr = PetscInfo3(pc,"Smooth P0: level %D, cache spectra %g %g\n",pc_gamg->current_level,(double)emin,(double)emax);CHKERRQ(ierr);
+      ierr = PetscInfo(pc,"%s: Smooth P0: level %D, cache spectra %g %g\n",((PetscObject)pc)->prefix,pc_gamg->current_level,(double)emin,(double)emax);CHKERRQ(ierr);
     } else {
       mg->min_eigen_DinvA[pc_gamg->current_level] = 0;
       mg->max_eigen_DinvA[pc_gamg->current_level] = 0;
@@ -1167,7 +1161,7 @@ static PetscErrorCode PCGAMGOptProlongator_AGG(PC pc,Mat Amat,Mat *a_P)
     ierr = VecDestroy(&diag);CHKERRQ(ierr);
 
     /* TODO: Set a PCFailedReason and exit the building of the AMG preconditioner */
-    if (emax == 0.0) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_PLIB,"Computed maximum singular value as zero");
+    PetscCheckFalse(emax == 0.0,PetscObjectComm((PetscObject)pc),PETSC_ERR_PLIB,"Computed maximum singular value as zero");
     /* TODO: Document the 1.4 and don't hardwire it in this routine */
     alpha = -1.4/emax;
 

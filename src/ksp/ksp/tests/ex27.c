@@ -28,11 +28,11 @@ int main(int argc,char **args)
 
   ierr = PetscInitialize(&argc,&args,(char*)0,help);if (ierr) return ierr;
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
-  if (size != 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"This is a uniprocessor example only!");
+  PetscCheckFalse(size != 1,PETSC_COMM_WORLD,PETSC_ERR_SUP,"This is a uniprocessor example only!");
 
   /* Read matrix and right-hand-side vector */
   ierr = PetscOptionsGetString(NULL,NULL,"-f",file[0],sizeof(file[0]),&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_USER,"Must indicate binary file with the -f option");
+  PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_USER,"Must indicate binary file with the -f option");
 
   ierr = PetscViewerBinaryOpen(PETSC_COMM_WORLD,file[0],FILE_MODE_READ,&fd);CHKERRQ(ierr);
   ierr = MatCreate(PETSC_COMM_WORLD,&A);CHKERRQ(ierr);
@@ -53,7 +53,7 @@ int main(int argc,char **args)
 
     /* Create a new vector b by padding the old one */
     ierr = MatGetLocalSize(A,&m,&n);CHKERRQ(ierr);
-    if (m != n) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ, "This example is not intended for rectangular matrices (%D, %D)", m, n);
+    PetscCheckFalse(m != n,PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ, "This example is not intended for rectangular matrices (%D, %D)", m, n);
     ierr = VecCreate(PETSC_COMM_WORLD,&tmp);CHKERRQ(ierr);
     ierr = VecSetSizes(tmp,m,PETSC_DECIDE);CHKERRQ(ierr);
     ierr = VecSetFromOptions(tmp);CHKERRQ(ierr);
@@ -101,7 +101,7 @@ int main(int argc,char **args)
 
   /* Now, set X=inv(A) as a preconditioner */
   ierr = PCSetType(pc,PCSHELL);CHKERRQ(ierr);
-  ierr = PCShellSetContext(pc,(void*)X);CHKERRQ(ierr);
+  ierr = PCShellSetContext(pc,X);CHKERRQ(ierr);
   ierr = PCShellSetApply(pc,PCShellApply_Matinv);CHKERRQ(ierr);
   ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
 
@@ -131,7 +131,7 @@ PetscErrorCode PCShellApply_Matinv(PC pc,Vec xin,Vec xout)
   Mat            X;
 
   PetscFunctionBeginUser;
-  ierr = PCShellGetContext(pc,(void**)&X);CHKERRQ(ierr);
+  ierr = PCShellGetContext(pc,&X);CHKERRQ(ierr);
   ierr = MatMult(X,xin,xout);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -140,7 +140,7 @@ PetscErrorCode PCShellApply_Matinv(PC pc,Vec xin,Vec xout)
 
     test:
       args: -f ${DATAFILESPATH}/matrices/small
-      requires: datafilespath !complex double !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath !complex double !defined(PETSC_USE_64BIT_INDICES)
       output_file: output/ex27.out
 
 TEST*/

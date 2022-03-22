@@ -13,7 +13,6 @@
       MatCreateMFFD _ - fills in the MatMFFD data structure
                            for this particular implementation
 
-
    Optional functions:
    -------------------
       MatMFFDView_ - prints information about the parameters being used.
@@ -55,7 +54,6 @@ typedef struct {
 .  U - the location at which you want the Jacobian
 -  a - the direction you want the derivative
 
-
    Output Parameter:
 .  h - the scale computed
 
@@ -93,7 +91,7 @@ static PetscErrorCode MatMFFDCompute_DS(MatMFFD ctx,Vec U,Vec a,PetscScalar *h,P
     if (PetscAbsScalar(dot) < umin*sum && PetscRealPart(dot) >= 0.0) dot = umin*sum;
     else if (PetscAbsScalar(dot) < 0.0 && PetscRealPart(dot) > -umin*sum) dot = -umin*sum;
     *h = ctx->error_rel*dot/(nrm*nrm);
-    if (PetscIsInfOrNanScalar(*h)) SETERRQ3(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Differencing parameter is not a number sum = %g dot = %g norm = %g",(double)sum,(double)PetscRealPart(dot),(double)nrm);
+    PetscCheckFalse(PetscIsInfOrNanScalar(*h),PETSC_COMM_SELF,PETSC_ERR_PLIB,"Differencing parameter is not a number sum = %g dot = %g norm = %g",(double)sum,(double)PetscRealPart(dot),(double)nrm);
   } else {
     *h = ctx->currenth;
   }
@@ -181,7 +179,7 @@ PetscErrorCode MatMFFDDSSetUmin_DS(Mat mat,PetscReal umin)
 
   PetscFunctionBegin;
   ierr = MatShellGetContext(mat,&ctx);CHKERRQ(ierr);
-  if (!ctx) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"MatMFFDDSSetUmin() attached to non-shell matrix");
+  PetscCheckFalse(!ctx,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"MatMFFDDSSetUmin() attached to non-shell matrix");
   hctx       = (MatMFFD_DS*)ctx->hctx;
   hctx->umin = umin;
   PetscFunctionReturn(0);
@@ -222,7 +220,7 @@ PetscErrorCode  MatMFFDDSSetUmin(Mat A,PetscReal umin)
         Optimization and Nonlinear Equations".
 
    Options Database Keys:
-.  -mat_mffd_umin <umin> see MatMFFDDSSetUmin()
+.  -mat_mffd_umin <umin> - see MatMFFDDSSetUmin()
 
    Level: intermediate
 
@@ -263,10 +261,4 @@ PETSC_EXTERN PetscErrorCode MatCreateMFFD_DS(MatMFFD ctx)
   ierr = PetscObjectComposeFunction((PetscObject)ctx->mat,"MatMFFDDSSetUmin_C",MatMFFDDSSetUmin_DS);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
-
-
-
-
-
 

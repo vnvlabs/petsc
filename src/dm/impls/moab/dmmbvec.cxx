@@ -21,7 +21,7 @@ static PetscErrorCode DMVecCreateTagName_Moab_Private(moab::Interface *mbiface,c
 
   Collective
 
-  Input Parameter:
+  Input Parameters:
 + dm              - The DMMoab object being set
 . tag             - If non-zero, block size will be taken from the tag size
 . range           - If non-empty, Vec corresponds to these entities, otherwise to the entities set on the DMMoab
@@ -40,12 +40,11 @@ PetscErrorCode DMMoabCreateVector(DM dm, moab::Tag tag, const moab::Range* range
   PetscErrorCode     ierr;
 
   PetscFunctionBegin;
-  if (!tag && (!range || range->empty())) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Both tag and range cannot be null.");
+  PetscCheck(tag || (range && !range->empty()),PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Both tag and range cannot be null.");
 
   ierr = DMCreateVector_Moab_Private(dm, tag, range, is_global_vec, destroy_tag, vec);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabGetVecTag - Get the MOAB tag associated with this Vec
@@ -77,7 +76,6 @@ PetscErrorCode DMMoabGetVecTag(Vec vec, moab::Tag *tag)
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabGetVecRange - Get the MOAB entities associated with this Vec
 
@@ -108,13 +106,12 @@ PetscErrorCode DMMoabGetVecRange(Vec vec, moab::Range *range)
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabVecGetArray - Returns the writable direct access array to the local representation of MOAB tag data for the underlying vector using locally owned+ghosted range of entities
 
   Collective
 
-  Input Parameter:
+  Input Parameters:
 + dm              - The DMMoab object being set
 - vec             - The Vector whose underlying data is requested
 
@@ -182,7 +179,7 @@ PetscErrorCode  DMMoabVecGetArray(DM dm, Vec vec, void* array)
 
     /* Get the array data for local entities */
     merr = dmmoab->mbiface->tag_iterate(vtag, dmmoab->vlocal->begin(), dmmoab->vlocal->end(), count, reinterpret_cast<void*&>(marray), false); MBERRNM(merr);
-    if (count != dmmoab->nloc + dmmoab->nghost) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Mismatch between local vertices and tag partition for Vec. %D != %D.", count, dmmoab->nloc + dmmoab->nghost);
+    PetscCheckFalse(count != dmmoab->nloc + dmmoab->nghost,PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Mismatch between local vertices and tag partition for Vec. %D != %D.", count, dmmoab->nloc + dmmoab->nghost);
 
     i = 0;
     for (moab::Range::iterator iter = dmmoab->vlocal->begin(); iter != dmmoab->vlocal->end(); iter++) {
@@ -194,13 +191,12 @@ PetscErrorCode  DMMoabVecGetArray(DM dm, Vec vec, void* array)
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabVecRestoreArray - Restores the writable direct access array obtained via DMMoabVecGetArray
 
   Collective
 
-  Input Parameter:
+  Input Parameters:
 + dm              - The DMMoab object being set
 . vec             - The Vector whose underlying data is requested
 - array           - The local data array
@@ -258,7 +254,7 @@ PetscErrorCode  DMMoabVecRestoreArray(DM dm, Vec vec, void* array)
 
     /* Get the array data for local entities */
     merr = dmmoab->mbiface->tag_iterate(vtag, dmmoab->vlocal->begin(), dmmoab->vlocal->end(), count, reinterpret_cast<void*&>(marray), false); MBERRNM(merr);
-    if (count != dmmoab->nloc + dmmoab->nghost) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Mismatch between local vertices and tag partition for Vec. %D != %D.", count, dmmoab->nloc + dmmoab->nghost);
+    PetscCheckFalse(count != dmmoab->nloc + dmmoab->nghost,PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Mismatch between local vertices and tag partition for Vec. %D != %D.", count, dmmoab->nloc + dmmoab->nghost);
 
     i = 0;
     for (moab::Range::iterator iter = dmmoab->vlocal->begin(); iter != dmmoab->vlocal->end(); iter++) {
@@ -282,7 +278,7 @@ PetscErrorCode  DMMoabVecRestoreArray(DM dm, Vec vec, void* array)
 
   Collective
 
-  Input Parameter:
+  Input Parameters:
 + dm              - The DMMoab object being set
 - vec             - The Vector whose underlying data is requested
 
@@ -346,7 +342,7 @@ PetscErrorCode  DMMoabVecGetArrayRead(DM dm, Vec vec, void* array)
 
     /* Get the array data for local entities */
     merr = dmmoab->mbiface->tag_iterate(vtag, dmmoab->vlocal->begin(), dmmoab->vlocal->end(), count, reinterpret_cast<void*&>(marray), false); MBERRNM(merr);
-    if (count != dmmoab->nloc + dmmoab->nghost) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Mismatch between local vertices and tag partition for Vec. %D != %D.", count, dmmoab->nloc + dmmoab->nghost);
+    PetscCheckFalse(count != dmmoab->nloc + dmmoab->nghost,PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Mismatch between local vertices and tag partition for Vec. %D != %D.", count, dmmoab->nloc + dmmoab->nghost);
 
     i = 0;
     for (moab::Range::iterator iter = dmmoab->vlocal->begin(); iter != dmmoab->vlocal->end(); iter++) {
@@ -358,13 +354,12 @@ PetscErrorCode  DMMoabVecGetArrayRead(DM dm, Vec vec, void* array)
   PetscFunctionReturn(0);
 }
 
-
 /*@C
-  DMMoabVecRestoreArray - Restores the read-only direct access array obtained via DMMoabVecGetArray
+  DMMoabVecRestoreArrayRead - Restores the read-only direct access array obtained via DMMoabVecGetArray
 
   Collective
 
-  Input Parameter:
+  Input Parameters:
 + dm              - The DMMoab object being set
 . vec             - The Vector whose underlying data is requested
 - array           - The local data array
@@ -412,7 +407,6 @@ PetscErrorCode  DMMoabVecRestoreArrayRead(DM dm, Vec vec, void* array)
   PetscFunctionReturn(0);
 }
 
-
 PetscErrorCode DMCreateVector_Moab_Private(DM dm, moab::Tag tag, const moab::Range* userrange, PetscBool is_global_vec, PetscBool destroy_tag, Vec *vec)
 {
   PetscErrorCode    ierr;
@@ -431,10 +425,10 @@ PetscErrorCode DMCreateVector_Moab_Private(DM dm, moab::Tag tag, const moab::Ran
   moab::Interface *mbiface = dmmoab->mbiface;
 
   PetscFunctionBegin;
-  if (sizeof(PetscReal) != sizeof(PetscScalar)) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_ARG_SIZ, "MOAB tags only support Real types (Complex-type unsupported)");
+  PetscCheckFalse(sizeof(PetscReal) != sizeof(PetscScalar),PETSC_COMM_SELF, PETSC_ERR_ARG_SIZ, "MOAB tags only support Real types (Complex-type unsupported)");
   if (!userrange) range = dmmoab->vowned;
   else range = userrange;
-  if (!range) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_WRONG, "Input range cannot be empty or call DMSetUp first.");
+  PetscCheck(range,PETSC_COMM_WORLD, PETSC_ERR_ARG_WRONG, "Input range cannot be empty or call DMSetUp first.");
 
 #ifndef USE_NATIVE_PETSCVEC
   /* If the tag data is in a single sequence, use PETSc native vector since tag_iterate isn't useful anymore */
@@ -480,7 +474,7 @@ PetscErrorCode DMCreateVector_Moab_Private(DM dm, moab::Tag tag, const moab::Ran
       /* Make sure the tag data is of type "double" */
       moab::DataType tag_type;
       merr = mbiface->tag_get_data_type(tag, tag_type); MBERRNM(merr);
-      if (tag_type != moab::MB_TYPE_DOUBLE) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Tag data type must be MB_TYPE_DOUBLE");
+      PetscCheckFalse(tag_type != moab::MB_TYPE_DOUBLE,PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Tag data type must be MB_TYPE_DOUBLE");
       is_newtag = destroy_tag;
     }
 
@@ -555,7 +549,6 @@ PetscErrorCode DMCreateVector_Moab_Private(DM dm, moab::Tag tag, const moab::Ran
   PetscFunctionReturn(0);
 }
 
-
 /*  DMVecCreateTagName_Moab_Private
  *
  *  Creates a unique tag name that will be shared across processes. If
@@ -608,7 +601,6 @@ PetscErrorCode DMVecCreateTagName_Moab_Private(moab::Interface *mbiface, char** 
   PetscFunctionReturn(0);
 }
 
-
 PETSC_EXTERN PetscErrorCode DMCreateGlobalVector_Moab(DM dm, Vec *gvec)
 {
   PetscErrorCode  ierr;
@@ -621,7 +613,6 @@ PETSC_EXTERN PetscErrorCode DMCreateGlobalVector_Moab(DM dm, Vec *gvec)
   PetscFunctionReturn(0);
 }
 
-
 PETSC_EXTERN PetscErrorCode DMCreateLocalVector_Moab(DM dm, Vec *lvec)
 {
   PetscErrorCode  ierr;
@@ -633,7 +624,6 @@ PETSC_EXTERN PetscErrorCode DMCreateLocalVector_Moab(DM dm, Vec *lvec)
   ierr = DMCreateVector_Moab_Private(dm,NULL,dmmoab->vlocal,PETSC_FALSE,PETSC_TRUE,lvec);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 PetscErrorCode DMVecDuplicate_Moab(Vec x, Vec *y)
 {
@@ -658,7 +648,6 @@ PetscErrorCode DMVecDuplicate_Moab(Vec x, Vec *y)
   PetscFunctionReturn(0);
 }
 
-
 PetscErrorCode DMVecUserDestroy_Moab(void *user)
 {
   Vec_MOAB        *vmoab = (Vec_MOAB*)user;
@@ -680,7 +669,6 @@ PetscErrorCode DMVecUserDestroy_Moab(void *user)
   PetscFunctionReturn(0);
 }
 
-
 PETSC_EXTERN PetscErrorCode  DMGlobalToLocalBegin_Moab(DM dm, Vec g, InsertMode mode, Vec l)
 {
   PetscErrorCode    ierr;
@@ -690,7 +678,6 @@ PETSC_EXTERN PetscErrorCode  DMGlobalToLocalBegin_Moab(DM dm, Vec g, InsertMode 
   ierr = VecScatterBegin(dmmoab->ltog_sendrecv, g, l, mode, SCATTER_REVERSE);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 PETSC_EXTERN PetscErrorCode  DMGlobalToLocalEnd_Moab(DM dm, Vec g, InsertMode mode, Vec l)
 {
@@ -702,7 +689,6 @@ PETSC_EXTERN PetscErrorCode  DMGlobalToLocalEnd_Moab(DM dm, Vec g, InsertMode mo
   PetscFunctionReturn(0);
 }
 
-
 PETSC_EXTERN PetscErrorCode  DMLocalToGlobalBegin_Moab(DM dm, Vec l, InsertMode mode, Vec g)
 {
   PetscErrorCode    ierr;
@@ -712,7 +698,6 @@ PETSC_EXTERN PetscErrorCode  DMLocalToGlobalBegin_Moab(DM dm, Vec l, InsertMode 
   ierr = VecScatterBegin(dmmoab->ltog_sendrecv, l, g, mode, SCATTER_FORWARD);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 PETSC_EXTERN PetscErrorCode  DMLocalToGlobalEnd_Moab(DM dm, Vec l, InsertMode mode, Vec g)
 {

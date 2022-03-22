@@ -5,7 +5,6 @@ static char help[] = "Show MatShift BUG happening after copying a matrix with no
 */
 #include <petscmat.h>
 
-
 /* DEFINE this to turn on/off the bug: */
 #define SET_2nd_PROC_TO_HAVE_NO_LOCAL_LINES
 
@@ -25,7 +24,7 @@ int main(int argc,char **args)
   ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
 
-  if (2 != size) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_INCOMP,"Relevant with 2 processes only");
+  PetscCheckFalse(2 != size,PETSC_COMM_WORLD,PETSC_ERR_ARG_INCOMP,"Relevant with 2 processes only");
   ierr = MatCreate(PETSC_COMM_WORLD,&C);CHKERRQ(ierr);
 
 #ifdef SET_2nd_PROC_TO_HAVE_NO_LOCAL_LINES
@@ -72,7 +71,6 @@ int main(int argc,char **args)
   ierr = PetscFinalize();
   return ierr;
 }
-
 
 /*TEST
 

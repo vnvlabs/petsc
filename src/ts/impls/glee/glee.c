@@ -1,7 +1,6 @@
 /*
   Code for time stepping with the General Linear with Error Estimation method
 
-
   Notes:
   The general system is written as
 
@@ -569,7 +568,7 @@ static PetscErrorCode TSEvaluateStep_GLEE(TS ts,PetscInt order,Vec X,PetscBool *
     PetscFunctionReturn(0);
   }
   if (done) *done = PETSC_FALSE;
-  else SETERRQ3(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"GLEE '%s' of order %D cannot evaluate step at order %D",tab->name,tab->order,order);
+  else SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"GLEE '%s' of order %D cannot evaluate step at order %D",tab->name,tab->order,order);
   PetscFunctionReturn(0);
 }
 
@@ -684,7 +683,7 @@ static PetscErrorCode TSInterpolate_GLEE(TS ts,PetscReal itime,Vec X)
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
-  if (!B) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSGLEE %s does not have an interpolation formula",glee->tableau->name);
+  PetscCheckFalse(!B,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSGLEE %s does not have an interpolation formula",glee->tableau->name);
   switch (glee->status) {
     case TS_STEP_INCOMPLETE:
     case TS_STEP_PENDING:
@@ -745,7 +744,6 @@ static PetscErrorCode TSGLEEGetVecs(TS ts,DM dm,Vec *Ydot)
   }
   PetscFunctionReturn(0);
 }
-
 
 static PetscErrorCode TSGLEERestoreVecs(TS ts,DM dm,Vec *Ydot)
 {
@@ -821,7 +819,6 @@ static PetscErrorCode DMRestrictHook_TSGLEE(DM fine,Mat restrct,Vec rscale,Mat i
   PetscFunctionReturn(0);
 }
 
-
 static PetscErrorCode DMSubDomainHook_TSGLEE(DM dm,DM subdm,void *ctx)
 {
   PetscFunctionBegin;
@@ -880,7 +877,6 @@ PetscErrorCode TSStartingMethod_GLEE(TS ts)
 
   PetscFunctionReturn(0);
 }
-
 
 /*------------------------------------------------------------*/
 
@@ -952,7 +948,7 @@ static PetscErrorCode TSLoad_GLEE(TS ts,PetscViewer viewer)
 
   Logically collective
 
-  Input Parameter:
+  Input Parameters:
 +  ts - timestepping context
 -  gleetype - type of GLEE-scheme
 
@@ -1028,7 +1024,7 @@ PetscErrorCode  TSGLEESetType_GLEE(TS ts,TSGLEEType gleetype)
       PetscFunctionReturn(0);
     }
   }
-  SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_UNKNOWN_TYPE,"Could not find '%s'",gleetype);
+  SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_UNKNOWN_TYPE,"Could not find '%s'",gleetype);
 }
 
 static PetscErrorCode  TSGetStages_GLEE(TS ts,PetscInt *ns,Vec **Y)
@@ -1052,7 +1048,7 @@ PetscErrorCode TSGetSolutionComponents_GLEE(TS ts,PetscInt *n,Vec *Y)
   else {
     if ((*n >= 0) && (*n < tab->r)) {
       ierr = VecCopy(glee->Y[*n],*Y);CHKERRQ(ierr);
-    } else SETERRQ3(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Second argument (%d) out of range[%d,%d].",*n,0,tab->r-1);
+    } else SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Second argument (%d) out of range[%d,%d].",*n,0,tab->r-1);
   }
   PetscFunctionReturn(0);
 }
@@ -1088,7 +1084,7 @@ PetscErrorCode TSGetTimeError_GLEE(TS ts,PetscInt n,Vec *X)
 
   PetscFunctionBegin;
   ierr = VecZeroEntries(*X);CHKERRQ(ierr);
-  if (n==0){
+  if (n==0) {
     for (i=0; i<r; i++) wr[i] = F[i];
     ierr = VecMAXPY((*X),r,wr,Y);CHKERRQ(ierr);
   } else if (n==-1) {
@@ -1107,7 +1103,7 @@ PetscErrorCode TSSetTimeError_GLEE(TS ts,Vec X)
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
-  if (r != 2) SETERRQ2(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSSetTimeError_GLEE not supported for '%s' with r=%D.",tab->name,tab->r);
+  PetscCheckFalse(r != 2,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSSetTimeError_GLEE not supported for '%s' with r=%D.",tab->name,tab->r);
   for (i=1; i<r; i++) {
     ierr = VecCopy(ts->vec_sol,Y[i]);CHKERRQ(ierr);
     ierr = VecAXPBY(Y[i],S[0],S[1],X);CHKERRQ(ierr);

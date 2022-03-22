@@ -119,7 +119,6 @@ static void stokes_mass_J(PetscInt dim, PetscInt Nf, PetscInt NfAux,
   for (d = 0; d < dim; ++d) g1[d*dim+d] = -1.0; /* \frac{\partial\phi^{u_d}}{\partial x_d} */
 }
 
-
 /* -< \nabla\cdot v, p >, J_{up} */
 static void stokes_momentum_pres_J(PetscInt dim, PetscInt Nf, PetscInt NfAux,
                                    const PetscInt uOff[], const PetscInt uOff_x[], const PetscScalar u[], const PetscScalar u_t[], const PetscScalar u_x[],
@@ -505,7 +504,6 @@ static PetscErrorCode SolKxSolution(const PetscReal pos[], PetscReal m, PetscInt
   t143 = t132 + t129 - t125 + t133 + t127 - t124 - t130 - t126 + t135;
   t160 = PetscExpReal(-t20 - Rp - B);
   num4 = (0.2e1 * t12 - 0.8e1 * t14 * kn * t1 * BB) * t21 + ((0.2e1 * t23 * (t7 + 0.5e1 * t3 - t8 - t9) * AA - 0.8e1 * B * BB * t30 * Rp) * t36 + (-0.2e1 * Rp * (-B * t8 - B * t7 - t40 + 0.2e1 * t41 + 0.3e1 * t43 + 0.2e1 * Rp * t7) * AA + 0.8e1 * t51 * kn * Rp) * t56 - 0.2e1 * t14 * (-t8 + t9 + t4 + t7) * AA + 0.8e1 * t51 * t30) * t67 + ((t12 - 0.2e1 * t2 * t71 * BB) * t77 + (t12 + 0.2e1 * t2 * t79 * BB) * t85 + (-0.2e1 * t2 * t71 * AA - t91) * t93 + (-0.2e1 * t2 * t79 * AA + t91) * t99) * t104 + ((-t120 * AA + 0.2e1 * t136 * BB) * t77 + (-t141 * AA - 0.2e1 * t143 * BB) * t85 + (0.2e1 * t136 * AA + t120 * BB) * t93 + (0.2e1 * t143 * AA - t141 * BB) * t99) * t160;
-
 
   t1 = Rm * Rm;
   t2 = Rp * Rp;
@@ -2951,10 +2949,8 @@ static PetscErrorCode SolCxSolution(const PetscReal pos[], PetscReal m, PetscInt
 
   u4 = (t57 + t95 + t135 + t164) / (0.4e1 * t24 * t15 + 0.8e1 * t127 * t15 * t18 + 0.4e1 * t131 * t15 * t19);
 
-
   /****************************************************************************************/
   /****************************************************************************************/
-
 
   u5 = (PetscReal)(-2*Z*nz*PETSC_PI*u2-u3*2*nz*PETSC_PI)*PetscCosReal(nz*PETSC_PI*z); /* pressure */
 
@@ -3028,7 +3024,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   sol  = options->solType;
   ierr = PetscOptionsEList("-sol_type", "Type of exact solution", "ex69.c", solTypes, NUM_SOL_TYPES, solTypes[options->solType], &sol, NULL);CHKERRQ(ierr);
   options->solType = (SolutionType) sol;
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -3057,40 +3053,49 @@ static PetscErrorCode SetUpParameters(AppCtx *user)
     ierr = PetscBagRegisterReal(bag, &p->xc,   0.5, "xc",   "x-coordinate of the viscosity jump");CHKERRQ(ierr);
     break;
   default:
-    SETERRQ2(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid solution type %d (%s)", (PetscInt) user->solType, solTypes[PetscMin(user->solType, NUM_SOL_TYPES)]);
+    SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid solution type %d (%s)", (PetscInt) user->solType, solTypes[PetscMin(user->solType, NUM_SOL_TYPES)]);
   }
   ierr = PetscBagSetFromOptions(bag);CHKERRQ(ierr);
   ierr = PetscBagViewFromOptions(bag, NULL, "-param_view");CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
+/* Make split labels so that we can have corners in multiple labels */
+static PetscErrorCode CreateSplitLabels(DM dm)
 {
+  const char    *names[4] = {"markerBottom", "markerRight", "markerTop", "markerLeft"};
+  PetscInt       ids[4]   = {1, 2, 3, 4};
+  DMLabel        label;
+  IS             is;
+  PetscInt       f;
   PetscErrorCode ierr;
 
   PetscFunctionBeginUser;
-  ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_TRUE, NULL, NULL, NULL, NULL, PETSC_TRUE, dm);CHKERRQ(ierr);
-  /* Make split labels so that we can have corners in multiple labels */
-  {
-    const char *names[4] = {"markerBottom", "markerRight", "markerTop", "markerLeft"};
-    PetscInt    ids[4]   = {1, 2, 3, 4};
-    DMLabel     label;
-    IS          is;
-    PetscInt    f;
-
-    for (f = 0; f < 4; ++f) {
-      ierr = DMGetStratumIS(*dm, "marker", ids[f],  &is);CHKERRQ(ierr);
-      if (!is) continue;
-      ierr = DMCreateLabel(*dm, names[f]);CHKERRQ(ierr);
-      ierr = DMGetLabel(*dm, names[f], &label);CHKERRQ(ierr);
-      if (is) {
-        ierr = DMLabelInsertIS(label, is, 1);CHKERRQ(ierr);
-      }
-      ierr = ISDestroy(&is);CHKERRQ(ierr);
-    }
+  for (f = 0; f < 4; ++f) {
+    ierr = DMCreateLabel(dm, names[f]);CHKERRQ(ierr);
+    ierr = DMGetStratumIS(dm, "marker", ids[f],  &is);CHKERRQ(ierr);
+    if (!is) continue;
+    ierr = DMGetLabel(dm, names[f], &label);CHKERRQ(ierr);
+    ierr = DMLabelInsertIS(label, is, 1);CHKERRQ(ierr);
+    ierr = ISDestroy(&is);CHKERRQ(ierr);
   }
-  ierr = PetscObjectSetName((PetscObject)(*dm), "Mesh");CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+static PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
+{
+  DM             cdm;
+  PetscErrorCode ierr;
+
+  PetscFunctionBeginUser;
+  ierr = DMCreate(comm, dm);CHKERRQ(ierr);
+  ierr = DMSetType(*dm, DMPLEX);CHKERRQ(ierr);
   ierr = DMSetFromOptions(*dm);CHKERRQ(ierr);
+  cdm  = *dm;
+  while (cdm) {
+    ierr = CreateSplitLabels(cdm);CHKERRQ(ierr);
+    ierr = DMGetCoarseDM(cdm, &cdm);CHKERRQ(ierr);
+  }
   ierr = DMViewFromOptions(*dm, NULL, "-dm_view");CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -3129,7 +3134,7 @@ static PetscErrorCode SetupProblem(DM dm, AppCtx *user)
     ierr = PetscDSSetJacobianPreconditioner(prob, 1, 1, stokes_identity_J_cx, NULL, NULL, NULL);CHKERRQ(ierr);
     break;
   default:
-    SETERRQ2(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid solution type %d (%s)", (PetscInt) user->solType, solTypes[PetscMin(user->solType, NUM_SOL_TYPES)]);
+    SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid solution type %d (%s)", (PetscInt) user->solType, solTypes[PetscMin(user->solType, NUM_SOL_TYPES)]);
   }
   ierr = PetscBagGetData(user->bag, &data);CHKERRQ(ierr);
   switch (dim) {
@@ -3144,11 +3149,11 @@ static PetscErrorCode SetupProblem(DM dm, AppCtx *user)
       ierr = PetscDSSetExactSolution(prob, 1, SolCxSolutionPressure, data);CHKERRQ(ierr);
       break;
     default:
-      SETERRQ2(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid solution type %d (%s)", (PetscInt) user->solType, solTypes[PetscMin(user->solType, NUM_SOL_TYPES)]);
+      SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid solution type %d (%s)", (PetscInt) user->solType, solTypes[PetscMin(user->solType, NUM_SOL_TYPES)]);
     }
     break;
   default:
-    SETERRQ1(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid dimension %D", dim);
+    SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid dimension %D", dim);
   }
   /* Setup constants */
   {
@@ -3178,7 +3183,7 @@ static PetscErrorCode SetupProblem(DM dm, AppCtx *user)
       ierr = PetscDSSetConstants(prob, 5, constants);CHKERRQ(ierr);
     }
     break;
-    default: SETERRQ1(PETSC_COMM_WORLD, PETSC_ERR_SUP, "No parameter information for solution type %d", user->solType);
+    default: SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_SUP, "No parameter information for solution type %d", user->solType);
     }
   }
   /* Setup Boundary Conditions */
@@ -3205,7 +3210,7 @@ static PetscErrorCode CreatePressureNullSpace(DM dm, PetscInt origField, PetscIn
   PetscErrorCode   ierr;
 
   PetscFunctionBeginUser;
-  if (origField != 1) SETERRQ1(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Field %D should be 1 for pressure", origField);
+  PetscCheckFalse(origField != 1,PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Field %D should be 1 for pressure", origField);
   funcs[field] = one;
   {
     PetscDS ds;
@@ -3299,12 +3304,12 @@ static PetscErrorCode CorrectDiscretePressure(DM dm, MatNullSpace nullspace, Vec
   ierr = PetscDSSetObjective(ds, 1, pressure);CHKERRQ(ierr);
   ierr = MatNullSpaceGetVecs(nullspace, NULL, NULL, &nullvecs);CHKERRQ(ierr);
   ierr = VecDot(nullvecs[0], u, &pintd);CHKERRQ(ierr);
-  if (PetscAbsScalar(pintd) > PETSC_SMALL) SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Discrete integral of pressure: %g\n", (double) PetscRealPart(pintd));
+  PetscCheckFalse(PetscAbsScalar(pintd) > PETSC_SMALL,comm, PETSC_ERR_ARG_WRONG, "Discrete integral of pressure: %g", (double) PetscRealPart(pintd));
   ierr = DMPlexComputeIntegralFEM(dm, nullvecs[0], intn, user);CHKERRQ(ierr);
   ierr = DMPlexComputeIntegralFEM(dm, u, intc, user);CHKERRQ(ierr);
   ierr = VecAXPY(u, -intc[1]/intn[1], nullvecs[0]);CHKERRQ(ierr);
   ierr = DMPlexComputeIntegralFEM(dm, u, intc, user);CHKERRQ(ierr);
-  if (PetscAbsScalar(intc[1]) > PETSC_SMALL) SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Continuum integral of pressure after correction: %g\n", (double) PetscRealPart(intc[1]));
+  PetscCheckFalse(PetscAbsScalar(intc[1]) > PETSC_SMALL,comm, PETSC_ERR_ARG_WRONG, "Continuum integral of pressure after correction: %g", (double) PetscRealPart(intc[1]));
   PetscFunctionReturn(0);
 }
 
@@ -3324,7 +3329,7 @@ static PetscErrorCode SNESConvergenceCorrectPressure(SNES snes, PetscInt it, Pet
     ierr = SNESGetSolution(snes, &u);CHKERRQ(ierr);
     ierr = SNESGetJacobian(snes, &J, NULL, NULL, NULL);CHKERRQ(ierr);
     ierr = MatGetNullSpace(J, &nullspace);CHKERRQ(ierr);
-    if (!nullspace) SETERRQ(PetscObjectComm((PetscObject) snes), PETSC_ERR_ARG_WRONG, "SNES Jacobian has no attached null space");
+    PetscCheckFalse(!nullspace,PetscObjectComm((PetscObject) snes), PETSC_ERR_ARG_WRONG, "SNES Jacobian has no attached null space");
     ierr = CorrectDiscretePressure(dm, nullspace, u, (AppCtx *) user);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
@@ -3444,7 +3449,7 @@ int main(int argc, char **argv)
   test:
     suffix: q2q1_conv
     # -dm_refine 2 gives L_2 convergence rate: [3.0, 2.1]
-    args: -dm_plex_box_simplex 0 -dm_plex_separate_marker -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
+    args: -dm_plex_simplex 0 -dm_plex_separate_marker -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
       -snes_error_if_not_converged -snes_convergence_estimate -convest_num_refine 2 \
       -ksp_rtol 1.e-9 -ksp_error_if_not_converged -pc_use_amat \
       -pc_type fieldsplit -pc_fieldsplit_type schur -pc_fieldsplit_schur_factorization_type full -pc_fieldsplit_schur_precondition a11 \
@@ -3453,7 +3458,7 @@ int main(int argc, char **argv)
   test:
     suffix: q1p0_conv
     # -dm_refine 2 gives L_2 convergence rate: [2.0, 1.0]
-    args: -dm_plex_box_simplex 0 -dm_plex_separate_marker -vel_petscspace_degree 1 -pres_petscspace_degree 0 \
+    args: -dm_plex_simplex 0 -dm_plex_separate_marker -vel_petscspace_degree 1 -pres_petscspace_degree 0 \
       -snes_error_if_not_converged -snes_convergence_estimate -convest_num_refine 2 \
       -ksp_rtol 1.e-9 -ksp_error_if_not_converged -pc_use_amat \
       -pc_type fieldsplit -pc_fieldsplit_type schur -pc_fieldsplit_schur_factorization_type full -pc_fieldsplit_schur_precondition a11 \
@@ -3462,7 +3467,7 @@ int main(int argc, char **argv)
   test:
     suffix: q2p1_conv
     # -dm_refine 2 gives L_2 convergence rate: [3.0, 2.0]
-    args: -dm_plex_box_simplex 0 -dm_plex_separate_marker \
+    args: -dm_plex_simplex 0 -dm_plex_separate_marker \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 -pres_petscspace_poly_tensor 0 -pres_petscdualspace_lagrange_continuity 0 \
       -snes_error_if_not_converged -snes_convergence_estimate -convest_num_refine 2 \
       -ksp_rtol 1.e-9 -ksp_error_if_not_converged -pc_use_amat \
@@ -3476,7 +3481,7 @@ int main(int argc, char **argv)
     suffix: q2p1fetidp
     requires: !single
     nsize: 5
-    args: -dm_distribute -dm_plex_box_simplex 0 -dm_plex_separate_marker -dm_refine_pre 1 -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_simplex 0 -dm_plex_separate_marker -dm_refine_pre 1 -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 -pres_petscspace_poly_tensor 0 -pres_petscdualspace_lagrange_continuity 0 -pres_petscdualspace_lagrange_node_endpoints 0 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3499,7 +3504,7 @@ int main(int argc, char **argv)
     output_file: output/ex69_q2p1fetidp_deluxe.out
     requires: mumps double
     nsize: 5
-    args: -dm_distribute -dm_plex_box_simplex 0 -dm_plex_separate_marker -dm_refine_pre 1 -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_simplex 0 -dm_plex_separate_marker -dm_refine_pre 1 -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 -pres_petscspace_poly_tensor 0 -pres_petscdualspace_lagrange_continuity 0 -pres_petscdualspace_lagrange_node_endpoints 0 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3526,7 +3531,7 @@ int main(int argc, char **argv)
     output_file: output/ex69_q2p1fetidp_deluxe_adaptive.out
     requires: mumps double
     nsize: 5
-    args: -dm_distribute -dm_plex_box_simplex 0 -dm_plex_separate_marker -dm_refine_pre 1 -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_simplex 0 -dm_plex_separate_marker -dm_refine_pre 1 -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 -pres_petscspace_poly_tensor 0 -pres_petscdualspace_lagrange_continuity 0 -pres_petscdualspace_lagrange_node_endpoints 0 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3552,7 +3557,7 @@ int main(int argc, char **argv)
     suffix: p2p1fetidp
     requires: triangle
     nsize: 4
-    args: -dm_distribute -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3565,7 +3570,7 @@ int main(int argc, char **argv)
     suffix: p2p1fetidp_allp
     requires: triangle
     nsize: 4
-    args: -dm_distribute -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3578,7 +3583,7 @@ int main(int argc, char **argv)
     suffix: p2p1fetidp_discharm
     requires: triangle
     nsize: 4
-    args: -dm_distribute -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3591,7 +3596,7 @@ int main(int argc, char **argv)
     suffix: p2p1fetidp_lumped
     requires: triangle
     nsize: 4
-    args: -dm_distribute -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3604,7 +3609,7 @@ int main(int argc, char **argv)
     suffix: p2p1fetidp_deluxe
     requires: triangle mumps
     nsize: 4
-    args: -dm_distribute -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3618,7 +3623,7 @@ int main(int argc, char **argv)
     suffix: p2p1fetidp_deluxe_discharm
     requires: triangle mumps
     nsize: 4
-    args: -dm_distribute -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3632,7 +3637,7 @@ int main(int argc, char **argv)
     nsize: 4
     requires: triangle
     output_file: output/ex69_p2p1fetidp_olof.out
-    args: -dm_distribute -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
+    args: -dm_plex_separate_marker -dm_refine_pre 2 -dm_refine_uniform_pre -dm_mat_type is -dm_view -petscpartitioner_type simple \
       -vel_petscspace_degree 2 -pres_petscspace_degree 1 \
       -snes_error_if_not_converged \
       -ksp_error_if_not_converged \
@@ -3655,7 +3660,7 @@ int main(int argc, char **argv)
     suffix: q2p1bddc
     output_file: output/ex69_q2p1fetidp_deluxe.out
     nsize: 5
-    args: -dm_distribute -dm_plex_box_simplex 0 -dm_plex_separate_marker -dm_refine_pre 1 -dm_mat_type is -dm_view -petscpartitioner_type simple -vel_petscspace_degree 2 -pres_petscspace_degree 1 -pres_petscspace_poly_tensor 0 -pres_petscdualspace_lagrange_continuity 0 -pres_petscdualspace_lagrange_node_endpoints 0 -petscds_jac_pre 0 -snes_error_if_not_converged -ksp_error_if_not_converged -ksp_type cg -ksp_norm_type natural -pc_type bddc -pc_bddc_benign_trick -pc_bddc_nonetflux -pc_bddc_detect_disconnected -pc_bddc_vertex_size 2 -pc_bddc_coarse_redundant_pc_type svd -pc_bddc_use_qr_single
+    args: -dm_plex_simplex 0 -dm_plex_separate_marker -dm_refine_pre 1 -dm_mat_type is -dm_view -petscpartitioner_type simple -vel_petscspace_degree 2 -pres_petscspace_degree 1 -pres_petscspace_poly_tensor 0 -pres_petscdualspace_lagrange_continuity 0 -pres_petscdualspace_lagrange_node_endpoints 0 -petscds_jac_pre 0 -snes_error_if_not_converged -ksp_error_if_not_converged -ksp_type cg -ksp_norm_type natural -pc_type bddc -pc_bddc_benign_trick -pc_bddc_nonetflux -pc_bddc_detect_disconnected -pc_bddc_vertex_size 2 -pc_bddc_coarse_redundant_pc_type svd -pc_bddc_use_qr_single
     test:
       requires: double
       suffix: benign_card
@@ -3670,11 +3675,13 @@ int main(int argc, char **argv)
       suffix: benign_deluxe_adaptive_mumps
       args: -pc_bddc_adaptive_threshold 1.7 -pc_bddc_use_deluxe_scaling -pc_bddc_deluxe_zerorows -sub_schurs_mat_solver_type mumps -sub_schurs_mat_mumps_icntl_14 1000
     test:
-      requires: mkl_pardiso double
+      TODO: broken (INDEFINITE PC)
+      requires: mkl_pardiso double !complex
       suffix: benign_deluxe_mkl
       args: -pc_bddc_use_deluxe_scaling -pc_bddc_deluxe_zerorows -sub_schurs_mat_solver_type mkl_pardiso -snes_rtol 1.e-7
     test:
-      requires: mkl_pardiso double
+      TODO: broken (INDEFINITE PC)
+      requires: mkl_pardiso double !complex
       suffix: benign_deluxe_adaptive_mkl
       args: -pc_bddc_adaptive_threshold 1.7 -pc_bddc_use_deluxe_scaling -pc_bddc_deluxe_zerorows -sub_schurs_mat_solver_type mkl_pardiso -snes_rtol 1.e-7
 

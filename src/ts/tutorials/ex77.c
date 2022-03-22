@@ -264,7 +264,6 @@ static void g1_vu(PetscInt dim, PetscInt Nf, PetscInt NfAux,
   }
 }
 
-
 static void g2_vp(PetscInt dim, PetscInt Nf, PetscInt NfAux,
                   const PetscInt uOff[], const PetscInt uOff_x[], const PetscScalar u[], const PetscScalar u_t[], const PetscScalar u_x[],
                   const PetscInt aOff[], const PetscInt aOff_x[], const PetscScalar a[], const PetscScalar a_t[], const PetscScalar a_x[],
@@ -355,7 +354,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   n    = 3;
   ierr = PetscOptionsRealArray("-part_upper", "The upper right corner of the particle box", "ex77.c", options->partUpper, &n, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-Npb", "The initial number of particles per box dimension", "ex77.c", options->Npb, &options->Npb, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -382,7 +381,8 @@ static PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
   PetscErrorCode ierr;
 
   PetscFunctionBeginUser;
-  ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_TRUE, NULL, NULL, NULL, NULL, PETSC_TRUE, dm);CHKERRQ(ierr);
+  ierr = DMCreate(comm, dm);CHKERRQ(ierr);
+  ierr = DMSetType(*dm, DMPLEX);CHKERRQ(ierr);
   ierr = DMSetFromOptions(*dm);CHKERRQ(ierr);
   ierr = DMViewFromOptions(*dm, NULL, "-dm_view");CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -401,7 +401,7 @@ static PetscErrorCode SetupProblem(DM dm, AppCtx *user)
   PetscFunctionBeginUser;
   ierr = DMGetLabel(dm, "marker", &label);CHKERRQ(ierr);
   ierr = DMGetDS(dm, &prob);CHKERRQ(ierr);
-  switch(user->solType){
+  switch(user->solType) {
   case SOL_TRIG_TRIG:
     ierr = PetscDSSetResidual(prob, 0, f0_trig_trig_v, f1_v);CHKERRQ(ierr);
     ierr = PetscDSSetResidual(prob, 2, f0_trig_trig_w, f1_w);CHKERRQ(ierr);
@@ -413,7 +413,7 @@ static PetscErrorCode SetupProblem(DM dm, AppCtx *user)
     exactFuncs_t[1] = NULL;
     exactFuncs_t[2] = trig_trig_T_t;
     break;
-   default: SETERRQ2(PetscObjectComm((PetscObject) prob), PETSC_ERR_ARG_WRONG, "Unsupported solution type: %s (%D)", solTypes[PetscMin(user->solType, NUM_SOL_TYPES)], user->solType);
+   default: SETERRQ(PetscObjectComm((PetscObject) prob), PETSC_ERR_ARG_WRONG, "Unsupported solution type: %s (%D)", solTypes[PetscMin(user->solType, NUM_SOL_TYPES)], user->solType);
   }
 
   ierr = PetscDSSetResidual(prob, 1, f0_q, NULL);CHKERRQ(ierr);
@@ -577,11 +577,11 @@ static PetscErrorCode SetInitialParticleConditions(TS ts, Vec u)
             }
           }
           break;
-        default: SETERRQ1(PetscObjectComm((PetscObject) ts), PETSC_ERR_SUP, "Do not support particle layout in dimension %D", dim);
+        default: SETERRQ(PetscObjectComm((PetscObject) ts), PETSC_ERR_SUP, "Do not support particle layout in dimension %D", dim);
       }
       ierr = VecRestoreArray(u, &coords);CHKERRQ(ierr);
       break;
-    default: SETERRQ1(PetscObjectComm((PetscObject) ts), PETSC_ERR_ARG_WRONG, "Invalid particle layout type %s", partLayoutTypes[PetscMin(user->partLayout, NUM_PART_LAYOUT_TYPES)]);
+    default: SETERRQ(PetscObjectComm((PetscObject) ts), PETSC_ERR_ARG_WRONG, "Invalid particle layout type %s", partLayoutTypes[PetscMin(user->partLayout, NUM_PART_LAYOUT_TYPES)]);
   }
   PetscFunctionReturn(0);
 }
@@ -696,7 +696,7 @@ static PetscErrorCode SetupDiscretization(DM dm, DM sdm, AppCtx *user)
             }
           }
           break;
-        default: SETERRQ1(comm, PETSC_ERR_SUP, "Do not support particle layout in dimension %D", dim);
+        default: SETERRQ(comm, PETSC_ERR_SUP, "Do not support particle layout in dimension %D", dim);
       }
       ierr = DMSwarmRestoreField(sdm, DMSwarmPICField_coor, NULL, NULL, (void **) &coords);CHKERRQ(ierr);
       ierr = DMSwarmGetField(sdm, DMSwarmPICField_cellid, NULL, NULL, (void **) &cellid);CHKERRQ(ierr);
@@ -704,7 +704,7 @@ static PetscErrorCode SetupDiscretization(DM dm, DM sdm, AppCtx *user)
       ierr = DMSwarmRestoreField(sdm, DMSwarmPICField_cellid, NULL, NULL, (void **) &cellid);CHKERRQ(ierr);
       ierr = DMSwarmMigrate(sdm, PETSC_TRUE);CHKERRQ(ierr);
       break;
-    default: SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Invalid particle layout type %s", partLayoutTypes[PetscMin(user->partLayout, NUM_PART_LAYOUT_TYPES)]);
+    default: SETERRQ(comm, PETSC_ERR_ARG_WRONG, "Invalid particle layout type %s", partLayoutTypes[PetscMin(user->partLayout, NUM_PART_LAYOUT_TYPES)]);
   }
   ierr = PetscObjectSetName((PetscObject) sdm, "Particles");CHKERRQ(ierr);
   ierr = DMViewFromOptions(sdm, NULL, "-dm_view");CHKERRQ(ierr);
@@ -718,7 +718,7 @@ static PetscErrorCode CreatePressureNullSpace(DM dm, PetscInt ofield, PetscInt n
   PetscErrorCode   ierr;
 
   PetscFunctionBeginUser;
-  if (ofield != 1) SETERRQ1(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Nullspace must be for pressure field at index 1, not %D", ofield);
+  PetscCheckFalse(ofield != 1,PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Nullspace must be for pressure field at index 1, not %D", ofield);
   funcs[nfield] = constant;
   ierr = DMCreateGlobalVector(dm, &vec);CHKERRQ(ierr);
   ierr = DMProjectFunction(dm, 0.0, funcs, NULL, INSERT_ALL_VALUES, vec);CHKERRQ(ierr);
@@ -820,7 +820,7 @@ static PetscErrorCode ComputeParticleError(TS ts, Vec u, Vec e)
 
   PetscFunctionBeginUser;
   ierr = TSGetTime(ts, &time);CHKERRQ(ierr);
-  ierr = TSGetApplicationContext(ts, (void **) &adv);CHKERRQ(ierr);
+  ierr = TSGetApplicationContext(ts, &adv);CHKERRQ(ierr);
   ierr = PetscBagGetData(adv->ctx->bag, (void **) &param);CHKERRQ(ierr);
   ierr = PetscObjectGetComm((PetscObject) ts, &comm);CHKERRQ(ierr);
   ierr = TSGetDM(ts, &sdm);CHKERRQ(ierr);
@@ -983,7 +983,7 @@ int main(int argc, char **argv)
   ierr = TSSetComputeInitialCondition(sts, SetInitialParticleConditions);CHKERRQ(ierr);
   adv.ti = t;
   adv.uf = u;
-  ierr = VecDuplicate(adv.uf, &adv.ui);
+  ierr = VecDuplicate(adv.uf, &adv.ui);CHKERRQ(ierr);
   ierr = VecCopy(u, adv.ui);CHKERRQ(ierr);
   ierr = TSSetRHSFunction(sts, NULL, FreeStreaming, &adv);CHKERRQ(ierr);
   ierr = TSSetPostStep(ts, AdvectParticles);CHKERRQ(ierr);
@@ -993,9 +993,9 @@ int main(int argc, char **argv)
   ierr = DMSwarmCreateGlobalVectorFromField(sdm, DMSwarmPICField_coor, &xtmp);CHKERRQ(ierr);
   ierr = VecCopy(xtmp, adv.x0);CHKERRQ(ierr);
   ierr = DMSwarmDestroyGlobalVectorFromField(sdm, DMSwarmPICField_coor, &xtmp);CHKERRQ(ierr);
-  switch(user.solType){
+  switch(user.solType) {
     case SOL_TRIG_TRIG: adv.exact = trig_trig_x;break;
-    default: SETERRQ2(PetscObjectComm((PetscObject) sdm), PETSC_ERR_ARG_WRONG, "Unsupported solution type: %s (%D)", solTypes[PetscMin(user.solType, NUM_SOL_TYPES)], user.solType);
+    default: SETERRQ(PetscObjectComm((PetscObject) sdm), PETSC_ERR_ARG_WRONG, "Unsupported solution type: %s (%D)", solTypes[PetscMin(user.solType, NUM_SOL_TYPES)], user.solType);
   }
   adv.ctx = &user;
 

@@ -3,7 +3,7 @@
 #include <petscmatlab.h>   /*I  "petscmatlab.h"  I*/
 
 /*
-        Ths PF generates a MATLAB function on the fly
+        This PF generates a MATLAB function on the fly
 */
 typedef struct {
   PetscInt          dimin,dimout;
@@ -43,7 +43,7 @@ PetscErrorCode PFApply_Matlab(void *value,PetscInt n,const PetscScalar *in,Petsc
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (!value) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Need to set string for MATLAB function, via -pf_matlab string");
+  PetscCheckFalse(!value,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Need to set string for MATLAB function, via -pf_matlab string");
   ierr = PetscMatlabEnginePutArray(matlab->mengine,matlab->dimin,n,in,"x");CHKERRQ(ierr);
   ierr = PetscMatlabEngineEvaluate(matlab->mengine,matlab->string);CHKERRQ(ierr);
   ierr = PetscMatlabEngineGetArray(matlab->mengine,matlab->dimout,n,out,"f");CHKERRQ(ierr);
@@ -87,8 +87,4 @@ PETSC_EXTERN PetscErrorCode PFCreate_Matlab(PF pf,void *value)
   pf->ops->setfromoptions = PFSetFromOptions_Matlab;
   PetscFunctionReturn(0);
 }
-
-
-
-
 

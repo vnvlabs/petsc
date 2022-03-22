@@ -108,7 +108,6 @@ typedef struct {
   PetscInt    interval;
 } MonitorCtx;
 
-
 /* Inputs read in from text file */
 struct in {
   PetscScalar Ts;     /* surface temperature  */
@@ -313,7 +312,6 @@ int main(int argc,char **argv)
   ierr = TSGetStepNumber(ts,&steps);CHKERRQ(ierr);
   ierr = PetscPrintf(PETSC_COMM_WORLD,"Solution T after %g hours %D steps\n",(double)(ftime/3600),steps);CHKERRQ(ierr);
 
-
   if (matfdcoloring) {ierr = MatFDColoringDestroy(&matfdcoloring);CHKERRQ(ierr);}
   if (usermonitor.drawcontours) {
     ierr = PetscViewerDestroy(&usermonitor.drawviewer);CHKERRQ(ierr);
@@ -485,45 +483,45 @@ PetscErrorCode readinput(struct in *put)
 
   PetscFunctionBegin;
   ifp = fopen("ex5_control.txt", "r");
-  if (!ifp) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to open input file");
-  for (i=0; i<110; i++) { if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  PetscCheckFalse(!ifp,PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to open input file");
+  for (i=0; i<110; i++) { PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->Ts = tmp;
 
-  for (i=0; i<43; i++) { if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<43; i++) { PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->Td = tmp;
 
-  for (i=0; i<43; i++) { if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<43; i++) { PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->Ta = tmp;
 
-  for (i=0; i<43; i++) { if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp)!= 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<43; i++) { PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp)!= 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->Tc = tmp;
 
-  for (i=0; i<43; i++) { if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<43; i++) { PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->fr = tmp;
 
-  for (i=0; i<43; i++) {if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<43; i++) {PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->wnd = tmp;
 
-  for (i=0; i<43; i++) {if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<43; i++) {PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->pwt = tmp;
 
-  for (i=0; i<43; i++) {if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<43; i++) {PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->wndDir = tmp;
 
-  for (i=0; i<43; i++) {if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<43; i++) {PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->time = tmp;
 
-  for (i=0; i<63; i++) {if (fscanf(ifp, "%c", &x) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
-  if (fscanf(ifp, "%lf", &tmp) != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
+  for (i=0; i<63; i++) {PetscCheckFalse(fscanf(ifp, "%c", &x) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");}
+  PetscCheckFalse(fscanf(ifp, "%lf", &tmp) != 1,PETSC_COMM_SELF,PETSC_ERR_FILE_READ,"Unable to read file");
   put->init = tmp;
   PetscFunctionReturn(0);
 }
@@ -630,7 +628,6 @@ PetscErrorCode RhsFunc(TS ts,PetscReal t,Vec Xglobal,Vec F,void *ctx)
   dhx = (PetscReal)(Mx-1)/(5000*(Mx-1));  /* dhx = 1/dx; assume 2D space domain: [0.0, 1.e5] x [0.0, 1.e5] */
   dhy = (PetscReal)(My-1)/(5000*(Mx-1));  /* dhy = 1/dy; */
 
-
   /*
      Scatter ghost points to local vector,using the 2-step process
         DAGlobalToLocalBegin(),DAGlobalToLocalEnd().
@@ -723,7 +720,7 @@ PetscErrorCode Monitor(TS ts,PetscInt step,PetscReal time,Vec T,void *ctx)
 
   if (step%user->interval == 0) {
     ierr = VecGetArrayRead(T,&array);CHKERRQ(ierr);
-    ierr = PetscPrintf(PETSC_COMM_WORLD,"step %D, time %8.1f,  %6.4f, %6.4f, %6.4f, %6.4f, %6.4f, %6.4f\n",step,(double)time,(double)(((array[0]-273)*9)/5 + 32),(double)(((array[1]-273)*9)/5 + 32),(double)array[2],(double)array[3],(double)array[4],(double)array[5]);
+    ierr = PetscPrintf(PETSC_COMM_WORLD,"step %D, time %8.1f,  %6.4f, %6.4f, %6.4f, %6.4f, %6.4f, %6.4f\n",step,(double)time,(double)(((array[0]-273)*9)/5 + 32),(double)(((array[1]-273)*9)/5 + 32),(double)array[2],(double)array[3],(double)array[4],(double)array[5]);CHKERRQ(ierr);
     ierr = VecRestoreArrayRead(T,&array);CHKERRQ(ierr);
   }
 
@@ -732,8 +729,6 @@ PetscErrorCode Monitor(TS ts,PetscInt step,PetscReal time,Vec T,void *ctx)
   }
   PetscFunctionReturn(0);
 }
-
-
 
 /*TEST
 

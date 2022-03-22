@@ -25,7 +25,7 @@ int main(int argc,char **args)
   ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
   ierr = PetscOptionsGetString(NULL,NULL,"-f",name,sizeof(name),&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Must provide a binary file for the matrix");
+  PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_SUP,"Must provide a binary file for the matrix");
   ierr = PetscOptionsGetInt(NULL,NULL,"-N",&N,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetBool(NULL,NULL,"-breakdown",&breakdown,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetReal(NULL,NULL,"-ksp_hpddm_deflation_tol",&deflation,NULL);CHKERRQ(ierr);
@@ -73,7 +73,7 @@ int main(int argc,char **args)
       if (rank > 3) {
         ierr = MatSetSizes(B,0,0,M,M);CHKERRQ(ierr);
       } else {
-        ierr = MatSetSizes(B,!rank?M-3*(M/4):M/4,!rank?M-3*(M/4):M/4,M,M);CHKERRQ(ierr);
+        ierr = MatSetSizes(B,rank == 0?M-3*(M/4):M/4,rank == 0?M-3*(M/4):M/4,M,M);CHKERRQ(ierr);
       }
       ierr = PetscViewerBinaryOpen(PETSC_COMM_WORLD,name,FILE_MODE_READ,&viewer);CHKERRQ(ierr);
       ierr = MatLoad(B,viewer);CHKERRQ(ierr);
@@ -104,19 +104,19 @@ int main(int argc,char **args)
         ierr = MatMatSolve(F,B,B);CHKERRQ(ierr);
         ierr = MatAYPX(B,-1.0,X,SAME_NONZERO_PATTERN);CHKERRQ(ierr);
         ierr = MatNorm(B,NORM_INFINITY,&norm);CHKERRQ(ierr);
-        if (norm > 100*PETSC_MACHINE_EPSILON) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_PLIB,"KSPMatSolve() and MatMatSolve() difference has nonzero norm %g",(double)norm);
+        PetscCheckFalse(norm > 100*PETSC_MACHINE_EPSILON,PetscObjectComm((PetscObject)ksp),PETSC_ERR_PLIB,"KSPMatSolve() and MatMatSolve() difference has nonzero norm %g",(double)norm);
       }
     } else {
       ierr = MatZeroEntries(B);CHKERRQ(ierr);
       ierr = KSPMatSolve(ksp,B,X);CHKERRQ(ierr);
       ierr = KSPGetConvergedReason(ksp,&reason);CHKERRQ(ierr);
-      if (reason != KSP_CONVERGED_HAPPY_BREAKDOWN) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_PLIB,"KSPConvergedReason() %s != KSP_CONVERGED_HAPPY_BREAKDOWN",KSPConvergedReasons[reason]);
+      PetscCheckFalse(reason != KSP_CONVERGED_HAPPY_BREAKDOWN,PetscObjectComm((PetscObject)ksp),PETSC_ERR_PLIB,"KSPConvergedReason() %s != KSP_CONVERGED_HAPPY_BREAKDOWN",KSPConvergedReasons[reason]);
       ierr = MatDenseGetArrayWrite(B,&x);CHKERRQ(ierr);
       for (i=0; i<m*N; ++i) x[i] = 1.0;
       ierr = MatDenseRestoreArrayWrite(B,&x);CHKERRQ(ierr);
       ierr = KSPMatSolve(ksp,B,X);CHKERRQ(ierr);
       ierr = KSPGetConvergedReason(ksp,&reason);CHKERRQ(ierr);
-      if (reason != KSP_DIVERGED_BREAKDOWN && deflation < 0.0) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_PLIB,"KSPConvergedReason() %s != KSP_DIVERGED_BREAKDOWN",KSPConvergedReasons[reason]);
+      PetscCheckFalse(reason != KSP_DIVERGED_BREAKDOWN && deflation < 0.0,PetscObjectComm((PetscObject)ksp),PETSC_ERR_PLIB,"KSPConvergedReason() %s != KSP_DIVERGED_BREAKDOWN",KSPConvergedReasons[reason]);
     }
   } else {
     ierr = KSPSetOperators(ksp,KA,KA);CHKERRQ(ierr);
@@ -144,7 +144,7 @@ int main(int argc,char **args)
 
    testset:
       nsize: 2
-      requires: datafilespath double !complex !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES)
       args: -ksp_converged_reason -ksp_max_it 500 -f ${DATAFILESPATH}/matrices/hpddm/GCRODR/A_400.dat -mat_type {{aij sbaij}shared output}
       test:
          suffix: 1
@@ -165,13 +165,13 @@ int main(int argc,char **args)
 
    test:
       nsize: 1
-      requires: hpddm datafilespath double !complex !define(PETSC_USE_64BIT_INDICES)
+      requires: hpddm datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES)
       suffix: preonly
       args: -N 6 -f ${DATAFILESPATH}/matrices/hpddm/GCRODR/A_400.dat -pc_type lu -ksp_type hpddm -ksp_hpddm_type preonly
 
    testset:
       nsize: 1
-      requires: hpddm datafilespath double !complex !define(PETSC_USE_64BIT_INDICES)
+      requires: hpddm datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES)
       args: -N 3 -f ${DATAFILESPATH}/matrices/hpddm/GCRODR/A_400.dat -ksp_type hpddm -breakdown
       test:
          suffix: breakdown_wo_deflation
@@ -185,19 +185,19 @@ int main(int argc,char **args)
 
    test:
       nsize: 2
-      requires: hpddm datafilespath double !complex !define(PETSC_USE_64BIT_INDICES)
+      requires: hpddm datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES)
       args: -N 12 -ksp_converged_reason -ksp_max_it 500 -f ${DATAFILESPATH}/matrices/hpddm/GCRODR/A_400.dat -mat_type kaij -pc_type pbjacobi -ksp_type hpddm -ksp_hpddm_type {{gmres bgmres}separate output}
 
    test:
       nsize: 3
-      requires: hpddm datafilespath double !complex !define(PETSC_USE_64BIT_INDICES)
+      requires: hpddm datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES)
       suffix: kaij_zero
       output_file: output/ex77_ksp_hpddm_type-bgmres.out
       args: -N 12 -ksp_converged_reason -ksp_max_it 500 -f ${DATAFILESPATH}/matrices/hpddm/GCRODR/A_400.dat -mat_type kaij -pc_type pbjacobi -ksp_type hpddm -ksp_hpddm_type bgmres
 
    test:
       nsize: 4
-      requires: hpddm datafilespath double !complex !define(PETSC_USE_64BIT_INDICES) slepc define(PETSC_HAVE_DYNAMIC_LIBRARIES) define(PETSC_USE_SHARED_LIBRARIES)
+      requires: hpddm datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES) slepc defined(PETSC_HAVE_DYNAMIC_LIBRARIES) defined(PETSC_USE_SHARED_LIBRARIES)
       suffix: 4_slepc
       output_file: output/ex77_4.out
       filter: sed "/^ksp_hpddm_recycle_ Linear eigensolve converged/d"
@@ -205,7 +205,7 @@ int main(int argc,char **args)
 
    testset:
       nsize: 4
-      requires: hpddm datafilespath double !complex !define(PETSC_USE_64BIT_INDICES) slepc define(PETSC_HAVE_DYNAMIC_LIBRARIES) define(PETSC_USE_SHARED_LIBRARIES)
+      requires: hpddm datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES) slepc defined(PETSC_HAVE_DYNAMIC_LIBRARIES) defined(PETSC_USE_SHARED_LIBRARIES)
       filter: sed "/^ksp_hpddm_recycle_ Linear eigensolve converged/d"
       args: -ksp_converged_reason -ksp_max_it 500 -f ${DATAFILESPATH}/matrices/hpddm/GCRODR/A_400.dat -ksp_rtol 1e-4 -ksp_type hpddm -ksp_hpddm_recycle 5 -ksp_hpddm_type bgcrodr -ksp_view_final_residual -N 12 -ksp_matsolve_batch_size 5 -ksp_hpddm_recycle_redistribute 2 -ksp_hpddm_recycle_eps_converged_reason
       test:
@@ -226,7 +226,7 @@ int main(int argc,char **args)
 
    test:
       nsize: 5
-      requires: hpddm datafilespath double !complex !define(PETSC_USE_64BIT_INDICES)
+      requires: hpddm datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES)
       suffix: 4_zero
       output_file: output/ex77_4.out
       args: -ksp_converged_reason -ksp_max_it 500 -f ${DATAFILESPATH}/matrices/hpddm/GCRODR/A_400.dat -ksp_rtol 1e-4 -ksp_type hpddm -ksp_hpddm_recycle 5 -ksp_hpddm_type bgcrodr -ksp_view_final_residual -N 12 -ksp_matsolve_batch_size 5

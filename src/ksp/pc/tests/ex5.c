@@ -58,7 +58,7 @@ int main(int Argc,char **Args)
   N[0] = x_mesh;
   for (i=1; i<levels; i++) {
     N[i] = N[i-1]/2;
-    if (N[i] < 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_USER,"Too many levels or N is not large enough");
+    PetscCheckFalse(N[i] < 1,PETSC_COMM_WORLD,PETSC_ERR_USER,"Too many levels or N is not large enough");
   }
 
   ierr = Create1dLaplacian(N[levels-1],&cmat);CHKERRQ(ierr);
@@ -227,7 +227,6 @@ PetscErrorCode apply_pc(PC pc,Vec bb,Vec xx)
 {
   PetscFunctionBegin;
   SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Not implemented");
-  PetscFunctionReturn(0);
 }
 
 PetscErrorCode gauss_seidel(PC pc,Vec bb,Vec xx,Vec w,PetscReal rtol,PetscReal abstol,PetscReal dtol,PetscInt m,PetscBool guesszero,PetscInt *its,PCRichardsonConvergedReason *reason)

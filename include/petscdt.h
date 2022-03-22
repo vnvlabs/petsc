@@ -54,11 +54,13 @@ PETSC_EXTERN PetscErrorCode PetscQuadratureGetOrder(PetscQuadrature, PetscInt*);
 PETSC_EXTERN PetscErrorCode PetscQuadratureSetOrder(PetscQuadrature, PetscInt);
 PETSC_EXTERN PetscErrorCode PetscQuadratureGetNumComponents(PetscQuadrature, PetscInt*);
 PETSC_EXTERN PetscErrorCode PetscQuadratureSetNumComponents(PetscQuadrature, PetscInt);
+PETSC_EXTERN PetscErrorCode PetscQuadratureEqual(PetscQuadrature, PetscQuadrature, PetscBool*);
 PETSC_EXTERN PetscErrorCode PetscQuadratureGetData(PetscQuadrature, PetscInt*, PetscInt*, PetscInt*, const PetscReal *[], const PetscReal *[]);
 PETSC_EXTERN PetscErrorCode PetscQuadratureSetData(PetscQuadrature, PetscInt, PetscInt, PetscInt, const PetscReal [], const PetscReal []);
 PETSC_EXTERN PetscErrorCode PetscQuadratureView(PetscQuadrature, PetscViewer);
 PETSC_EXTERN PetscErrorCode PetscQuadratureDestroy(PetscQuadrature *);
 
+PETSC_EXTERN PetscErrorCode PetscDTTensorQuadratureCreate(PetscQuadrature, PetscQuadrature, PetscQuadrature *);
 PETSC_EXTERN PetscErrorCode PetscQuadratureExpandComposite(PetscQuadrature, PetscInt, const PetscReal[], const PetscReal[], PetscQuadrature *);
 
 PETSC_EXTERN PetscErrorCode PetscQuadraturePushForward(PetscQuadrature, PetscInt, const PetscReal[], const PetscReal[], const PetscReal[], PetscInt, PetscQuadrature *);
@@ -68,6 +70,8 @@ PETSC_EXTERN PetscErrorCode PetscDTJacobiNorm(PetscReal,PetscReal,PetscInt,Petsc
 PETSC_EXTERN PetscErrorCode PetscDTJacobiEval(PetscInt,PetscReal,PetscReal,const PetscReal*,PetscInt,const PetscInt*,PetscReal*,PetscReal*,PetscReal*);
 PETSC_EXTERN PetscErrorCode PetscDTJacobiEvalJet(PetscReal,PetscReal,PetscInt,const PetscReal[],PetscInt,PetscInt,PetscReal[]);
 PETSC_EXTERN PetscErrorCode PetscDTPKDEvalJet(PetscInt,PetscInt,const PetscReal[],PetscInt,PetscInt,PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscDTPTrimmedSize(PetscInt,PetscInt,PetscInt,PetscInt*);
+PETSC_EXTERN PetscErrorCode PetscDTPTrimmedEvalJet(PetscInt,PetscInt,const PetscReal[],PetscInt,PetscInt,PetscInt,PetscReal[]);
 PETSC_EXTERN PetscErrorCode PetscDTGaussQuadrature(PetscInt,PetscReal,PetscReal,PetscReal*,PetscReal*);
 PETSC_EXTERN PetscErrorCode PetscDTGaussJacobiQuadrature(PetscInt,PetscReal,PetscReal,PetscReal,PetscReal,PetscReal*,PetscReal*);
 PETSC_EXTERN PetscErrorCode PetscDTGaussLobattoJacobiQuadrature(PetscInt,PetscReal,PetscReal,PetscReal,PetscReal,PetscReal*,PetscReal*);
@@ -77,8 +81,8 @@ PETSC_EXTERN PetscErrorCode PetscDTGaussTensorQuadrature(PetscInt,PetscInt,Petsc
 PETSC_EXTERN PetscErrorCode PetscDTStroudConicalQuadrature(PetscInt,PetscInt,PetscInt,PetscReal,PetscReal,PetscQuadrature*);
 
 PETSC_EXTERN PetscErrorCode PetscDTTanhSinhTensorQuadrature(PetscInt, PetscInt, PetscReal, PetscReal, PetscQuadrature *);
-PETSC_EXTERN PetscErrorCode PetscDTTanhSinhIntegrate(void (*)(PetscReal, PetscReal *), PetscReal, PetscReal, PetscInt, PetscReal *);
-PETSC_EXTERN PetscErrorCode PetscDTTanhSinhIntegrateMPFR(void (*)(PetscReal, PetscReal *), PetscReal, PetscReal, PetscInt, PetscReal *);
+PETSC_EXTERN PetscErrorCode PetscDTTanhSinhIntegrate(void (*)(const PetscReal[], void *, PetscReal *), PetscReal, PetscReal, PetscInt, void *, PetscReal *);
+PETSC_EXTERN PetscErrorCode PetscDTTanhSinhIntegrateMPFR(void (*)(const PetscReal[], void *, PetscReal *), PetscReal, PetscReal, PetscInt, void *, PetscReal *);
 
 PETSC_EXTERN PetscErrorCode PetscGaussLobattoLegendreIntegrate(PetscInt, PetscReal *, PetscReal *, const PetscReal *, PetscReal *);
 PETSC_EXTERN PetscErrorCode PetscGaussLobattoLegendreElementLaplacianCreate(PetscInt, PetscReal *, PetscReal *, PetscReal ***);
@@ -116,22 +120,22 @@ PETSC_EXTERN PetscErrorCode PetscDTIndexToGradedOrder(PetscInt,PetscInt,PetscInt
 /*MC
    PetscDTFactorial - Approximate n! as a real number
 
-   Input Arguments:
+   Input Parameter:
 .  n - a non-negative integer
 
-   Output Arguments:
+   Output Parameter:
 .  factorial - n!
 
    Level: beginner
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTFactorial(PetscInt n, PetscReal *factorial)
+static inline PetscErrorCode PetscDTFactorial(PetscInt n, PetscReal *factorial)
 {
   PetscReal f = 1.0;
   PetscInt  i;
 
   PetscFunctionBegin;
   *factorial = -1.0;
-  if (n < 0) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Factorial called with negative number %D\n", n);
+  PetscCheck(n >= 0,PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Factorial called with negative number %D", n);
   for (i = 1; i < n+1; ++i) f *= (PetscReal)i;
   *factorial = f;
   PetscFunctionReturn(0);
@@ -140,23 +144,23 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTFactorial(PetscInt n, PetscReal *facto
 /*MC
    PetscDTFactorialInt - Compute n! as an integer
 
-   Input Arguments:
+   Input Parameter:
 .  n - a non-negative integer
 
-   Output Arguments:
+   Output Parameter:
 .  factorial - n!
 
    Level: beginner
 
    Note: this is limited to n such that n! can be represented by PetscInt, which is 12 if PetscInt is a signed 32-bit integer and 20 if PetscInt is a signed 64-bit integer.
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTFactorialInt(PetscInt n, PetscInt *factorial)
+static inline PetscErrorCode PetscDTFactorialInt(PetscInt n, PetscInt *factorial)
 {
   PetscInt facLookup[13] = {1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800, 39916800, 479001600};
 
   PetscFunctionBegin;
   *factorial = -1;
-  if (n < 0 || n > PETSC_FACTORIAL_MAX) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Number of elements %D is not in supported range [0,%D]\n",n,PETSC_FACTORIAL_MAX);
+  PetscCheck(n >= 0 && n <= PETSC_FACTORIAL_MAX,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Number of elements %D is not in supported range [0,%D]",n,PETSC_FACTORIAL_MAX);
   if (n <= 12) {
     *factorial = facLookup[n];
   } else {
@@ -172,20 +176,20 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTFactorialInt(PetscInt n, PetscInt *fac
 /*MC
    PetscDTBinomial - Approximate the binomial coefficient "n choose k"
 
-   Input Arguments:
+   Input Parameters:
 +  n - a non-negative integer
 -  k - an integer between 0 and n, inclusive
 
-   Output Arguments:
+   Output Parameter:
 .  binomial - approximation of the binomial coefficient n choose k
 
    Level: beginner
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTBinomial(PetscInt n, PetscInt k, PetscReal *binomial)
+static inline PetscErrorCode PetscDTBinomial(PetscInt n, PetscInt k, PetscReal *binomial)
 {
   PetscFunctionBeginHot;
   *binomial = -1.0;
-  if (n < 0 || k < 0 || k > n) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Binomial arguments (%D %D) must be non-negative, k <= n\n", n, k);
+  PetscCheck(n >= 0 && k >= 0 && k <= n,PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Binomial arguments (%D %D) must be non-negative, k <= n", n, k);
   if (n <= 3) {
     PetscInt binomLookup[4][4] = {{1, 0, 0, 0}, {1, 1, 0, 0}, {1, 2, 1, 0}, {1, 3, 3, 1}};
 
@@ -204,25 +208,25 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTBinomial(PetscInt n, PetscInt k, Petsc
 /*MC
    PetscDTBinomialInt - Compute the binomial coefficient "n choose k"
 
-   Input Arguments:
+   Input Parameters:
 +  n - a non-negative integer
 -  k - an integer between 0 and n, inclusive
 
-   Output Arguments:
+   Output Parameter:
 .  binomial - the binomial coefficient n choose k
 
    Note: this is limited by integers that can be represented by PetscInt
 
    Level: beginner
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTBinomialInt(PetscInt n, PetscInt k, PetscInt *binomial)
+static inline PetscErrorCode PetscDTBinomialInt(PetscInt n, PetscInt k, PetscInt *binomial)
 {
   PetscInt bin;
 
   PetscFunctionBegin;
   *binomial = -1;
-  if (n < 0 || k < 0 || k > n) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Binomial arguments (%D %D) must be non-negative, k <= n\n", n, k);
-  if (n > PETSC_BINOMIAL_MAX) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Binomial elements %D is larger than max for PetscInt, %D\n", n, PETSC_BINOMIAL_MAX);
+  PetscCheck(n >= 0 && k >= 0 && k <= n,PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Binomial arguments (%D %D) must be non-negative, k <= n", n, k);
+  PetscCheck(n <= PETSC_BINOMIAL_MAX,PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Binomial elements %D is larger than max for PetscInt, %D", n, PETSC_BINOMIAL_MAX);
   if (n <= 3) {
     PetscInt binomLookup[4][4] = {{1, 0, 0, 0}, {1, 1, 0, 0}, {1, 2, 1, 0}, {1, 3, 3, 1}};
 
@@ -248,11 +252,11 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTBinomialInt(PetscInt n, PetscInt k, Pe
    (n - i).  This sequence of n-1 differences [d_0, ..., d_{n-2}] is encoded as the number
    (n-1)! * d_0 + (n-2)! * d_1 + ... + 1! * d_{n-2}.
 
-   Input Arguments:
+   Input Parameters:
 +  n - a non-negative integer (see note about limits below)
 -  k - an integer in [0, n!)
 
-   Output Arguments:
+   Output Parameters:
 +  perm - the permuted list of the integers [0, ..., n-1]
 -  isOdd - if not NULL, returns wether the permutation used an even or odd number of swaps.
 
@@ -260,7 +264,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTBinomialInt(PetscInt n, PetscInt k, Pe
 
    Level: beginner
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumPerm(PetscInt n, PetscInt k, PetscInt *perm, PetscBool *isOdd)
+static inline PetscErrorCode PetscDTEnumPerm(PetscInt n, PetscInt k, PetscInt *perm, PetscBool *isOdd)
 {
   PetscInt  odd = 0;
   PetscInt  i;
@@ -269,7 +273,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumPerm(PetscInt n, PetscInt k, Petsc
 
   PetscFunctionBegin;
   if (isOdd) *isOdd = PETSC_FALSE;
-  if (n < 0 || n > PETSC_FACTORIAL_MAX) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Number of elements %D is not in supported range [0,%D]\n",n,PETSC_FACTORIAL_MAX);
+  PetscCheck(n >= 0 && n <= PETSC_FACTORIAL_MAX,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Number of elements %D is not in supported range [0,%D]",n,PETSC_FACTORIAL_MAX);
   w = &work[n - 2];
   for (i = 2; i <= n; i++) {
     *(w--) = k % i;
@@ -291,11 +295,11 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumPerm(PetscInt n, PetscInt k, Petsc
 /*MC
    PetscDTPermIndex - Encode a permutation of n into an integer in [0, n!).  This inverts PetscDTEnumPerm.
 
-   Input Arguments:
+   Input Parameters:
 +  n - a non-negative integer (see note about limits below)
 -  perm - the permuted list of the integers [0, ..., n-1]
 
-   Output Arguments:
+   Output Parameters:
 +  k - an integer in [0, n!)
 -  isOdd - if not NULL, returns wether the permutation used an even or odd number of swaps.
 
@@ -303,7 +307,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumPerm(PetscInt n, PetscInt k, Petsc
 
    Level: beginner
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTPermIndex(PetscInt n, const PetscInt *perm, PetscInt *k, PetscBool *isOdd)
+static inline PetscErrorCode PetscDTPermIndex(PetscInt n, const PetscInt *perm, PetscInt *k, PetscBool *isOdd)
 {
   PetscInt  odd = 0;
   PetscInt  i, idx;
@@ -313,7 +317,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTPermIndex(PetscInt n, const PetscInt *
   PetscFunctionBeginHot;
   *k = -1;
   if (isOdd) *isOdd = PETSC_FALSE;
-  if (n < 0 || n > PETSC_FACTORIAL_MAX) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Number of elements %D is not in supported range [0,%D]\n",n,PETSC_FACTORIAL_MAX);
+  PetscCheck(n >= 0 && n <= PETSC_FACTORIAL_MAX,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Number of elements %D is not in supported range [0,%D]",n,PETSC_FACTORIAL_MAX);
   for (i = 0; i < n; i++) work[i] = i;  /* partial permutation */
   for (i = 0; i < n; i++) iwork[i] = i; /* partial permutation inverse */
   for (idx = 0, i = 0; i < n - 1; i++) {
@@ -339,12 +343,12 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTPermIndex(PetscInt n, const PetscInt *
    PetscDTEnumSubset - Get an ordered subset of the integers [0, ..., n - 1] from its encoding as an integers in [0, n choose k).
    The encoding is in lexicographic order.
 
-   Input Arguments:
+   Input Parameters:
 +  n - a non-negative integer (see note about limits below)
 .  k - an integer in [0, n]
 -  j - an index in [0, n choose k)
 
-   Output Arguments:
+   Output Parameter:
 .  subset - the jth subset of size k of the integers [0, ..., n - 1]
 
    Note: this is limited by arguments such that n choose k can be represented by PetscInt
@@ -353,7 +357,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTPermIndex(PetscInt n, const PetscInt *
 
 .seealso: PetscDTSubsetIndex()
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumSubset(PetscInt n, PetscInt k, PetscInt j, PetscInt *subset)
+static inline PetscErrorCode PetscDTEnumSubset(PetscInt n, PetscInt k, PetscInt j, PetscInt *subset)
 {
   PetscInt       Nk, i, l;
   PetscErrorCode ierr;
@@ -378,12 +382,12 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumSubset(PetscInt n, PetscInt k, Pet
 /*MC
    PetscDTSubsetIndex - Convert an ordered subset of k integers from the set [0, ..., n - 1] to its encoding as an integers in [0, n choose k) in lexicographic order.  This is the inverse of PetscDTEnumSubset.
 
-   Input Arguments:
+   Input Parameters:
 +  n - a non-negative integer (see note about limits below)
 .  k - an integer in [0, n]
 -  subset - an ordered subset of the integers [0, ..., n - 1]
 
-   Output Arguments:
+   Output Parameter:
 .  index - the rank of the subset in lexicographic order
 
    Note: this is limited by arguments such that n choose k can be represented by PetscInt
@@ -392,7 +396,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumSubset(PetscInt n, PetscInt k, Pet
 
 .seealso: PetscDTEnumSubset()
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTSubsetIndex(PetscInt n, PetscInt k, const PetscInt *subset, PetscInt *index)
+static inline PetscErrorCode PetscDTSubsetIndex(PetscInt n, PetscInt k, const PetscInt *subset, PetscInt *index)
 {
   PetscInt       i, j = 0, l, Nk;
   PetscErrorCode ierr;
@@ -419,12 +423,12 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTSubsetIndex(PetscInt n, PetscInt k, co
 /*MC
    PetscDTEnumSubset - Split the integers [0, ..., n - 1] into two complementary ordered subsets, the first subset of size k and being the jth subset of that size in lexicographic order.
 
-   Input Arguments:
+   Input Parameters:
 +  n - a non-negative integer (see note about limits below)
 .  k - an integer in [0, n]
 -  j - an index in [0, n choose k)
 
-   Output Arguments:
+   Output Parameters:
 +  perm - the jth subset of size k of the integers [0, ..., n - 1], followed by its complementary set.
 -  isOdd - if not NULL, return whether perm is an even or odd permutation.
 
@@ -434,7 +438,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTSubsetIndex(PetscInt n, PetscInt k, co
 
 .seealso: PetscDTEnumSubset(), PetscDTSubsetIndex()
 M*/
-PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumSplit(PetscInt n, PetscInt k, PetscInt j, PetscInt *perm, PetscBool *isOdd)
+static inline PetscErrorCode PetscDTEnumSplit(PetscInt n, PetscInt k, PetscInt j, PetscInt *perm, PetscBool *isOdd)
 {
   PetscInt       i, l, m, *subcomp, Nk;
   PetscInt       odd;
@@ -467,7 +471,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscDTEnumSplit(PetscInt n, PetscInt k, Pets
 }
 
 struct _p_PetscTabulation {
-  PetscInt    K;    /* Indicates a k-jet, namely tabulated derviatives up to order k */
+  PetscInt    K;    /* Indicates a k-jet, namely tabulated derivatives up to order k */
   PetscInt    Nr;   /* The number of tabulation replicas (often 1) */
   PetscInt    Np;   /* The number of tabulation points in a replica */
   PetscInt    Nb;   /* The number of functions tabulated */
@@ -479,5 +483,30 @@ struct _p_PetscTabulation {
                        T[2] = H[Nr*Np][Nb][Nc][cdim][cdim]: The basis function second derivatives at quadrature points */
 };
 typedef struct _p_PetscTabulation *PetscTabulation;
+
+typedef PetscErrorCode (*PetscProbFunc)(const PetscReal[], const PetscReal[], PetscReal[]);
+
+typedef enum {DTPROB_DENSITY_CONSTANT, DTPROB_DENSITY_GAUSSIAN, DTPROB_DENSITY_MAXWELL_BOLTZMANN, DTPROB_NUM_DENSITY} DTProbDensityType;
+PETSC_EXTERN const char * const DTProbDensityTypes[];
+
+PETSC_EXTERN PetscErrorCode PetscPDFMaxwellBoltzmann1D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscCDFMaxwellBoltzmann1D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscPDFMaxwellBoltzmann2D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscCDFMaxwellBoltzmann2D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscPDFMaxwellBoltzmann3D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscCDFMaxwellBoltzmann3D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscPDFGaussian1D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscCDFGaussian1D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscPDFSampleGaussian1D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscPDFGaussian2D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscPDFSampleGaussian2D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscPDFConstant1D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscCDFConstant1D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscPDFSampleConstant1D(const PetscReal[], const PetscReal[], PetscReal[]);
+PETSC_EXTERN PetscErrorCode PetscProbCreateFromOptions(PetscInt, const char[], const char[], PetscProbFunc *, PetscProbFunc *, PetscProbFunc *);
+
+#include <petscvec.h>
+
+PETSC_EXTERN PetscErrorCode PetscProbComputeKSStatistic(Vec, PetscProbFunc, PetscReal *);
 
 #endif

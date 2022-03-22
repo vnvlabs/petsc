@@ -21,7 +21,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   ierr = PetscOptionsString("-filename", "The mesh file", "ex8.c", options->filename, options->filename, sizeof(options->filename), NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-interpolate", "Interpolate the mesh", "ex8.c", options->interpolate, &options->interpolate, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBoundedInt("-mesh_num", "The mesh we should construct", "ex8.c", options->meshNum, &options->meshNum, NULL,0);CHKERRQ(ierr);
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   PetscFunctionReturn(0);
 }
@@ -61,7 +61,24 @@ static PetscErrorCode CreateHybridMesh(MPI_Comm comm, PetscBool interpolate, DM 
   PetscFunctionReturn(0);
 }
 
-/* TODO Need to extend interpolation to work when regular cells join to hybrid faces, rather than end faces */
+/*
+   This is not a valid mesh. We need to either change to tensor quad prisms or regular triangular prisms.
+
+           10-------16--------20
+           /|        |
+          / |        |
+         /  |        |
+        9---|---15   |
+       /|   7    |  13--------18
+      / |  /     |  /    ____/
+     /  | /      | /____/
+    8   |/  14---|//---19
+    |   6    |  12
+    |  /     |  / \
+    | /      | /   \__
+    |/       |/       \
+    5--------11--------17
+*/
 static PetscErrorCode CreateReverseHybridMesh(MPI_Comm comm, PetscBool interpolate, DM *dm)
 {
   PetscInt       dim;
@@ -115,7 +132,7 @@ static PetscErrorCode OrderHybridMesh(DM *dm)
 
   PetscFunctionBegin;
   ierr = DMGetDimension(*dm, &dim);CHKERRQ(ierr);
-  if (dim != 3) SETERRQ1(PetscObjectComm((PetscObject) *dm), PETSC_ERR_SUP, "No support for dimension %D", dim);
+  PetscCheckFalse(dim != 3,PetscObjectComm((PetscObject) *dm), PETSC_ERR_SUP, "No support for dimension %D", dim);
   ierr = DMPlexGetChart(*dm, &pStart, &pEnd);CHKERRQ(ierr);
   ierr = PetscMalloc1(pEnd-pStart, &ind);CHKERRQ(ierr);
   for (p = 0; p < pEnd-pStart; ++p) ind[p] = p;
@@ -135,8 +152,8 @@ static PetscErrorCode OrderHybridMesh(DM *dm)
     if (coneSize == 6) ind[c] = off[1]++;
     else               ind[c] = off[0]++;
   }
-  if (off[0] != cEnd - Nhyb) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Number of normal cells %D should be %D", off[0], cEnd - Nhyb);
-  if (off[1] != cEnd)        SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Number of hybrid cells %D should be %D", off[1] - off[0], Nhyb);
+  PetscCheckFalse(off[0] != cEnd - Nhyb,PETSC_COMM_SELF, PETSC_ERR_PLIB, "Number of normal cells %D should be %D", off[0], cEnd - Nhyb);
+  PetscCheckFalse(off[1] != cEnd,PETSC_COMM_SELF, PETSC_ERR_PLIB, "Number of hybrid cells %D should be %D", off[1] - off[0], Nhyb);
   ierr = ISCreateGeneral(PETSC_COMM_SELF, pEnd-pStart, ind, PETSC_OWN_POINTER, &perm);CHKERRQ(ierr);
   ierr = DMPlexPermute(*dm, perm, &pdm);CHKERRQ(ierr);
   ierr = ISDestroy(&perm);CHKERRQ(ierr);
@@ -156,7 +173,7 @@ static PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
   PetscFunctionBegin;
   ierr = PetscStrlen(filename, &len);CHKERRQ(ierr);
   if (len) {
-    ierr = DMPlexCreateFromFile(comm, filename, PETSC_FALSE, dm);CHKERRQ(ierr);
+    ierr = DMPlexCreateFromFile(comm, filename, "ex34_plex", PETSC_FALSE, dm);CHKERRQ(ierr);
     ierr = OrderHybridMesh(dm);CHKERRQ(ierr);
     if (interpolate) {
       DM idm;
@@ -173,7 +190,7 @@ static PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
       ierr = CreateHybridMesh(comm, interpolate, dm);CHKERRQ(ierr);break;
     case 1:
       ierr = CreateReverseHybridMesh(comm, interpolate, dm);CHKERRQ(ierr);break;
-    default: SETERRQ1(comm, PETSC_ERR_ARG_WRONG, "Unknown mesh number %D", user->meshNum);
+    default: SETERRQ(comm, PETSC_ERR_ARG_WRONG, "Unknown mesh number %D", user->meshNum);
     }
   }
   PetscFunctionReturn(0);
@@ -199,7 +216,9 @@ int main(int argc, char **argv)
     suffix: 0
     args: -interpolate -dm_view ascii::ascii_info_detail
 
+  # Test needs to be reworked
   test:
+    requires: BROKEN
     suffix: 1
     args: -mesh_num 1 -interpolate -dm_view ascii::ascii_info_detail
 

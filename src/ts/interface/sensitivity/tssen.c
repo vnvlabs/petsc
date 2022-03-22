@@ -55,7 +55,7 @@ PetscErrorCode TSSetRHSJacobianP(TS ts,Mat Amat,PetscErrorCode (*func)(TS,PetscR
 
   Logically Collective on TS
 
-  Input Parameters:
+  Input Parameter:
 . ts - TS context obtained from TSCreate()
 
   Output Parameters:
@@ -263,7 +263,7 @@ PetscErrorCode TSSetCostIntegrand(TS ts,PetscInt numcost,Vec costintegral,PetscE
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   if (costintegral) PetscValidHeaderSpecific(costintegral,VEC_CLASSID,3);
-  if (ts->numcost && ts->numcost!=numcost) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"The number of cost functions (2rd parameter of TSSetCostIntegrand()) is inconsistent with the one set by TSSetCostGradients() or TSForwardSetIntegralGradients()");
+  PetscCheckFalse(ts->numcost && ts->numcost!=numcost,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"The number of cost functions (2nd parameter of TSSetCostIntegrand()) is inconsistent with the one set by TSSetCostGradients() or TSForwardSetIntegralGradients()");
   if (!ts->numcost) ts->numcost=numcost;
 
   if (costintegral) {
@@ -842,10 +842,10 @@ PetscErrorCode TSSetCostGradients(TS ts,PetscInt numcost,Vec *lambda,Vec *mu)
 {
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  PetscValidPointer(lambda,2);
+  PetscValidPointer(lambda,3);
   ts->vecs_sensi  = lambda;
   ts->vecs_sensip = mu;
-  if (ts->numcost && ts->numcost!=numcost) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"The number of cost functions (2rd parameter of TSSetCostIntegrand()) is inconsistent with the one set by TSSetCostIntegrand");
+  PetscCheckFalse(ts->numcost && ts->numcost!=numcost,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"The number of cost functions (2nd parameter of TSSetCostIntegrand()) is inconsistent with the one set by TSSetCostIntegrand");
   ts->numcost  = numcost;
   PetscFunctionReturn(0);
 }
@@ -858,8 +858,9 @@ PetscErrorCode TSSetCostGradients(TS ts,PetscInt numcost,Vec *lambda,Vec *mu)
    Input Parameter:
 .  ts - the TS context obtained from TSCreate()
 
-   Output Parameter:
-+  lambda - vectors containing the gradients of the cost functions with respect to the ODE/DAE solution variables
+   Output Parameters:
++  numcost - size of returned arrays
+.  lambda - vectors containing the gradients of the cost functions with respect to the ODE/DAE solution variables
 -  mu - vectors containing the gradients of the cost functions with respect to the problem parameters
 
    Level: intermediate
@@ -904,7 +905,7 @@ PetscErrorCode TSSetCostHessianProducts(TS ts,PetscInt numcost,Vec *lambda2,Vec 
 {
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  if (ts->numcost && ts->numcost!=numcost) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"The number of cost functions (2rd parameter of TSSetCostIntegrand()) is inconsistent with the one set by TSSetCostIntegrand");
+  PetscCheckFalse(ts->numcost && ts->numcost!=numcost,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"The number of cost functions (2nd parameter of TSSetCostIntegrand()) is inconsistent with the one set by TSSetCostIntegrand");
   ts->numcost       = numcost;
   ts->vecs_sensi2   = lambda2;
   ts->vecs_sensi2p  = mu2;
@@ -920,7 +921,7 @@ PetscErrorCode TSSetCostHessianProducts(TS ts,PetscInt numcost,Vec *lambda2,Vec 
    Input Parameter:
 .  ts - the TS context obtained from TSCreate()
 
-   Output Parameter:
+   Output Parameters:
 +  numcost - number of cost functions
 .  lambda2 - Hessian-vector product with respect to the initial condition variables, the dimension and parallel layout of these vectors is the same as the ODE solution vector
 .  mu2 - Hessian-vector product with respect to the parameters, the number of entries in these vectors is the same as the number of parameters
@@ -966,8 +967,8 @@ PetscErrorCode TSAdjointSetForward(TS ts,Mat didp)
 
   PetscFunctionBegin;
   ts->forward_solve = PETSC_TRUE; /* turn on tangent linear mode */
-  if (!ts->vecs_sensi2) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must call TSSetCostHessianProducts() first");
-  if (!ts->vec_dir) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Directional vector is missing. Call TSSetCostHessianProducts() to set it.");
+  PetscCheckFalse(!ts->vecs_sensi2,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must call TSSetCostHessianProducts() first");
+  PetscCheckFalse(!ts->vec_dir,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Directional vector is missing. Call TSSetCostHessianProducts() to set it.");
   /* create a single-column dense matrix */
   ierr = VecGetLocalSize(ts->vec_sol,&lsize);CHKERRQ(ierr);
   ierr = MatCreateDense(PetscObjectComm((PetscObject)ts),lsize,PETSC_DECIDE,PETSC_DECIDE,1,NULL,&A);CHKERRQ(ierr);
@@ -1039,20 +1040,20 @@ PetscErrorCode TSAdjointSetUp(TS ts)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   if (ts->adjointsetupcalled) PetscFunctionReturn(0);
-  if (!ts->vecs_sensi) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"Must call TSSetCostGradients() first");
-  if (ts->vecs_sensip && !ts->Jacp && !ts->Jacprhs) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"Must call TSSetRHSJacobianP() or TSSetIJacobianP() first");
+  PetscCheckFalse(!ts->vecs_sensi,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"Must call TSSetCostGradients() first");
+  PetscCheckFalse(ts->vecs_sensip && !ts->Jacp && !ts->Jacprhs,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_WRONGSTATE,"Must call TSSetRHSJacobianP() or TSSetIJacobianP() first");
   ierr = TSGetTrajectory(ts,&tj);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)tj,TSTRAJECTORYBASIC,&match);CHKERRQ(ierr);
   if (match) {
     PetscBool solution_only;
     ierr = TSTrajectoryGetSolutionOnly(tj,&solution_only);CHKERRQ(ierr);
-    if (solution_only) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"TSAdjoint cannot use the solution-only mode when choosing the Basic TSTrajectory type. Turn it off with -ts_trajectory_solution_only 0");
+    PetscCheckFalse(solution_only,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"TSAdjoint cannot use the solution-only mode when choosing the Basic TSTrajectory type. Turn it off with -ts_trajectory_solution_only 0");
   }
   ierr = TSTrajectorySetUseHistory(tj,PETSC_FALSE);CHKERRQ(ierr); /* not use TSHistory */
 
   if (ts->quadraturets) { /* if there is integral in the cost function */
     ierr = VecDuplicate(ts->vecs_sensi[0],&ts->vec_drdu_col);CHKERRQ(ierr);
-    if (ts->vecs_sensip){
+    if (ts->vecs_sensip) {
       ierr = VecDuplicate(ts->vecs_sensip[0],&ts->vec_drdp_col);CHKERRQ(ierr);
     }
   }
@@ -1087,7 +1088,7 @@ PetscErrorCode TSAdjointReset(TS ts)
   }
   if (ts->quadraturets) { /* if there is integral in the cost function */
     ierr = VecDestroy(&ts->vec_drdu_col);CHKERRQ(ierr);
-    if (ts->vecs_sensip){
+    if (ts->vecs_sensip) {
       ierr = VecDestroy(&ts->vec_drdp_col);CHKERRQ(ierr);
     }
   }
@@ -1122,8 +1123,8 @@ PetscErrorCode TSAdjointSetSteps(TS ts,PetscInt steps)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidLogicalCollectiveInt(ts,steps,2);
-  if (steps < 0) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Cannot step back a negative number of steps");
-  if (steps > ts->steps) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Cannot step back more than the total number of forward steps");
+  PetscCheckFalse(steps < 0,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Cannot step back a negative number of steps");
+  PetscCheckFalse(steps > ts->steps,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Cannot step back more than the total number of forward steps");
   ts->adjoint_max_steps = steps;
   PetscFunctionReturn(0);
 }
@@ -1226,7 +1227,7 @@ PetscErrorCode TSAdjointMonitorSensi(TS ts,PetscInt step,PetscReal ptime,Vec v,P
   PetscViewer    viewer = vf->viewer;
 
   PetscFunctionBegin;
-  PetscValidHeaderSpecific(viewer,PETSC_VIEWER_CLASSID,4);
+  PetscValidHeaderSpecific(viewer,PETSC_VIEWER_CLASSID,8);
   ierr = PetscViewerPushFormat(viewer,vf->format);CHKERRQ(ierr);
   ierr = VecView(lambda[0],viewer);CHKERRQ(ierr);
   ierr = PetscViewerPopFormat(viewer);CHKERRQ(ierr);
@@ -1327,7 +1328,7 @@ PetscErrorCode TSAdjointMonitorSet(TS ts,PetscErrorCode (*adjointmonitor)(TS,Pet
     ierr = PetscMonitorCompare((PetscErrorCode (*)(void))adjointmonitor,adjointmctx,adjointmdestroy,(PetscErrorCode (*)(void))ts->adjointmonitor[i],ts->adjointmonitorcontext[i],ts->adjointmonitordestroy[i],&identical);CHKERRQ(ierr);
     if (identical) PetscFunctionReturn(0);
   }
-  if (ts->numberadjointmonitors >= MAXTSMONITORS) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Too many adjoint monitors set");
+  PetscCheckFalse(ts->numberadjointmonitors >= MAXTSMONITORS,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Too many adjoint monitors set");
   ts->adjointmonitor[ts->numberadjointmonitors]          = adjointmonitor;
   ts->adjointmonitordestroy[ts->numberadjointmonitors]   = adjointmdestroy;
   ts->adjointmonitorcontext[ts->numberadjointmonitors++] = (void*)adjointmctx;
@@ -1378,7 +1379,7 @@ PetscErrorCode TSAdjointMonitorDefault(TS ts,PetscInt step,PetscReal ptime,Vec v
   PetscViewer    viewer = vf->viewer;
 
   PetscFunctionBegin;
-  PetscValidHeaderSpecific(viewer,PETSC_VIEWER_CLASSID,4);
+  PetscValidHeaderSpecific(viewer,PETSC_VIEWER_CLASSID,8);
   ierr = PetscViewerPushFormat(viewer,vf->format);CHKERRQ(ierr);
   ierr = PetscViewerASCIIAddTab(viewer,((PetscObject)ts)->tablevel);CHKERRQ(ierr);
   ierr = PetscViewerASCIIPrintf(viewer,"%D TS dt %g time %g%s",step,(double)ts->time_step,(double)ptime,ts->steprollback ? " (r)\n" : "\n");CHKERRQ(ierr);
@@ -1502,14 +1503,14 @@ PetscErrorCode TSAdjointStep(TS ts)
 
   ts->reason = TS_CONVERGED_ITERATING;
   ts->ptime_prev = ts->ptime;
-  if (!ts->ops->adjointstep) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSStep has failed because the adjoint of  %s has not been implemented, try other time stepping methods for adjoint sensitivity analysis",((PetscObject)ts)->type_name);
+  PetscCheckFalse(!ts->ops->adjointstep,PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSStep has failed because the adjoint of  %s has not been implemented, try other time stepping methods for adjoint sensitivity analysis",((PetscObject)ts)->type_name);
   ierr = PetscLogEventBegin(TS_AdjointStep,ts,0,0,0);CHKERRQ(ierr);
   ierr = (*ts->ops->adjointstep)(ts);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(TS_AdjointStep,ts,0,0,0);CHKERRQ(ierr);
   ts->adjoint_steps++;
 
   if (ts->reason < 0) {
-    if (ts->errorifstepfailed) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSAdjointStep has failed due to %s",TSConvergedReasons[ts->reason]);
+    PetscCheckFalse(ts->errorifstepfailed,PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSAdjointStep has failed due to %s",TSConvergedReasons[ts->reason]);
   } else if (!ts->reason) {
     if (ts->adjoint_steps >= ts->adjoint_max_steps) ts->reason = TS_CONVERGED_ITS;
   }
@@ -1579,8 +1580,10 @@ PetscErrorCode TSAdjointSolve(TS ts)
       ierr = TSAdjointCostIntegral(ts);CHKERRQ(ierr);
     }
   }
-  ierr = TSTrajectoryGet(ts->trajectory,ts,ts->steps,&ts->ptime);CHKERRQ(ierr);
-  ierr = TSAdjointMonitor(ts,ts->steps,ts->ptime,ts->vec_sol,ts->numcost,ts->vecs_sensi,ts->vecs_sensip);CHKERRQ(ierr);
+  if (!ts->steps) {
+    ierr = TSTrajectoryGet(ts->trajectory,ts,ts->steps,&ts->ptime);CHKERRQ(ierr);
+    ierr = TSAdjointMonitor(ts,ts->steps,ts->ptime,ts->vec_sol,ts->numcost,ts->vecs_sensi,ts->vecs_sensip);CHKERRQ(ierr);
+  }
   ts->solvetime = ts->ptime;
   ierr = TSTrajectoryViewFromOptions(ts->trajectory,NULL,"-ts_trajectory_view");CHKERRQ(ierr);
   ierr = VecViewFromOptions(ts->vecs_sensi[0],(PetscObject) ts, "-ts_adjoint_view_solution");CHKERRQ(ierr);
@@ -1633,7 +1636,7 @@ PetscErrorCode TSAdjointMonitor(TS ts,PetscInt step,PetscReal ptime,Vec u,PetscI
 
  Collective on TS
 
- Input Arguments:
+ Input Parameter:
  .  ts - time stepping context
 
  Level: advanced
@@ -1645,11 +1648,12 @@ PetscErrorCode TSAdjointMonitor(TS ts,PetscInt step,PetscReal ptime,Vec u,PetscI
  @*/
 PetscErrorCode TSAdjointCostIntegral(TS ts)
 {
-    PetscErrorCode ierr;
-    PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-    if (!ts->ops->adjointintegral) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"%s does not provide integral evaluation in the adjoint run",((PetscObject)ts)->type_name);
-    ierr = (*ts->ops->adjointintegral)(ts);CHKERRQ(ierr);
-    PetscFunctionReturn(0);
+  PetscFunctionBegin;
+  PetscErrorCode ierr;
+  PetscValidHeaderSpecific(ts,TS_CLASSID,1);
+  PetscCheckFalse(!ts->ops->adjointintegral,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"%s does not provide integral evaluation in the adjoint run",((PetscObject)ts)->type_name);
+  ierr = (*ts->ops->adjointintegral)(ts);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
 }
 
 /* ------------------ Forward (tangent linear) sensitivity  ------------------*/
@@ -1717,10 +1721,10 @@ PetscErrorCode TSForwardReset(TS ts)
 /*@
   TSForwardSetIntegralGradients - Set the vectors holding forward sensitivities of the integral term.
 
-  Input Parameter:
-+ ts- the TS context obtained from TSCreate()
-. numfwdint- number of integrals
-- vp = the vectors containing the gradients for each integral w.r.t. parameters
+  Input Parameters:
++ ts - the TS context obtained from TSCreate()
+. numfwdint - number of integrals
+- vp - the vectors containing the gradients for each integral w.r.t. parameters
 
   Level: deprecated
 
@@ -1730,7 +1734,7 @@ PetscErrorCode TSForwardSetIntegralGradients(TS ts,PetscInt numfwdint,Vec *vp)
 {
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  if (ts->numcost && ts->numcost!=numfwdint) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"The number of cost functions (2rd parameter of TSSetCostIntegrand()) is inconsistent with the one set by TSSetCostIntegrand()");
+  PetscCheckFalse(ts->numcost && ts->numcost!=numfwdint,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"The number of cost functions (2nd parameter of TSSetCostIntegrand()) is inconsistent with the one set by TSSetCostIntegrand()");
   if (!ts->numcost) ts->numcost = numfwdint;
 
   ts->vecs_integral_sensip = vp;
@@ -1741,10 +1745,10 @@ PetscErrorCode TSForwardSetIntegralGradients(TS ts,PetscInt numfwdint,Vec *vp)
   TSForwardGetIntegralGradients - Returns the forward sensitivities ofthe integral term.
 
   Input Parameter:
-. ts- the TS context obtained from TSCreate()
+. ts - the TS context obtained from TSCreate()
 
   Output Parameter:
-. vp = the vectors containing the gradients for each integral w.r.t. parameters
+. vp - the vectors containing the gradients for each integral w.r.t. parameters
 
   Level: deprecated
 
@@ -1765,7 +1769,7 @@ PetscErrorCode TSForwardGetIntegralGradients(TS ts,PetscInt *numfwdint,Vec **vp)
 
   Collective on TS
 
-  Input Arguments:
+  Input Parameter:
 . ts - time stepping context
 
   Level: advanced
@@ -1778,12 +1782,13 @@ PetscErrorCode TSForwardGetIntegralGradients(TS ts,PetscInt *numfwdint,Vec **vp)
 PetscErrorCode TSForwardStep(TS ts)
 {
   PetscErrorCode ierr;
+  PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  if (!ts->ops->forwardstep) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"%s does not provide forward sensitivity analysis",((PetscObject)ts)->type_name);
+  PetscCheckFalse(!ts->ops->forwardstep,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"%s does not provide forward sensitivity analysis",((PetscObject)ts)->type_name);
   ierr = PetscLogEventBegin(TS_ForwardStep,ts,0,0,0);CHKERRQ(ierr);
   ierr = (*ts->ops->forwardstep)(ts);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(TS_ForwardStep,ts,0,0,0);CHKERRQ(ierr);
-  if (ts->reason < 0 && ts->errorifstepfailed) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSFowardStep has failed due to %s",TSConvergedReasons[ts->reason]);
+  PetscCheckFalse(ts->reason < 0 && ts->errorifstepfailed,PetscObjectComm((PetscObject)ts),PETSC_ERR_NOT_CONVERGED,"TSFowardStep has failed due to %s",TSConvergedReasons[ts->reason]);
   PetscFunctionReturn(0);
 }
 
@@ -1829,7 +1834,7 @@ PetscErrorCode TSForwardSetSensitivities(TS ts,PetscInt nump,Mat Smat)
 
   Not Collective, but Vec returned is parallel if TS is parallel
 
-  Output Parameter:
+  Output Parameters:
 + ts - the TS context obtained from TSCreate()
 . nump - number of parameters
 - Smat - sensitivities with respect to the parameters, the number of entries in these vectors is the same as the number of parameters
@@ -1852,7 +1857,7 @@ PetscErrorCode TSForwardGetSensitivities(TS ts,PetscInt *nump,Mat *Smat)
 
    Collective on TS
 
-   Input Arguments:
+   Input Parameter:
 .  ts - time stepping context
 
    Level: advanced
@@ -1865,8 +1870,10 @@ PetscErrorCode TSForwardGetSensitivities(TS ts,PetscInt *nump,Mat *Smat)
 PetscErrorCode TSForwardCostIntegral(TS ts)
 {
   PetscErrorCode ierr;
+
+  PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  if (!ts->ops->forwardintegral) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"%s does not provide integral evaluation in the forward run",((PetscObject)ts)->type_name);
+  PetscCheckFalse(!ts->ops->forwardintegral,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"%s does not provide integral evaluation in the forward run",((PetscObject)ts)->type_name);
   ierr = (*ts->ops->forwardintegral)(ts);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -1876,7 +1883,7 @@ PetscErrorCode TSForwardCostIntegral(TS ts)
 
   Collective on TS
 
-  Input Parameter:
+  Input Parameters:
 + ts - the TS context obtained from TSCreate()
 - didp - parametric sensitivities of the initial condition
 
@@ -1890,6 +1897,7 @@ PetscErrorCode TSForwardSetInitialSensitivities(TS ts,Mat didp)
 {
   PetscErrorCode ierr;
 
+  PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidHeaderSpecific(didp,MAT_CLASSID,2);
   if (!ts->mat_sensip) {
@@ -1928,7 +1936,7 @@ PetscErrorCode TSForwardGetStages(TS ts,PetscInt *ns,Mat **S)
 /*@
    TSCreateQuadratureTS - Create a sub-TS that evaluates integrals over time
 
-   Input Parameter:
+   Input Parameters:
 +  ts - the TS context obtained from TSCreate()
 -  fwd - flag indicating whether to evaluate cost integral in the forward run or the adjoint run
 
@@ -1946,7 +1954,7 @@ PetscErrorCode TSCreateQuadratureTS(TS ts,PetscBool fwd,TS *quadts)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
-  PetscValidPointer(quadts,2);
+  PetscValidPointer(quadts,3);
   ierr = TSDestroy(&ts->quadraturets);CHKERRQ(ierr);
   ierr = TSCreate(PetscObjectComm((PetscObject)ts),&ts->quadraturets);CHKERRQ(ierr);
   ierr = PetscObjectIncrementTabLevel((PetscObject)ts->quadraturets,(PetscObject)ts,1);CHKERRQ(ierr);

@@ -86,20 +86,22 @@ PetscErrorCode VecMax_MPI(Vec xin,PetscInt *idx,PetscReal *z)
   PetscFunctionBegin;
   /* Find the local max */
   ierr = VecMax_Seq(xin,idx,&work);CHKERRQ(ierr);
-
+#if defined(PETSC_HAVE_MPIUNI)
+  *z = work;
+#else
   /* Find the global max */
   if (!idx) {
     ierr = MPIU_Allreduce(&work,z,1,MPIU_REAL,MPIU_MAX,PetscObjectComm((PetscObject)xin));CHKERRMPI(ierr);
   } else {
-    PetscReal work2[2],z2[2];
-    PetscInt  rstart;
-    rstart   = xin->map->rstart;
-    work2[0] = work;
-    work2[1] = *idx + rstart;
-    ierr     = MPIU_Allreduce(work2,z2,2,MPIU_REAL,MPIU_MAXINDEX_OP,PetscObjectComm((PetscObject)xin));CHKERRMPI(ierr);
-    *z       = z2[0];
-    *idx     = (PetscInt)z2[1];
+    struct { PetscReal v; PetscInt i; } in,out;
+
+    in.v  = work;
+    in.i  = *idx + xin->map->rstart;
+    ierr  = MPIU_Allreduce(&in,&out,1,MPIU_REAL_INT,MPIU_MAXLOC,PetscObjectComm((PetscObject)xin));CHKERRMPI(ierr);
+    *z    = out.v;
+    *idx  = out.i;
   }
+#endif
   PetscFunctionReturn(0);
 }
 
@@ -111,20 +113,21 @@ PetscErrorCode VecMin_MPI(Vec xin,PetscInt *idx,PetscReal *z)
   PetscFunctionBegin;
   /* Find the local Min */
   ierr = VecMin_Seq(xin,idx,&work);CHKERRQ(ierr);
-
+#if defined(PETSC_HAVE_MPIUNI)
+  *z = work;
+#else
   /* Find the global Min */
   if (!idx) {
     ierr = MPIU_Allreduce(&work,z,1,MPIU_REAL,MPIU_MIN,PetscObjectComm((PetscObject)xin));CHKERRMPI(ierr);
   } else {
-    PetscReal work2[2],z2[2];
-    PetscInt  rstart;
+    struct { PetscReal v; PetscInt i; } in,out;
 
-    ierr = VecGetOwnershipRange(xin,&rstart,NULL);CHKERRQ(ierr);
-    work2[0] = work;
-    work2[1] = *idx + rstart;
-    ierr = MPIU_Allreduce(work2,z2,2,MPIU_REAL,MPIU_MININDEX_OP,PetscObjectComm((PetscObject)xin));CHKERRMPI(ierr);
-    *z   = z2[0];
-    *idx = (PetscInt)z2[1];
+    in.v  = work;
+    in.i  = *idx + xin->map->rstart;
+    ierr  = MPIU_Allreduce(&in,&out,1,MPIU_REAL_INT,MPIU_MINLOC,PetscObjectComm((PetscObject)xin));CHKERRMPI(ierr);
+    *z    = out.v;
+    *idx  = out.i;
   }
+#endif
   PetscFunctionReturn(0);
 }

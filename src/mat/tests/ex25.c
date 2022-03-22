@@ -37,14 +37,13 @@ int main(int argc,char **args)
   ierr = MatTranspose(C,MAT_INITIAL_MATRIX,&A);CHKERRQ(ierr);
 
   ierr = MatEqual(C,A,&equal);CHKERRQ(ierr);
-  if (!equal) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"C != C^T");
+  PetscCheckFalse(!equal,PETSC_COMM_SELF,PETSC_ERR_SUP,"C != C^T");
 
   ierr = MatDestroy(&C);CHKERRQ(ierr);
   ierr = MatDestroy(&A);CHKERRQ(ierr);
   ierr = PetscFinalize();
   return ierr;
 }
-
 
 /*TEST
 

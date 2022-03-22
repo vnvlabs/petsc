@@ -24,13 +24,13 @@ static PetscErrorCode KSPSetUp_PIPEPRCG(KSP ksp)
 
 static PetscErrorCode KSPSetFromOptions_PIPEPRCG(PetscOptionItems *PetscOptionsObject,KSP ksp)
 {
-  PetscInt       ierr=0;
   KSP_CG_PIPE_PR *prcg=(KSP_CG_PIPE_PR*)ksp->data;
   PetscBool      flag=PETSC_FALSE;
+  PetscErrorCode ierr;
 
   PetscFunctionBegin;
   ierr = PetscOptionsHead(PetscOptionsObject,"KSP PIPEPRCG options");CHKERRQ(ierr);
-  PetscOptionsBool("-recompute_w","-recompute w_k with Ar_k? (default = True)","",prcg->rc_w_q,&prcg->rc_w_q,&flag);CHKERRQ(ierr);
+  ierr = PetscOptionsBool("-recompute_w","-recompute w_k with Ar_k? (default = True)","",prcg->rc_w_q,&prcg->rc_w_q,&flag);CHKERRQ(ierr);
   if (!flag) prcg->rc_w_q = PETSC_TRUE;
   ierr = PetscOptionsTail();CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -56,7 +56,7 @@ static PetscErrorCode  KSPSolve_PIPEPRCG(KSP ksp)
   PetscFunctionBegin;
 
   ierr = PCGetDiagonalScale(ksp->pc,&diagonalscale);CHKERRQ(ierr);
-  if (diagonalscale) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(diagonalscale,PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
 
   X  = ksp->vec_sol;
   B  = ksp->vec_rhs;
@@ -121,7 +121,7 @@ static PetscErrorCode  KSPSolve_PIPEPRCG(KSP ksp)
     case KSP_NORM_NONE:
       dp   = 0.0;
       break;
-    default: SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"%s",KSPNormTypes[ksp->normtype]);
+    default: SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"%s",KSPNormTypes[ksp->normtype]);
     }
 
     ksp->rnorm = dp;
@@ -175,7 +175,6 @@ static PetscErrorCode  KSPSolve_PIPEPRCG(KSP ksp)
   PetscFunctionReturn(0);
 }
 
-
 /*MC
    KSPPIPEPRCG - Pipelined predict-and-recompute conjugate gradient method.
 
@@ -192,7 +191,7 @@ static PetscErrorCode  KSPSolve_PIPEPRCG(KSP ksp)
    Tyler Chen, University of Washington, Applied Mathematics Department
 
    Reference:
-   "Predict-and-recompute conjugate gradient variants". Tyler Chen and Erin C. Carson. In preparation.
+   Tyler Chen and Erin Carson. "Predict-and-recompute conjugate gradient variants." SIAM Journal on Scientific Computing 42.5 (2020): A3084-A3108.
 
    Acknowledgments:
    This material is based upon work supported by the National Science Foundation Graduate Research Fellowship Program under Grant No. DGE-1762114. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author and do not necessarily reflect the views of the National Science Foundation.

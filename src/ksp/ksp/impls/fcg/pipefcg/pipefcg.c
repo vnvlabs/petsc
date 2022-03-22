@@ -35,7 +35,7 @@ static PetscErrorCode KSPAllocateVectors_PIPEFCG(KSP ksp, PetscInt nvecsneeded, 
   pipefcg = (KSP_PIPEFCG*)ksp->data;
 
   /* Allocate enough new vectors to add chunksize new vectors, reach nvecsneedtotal, or to reach mmax+1, whichever is smallest */
-  if (pipefcg->nvecs < PetscMin(pipefcg->mmax+1,nvecsneeded)){
+  if (pipefcg->nvecs < PetscMin(pipefcg->mmax+1,nvecsneeded)) {
     nvecsprev = pipefcg->nvecs;
     nnewvecs = PetscMin(PetscMax(nvecsneeded-pipefcg->nvecs,chunksize),pipefcg->mmax+1-pipefcg->nvecs);
     ierr = KSPCreateVecs(ksp,nnewvecs,&pipefcg->pQvecs[pipefcg->nchunks],0,NULL);CHKERRQ(ierr);
@@ -47,7 +47,7 @@ static PetscErrorCode KSPAllocateVectors_PIPEFCG(KSP ksp, PetscInt nvecsneeded, 
     ierr = KSPCreateVecs(ksp,nnewvecs,&pipefcg->pSvecs[pipefcg->nchunks],0,NULL);CHKERRQ(ierr);
     ierr = PetscLogObjectParents((PetscObject)ksp,nnewvecs,pipefcg->pSvecs[pipefcg->nchunks]);CHKERRQ(ierr);
     pipefcg->nvecs += nnewvecs;
-    for (i=0;i<nnewvecs;++i){
+    for (i=0;i<nnewvecs;++i) {
       pipefcg->Qvecs[nvecsprev + i]    = pipefcg->pQvecs[pipefcg->nchunks][i];
       pipefcg->ZETAvecs[nvecsprev + i] = pipefcg->pZETAvecs[pipefcg->nchunks][i];
       pipefcg->Pvecs[nvecsprev + i]    = pipefcg->pPvecs[pipefcg->nchunks][i];
@@ -81,8 +81,8 @@ static PetscErrorCode KSPSetUp_PIPEFCG(KSP ksp)
   ierr = PetscMalloc3(pipefcg->mmax+2,&(pipefcg->dots),pipefcg->mmax+1,&(pipefcg->etas),pipefcg->mmax+2,&(pipefcg->redux));CHKERRQ(ierr);
 
   /* If the requested number of preallocated vectors is greater than mmax reduce nprealloc */
-  if (pipefcg->nprealloc > pipefcg->mmax+1){
-    ierr = PetscInfo2(NULL,"Requested nprealloc=%d is greater than m_max+1=%d. Resetting nprealloc = m_max+1.\n",pipefcg->nprealloc, pipefcg->mmax+1);CHKERRQ(ierr);
+  if (pipefcg->nprealloc > pipefcg->mmax+1) {
+    ierr = PetscInfo(NULL,"Requested nprealloc=%d is greater than m_max+1=%d. Resetting nprealloc = m_max+1.\n",pipefcg->nprealloc, pipefcg->mmax+1);CHKERRQ(ierr);
   }
 
   /* Preallocate additional work vectors */
@@ -106,7 +106,7 @@ static PetscErrorCode KSPSolve_PIPEFCG_cycle(KSP ksp)
   PetscFunctionBegin;
   /* We have not checked these routines for use with complex numbers. The inner products
      are likely not defined correctly for that case */
-  if (PetscDefined(USE_COMPLEX) && !PetscDefined(SKIP_COMPLEX)) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"PIPEFGMRES has not been implemented for use with complex scalars");
+  PetscCheckFalse(PetscDefined(USE_COMPLEX) && !PetscDefined(SKIP_COMPLEX),PETSC_COMM_WORLD,PETSC_ERR_SUP,"PIPEFGMRES has not been implemented for use with complex scalars");
 
 #define VecXDot(x,y,a)         (((pipefcg->type) == (KSP_CG_HERMITIAN)) ? VecDot       (x,y,a)   : VecTDot       (x,y,a))
 #define VecXDotBegin(x,y,a)    (((pipefcg->type) == (KSP_CG_HERMITIAN)) ? VecDotBegin  (x,y,a)   : VecTDotBegin  (x,y,a))
@@ -183,12 +183,12 @@ static PetscErrorCode KSPSolve_PIPEFCG_cycle(KSP ksp)
       case KSP_NORM_NONE:
         dp = 0.0;
         break;
-      default: SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"%s",KSPNormTypes[ksp->normtype]);
+      default: SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"%s",KSPNormTypes[ksp->normtype]);
     }
 
     /* Check for convergence */
     ksp->rnorm = dp;
-    KSPLogResidualHistory(ksp,dp);CHKERRQ(ierr);
+    ierr = KSPLogResidualHistory(ksp,dp);CHKERRQ(ierr);
     ierr = KSPMonitor(ksp,ksp->its,dp);CHKERRQ(ierr);
     ierr = (*ksp->converged)(ksp,ksp->its,dp,&ksp->reason,ksp->cnvP);CHKERRQ(ierr);
     if (ksp->reason) PetscFunctionReturn(0);
@@ -208,7 +208,7 @@ static PetscErrorCode KSPSolve_PIPEFCG_cycle(KSP ksp)
     eta      = pipefcg->etas+idx;
 
     /* number of old directions to orthogonalize against */
-    switch(pipefcg->truncstrat){
+    switch(pipefcg->truncstrat) {
       case KSP_FCD_TRUNC_TYPE_STANDARD:
         mi = pipefcg->mmax;
         break;
@@ -221,7 +221,7 @@ static PetscErrorCode KSPSolve_PIPEFCG_cycle(KSP ksp)
 
     /* Pick old p,s,q,zeta in a way suitable for VecMDot */
     ierr = VecCopy(Z,Pcurr);CHKERRQ(ierr);
-    for (k=PetscMax(0,i-mi),j=0;k<i;++j,++k){
+    for (k=PetscMax(0,i-mi),j=0;k<i;++j,++k) {
       kdx = k % (pipefcg->mmax+1);
       pipefcg->Pold[j]    = pipefcg->Pvecs[kdx];
       pipefcg->Sold[j]    = pipefcg->Svecs[kdx];
@@ -243,7 +243,7 @@ static PetscErrorCode KSPSolve_PIPEFCG_cycle(KSP ksp)
     delta = PetscRealPart(betas[j+1]);
 
     *eta = 0.;
-    for (k=PetscMax(0,i-mi),j=0;k<i;++j,++k){
+    for (k=PetscMax(0,i-mi),j=0;k<i;++j,++k) {
       kdx = k % (pipefcg->mmax+1);
       betas[j] /= -etas[kdx];                               /* betak  /= etak */
       *eta -= ((PetscReal)(PetscAbsScalar(betas[j])*PetscAbsScalar(betas[j]))) * etas[kdx];
@@ -252,7 +252,7 @@ static PetscErrorCode KSPSolve_PIPEFCG_cycle(KSP ksp)
     *eta += delta;                                          /* etai    = delta -betaik^2 * etak */
     if (*eta < 0.) {
       pipefcg->norm_breakdown = PETSC_TRUE;
-      ierr = PetscInfo1(ksp,"Restart due to square root breakdown at it = \n",ksp->its);CHKERRQ(ierr);
+      ierr = PetscInfo(ksp,"Restart due to square root breakdown at it = \n",ksp->its);CHKERRQ(ierr);
       break;
     } else {
       alpha= gamma/(*eta);                                  /* alpha = gamma/etai */
@@ -319,7 +319,7 @@ static PetscErrorCode KSPSolve_PIPEFCG(KSP ksp)
     case KSP_NORM_NONE:
       dp = 0.0;
       break;
-    default: SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"%s",KSPNormTypes[ksp->normtype]);
+    default: SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"%s",KSPNormTypes[ksp->normtype]);
   }
 
   /* Initial Convergence Check */
@@ -358,8 +358,8 @@ static PetscErrorCode KSPDestroy_PIPEFCG(KSP ksp)
   VecDestroyVecs(ksp->nwork,&ksp->work);
 
   /* Destroy vectors of old directions and the arrays that manage pointers to them */
-  if (pipefcg->nvecs){
-    for (i=0;i<pipefcg->nchunks;++i){
+  if (pipefcg->nvecs) {
+    for (i=0;i<pipefcg->nchunks;++i) {
       ierr = VecDestroyVecs(pipefcg->chunksizes[i],&pipefcg->pPvecs[i]);CHKERRQ(ierr);
       ierr = VecDestroyVecs(pipefcg->chunksizes[i],&pipefcg->pSvecs[i]);CHKERRQ(ierr);
       ierr = VecDestroyVecs(pipefcg->chunksizes[i],&pipefcg->pQvecs[i]);CHKERRQ(ierr);
@@ -386,9 +386,9 @@ static PetscErrorCode KSPView_PIPEFCG(KSP ksp,PetscViewer viewer)
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERASCII,&iascii);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERSTRING,&isstring);CHKERRQ(ierr);
 
-  if (pipefcg->truncstrat == KSP_FCD_TRUNC_TYPE_STANDARD){
+  if (pipefcg->truncstrat == KSP_FCD_TRUNC_TYPE_STANDARD) {
     truncstr = "Using standard truncation strategy";
-  } else if (pipefcg->truncstrat == KSP_FCD_TRUNC_TYPE_NOTAY){
+  } else if (pipefcg->truncstrat == KSP_FCD_TRUNC_TYPE_NOTAY) {
     truncstr = "Using Notay's truncation strategy";
   } else {
     SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Undefined FCD truncation strategy");
@@ -423,7 +423,7 @@ static PetscErrorCode KSPView_PIPEFCG(KSP ksp,PetscViewer viewer)
   Level: intermediate
 
   Options Database:
-. -ksp_pipefcg_mmax <N>
+. -ksp_pipefcg_mmax <N> - maximum number of previous directions
 
 .seealso: KSPPIPEFCG, KSPPIPEFCGSetTruncationType(), KSPPIPEFCGSetNprealloc()
 @*/
@@ -433,7 +433,7 @@ PetscErrorCode KSPPIPEFCGSetMmax(KSP ksp,PetscInt mmax)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ksp,KSP_CLASSID,1);
-  PetscValidLogicalCollectiveEnum(ksp,mmax,2);
+  PetscValidLogicalCollectiveInt(ksp,mmax,2);
   pipefcg->mmax=mmax;
   PetscFunctionReturn(0);
 }
@@ -449,10 +449,10 @@ PetscErrorCode KSPPIPEFCGSetMmax(KSP ksp,PetscInt mmax)
 .  ksp - the Krylov space context
 
    Output Parameter:
-.  mmax - the maximum number of previous directons allowed for orthogonalization
+.  mmax - the maximum number of previous directions allowed for orthogonalization
 
   Options Database:
-. -ksp_pipefcg_mmax <N>
+. -ksp_pipefcg_mmax <N> - maximum number of previous directions
 
    Level: intermediate
 
@@ -480,7 +480,7 @@ PetscErrorCode KSPPIPEFCGGetMmax(KSP ksp,PetscInt *mmax)
   Level: advanced
 
   Options Database:
-. -ksp_pipefcg_nprealloc <N>
+. -ksp_pipefcg_nprealloc <N> - the number of vectors to preallocate
 
 .seealso: KSPPIPEFCG, KSPPIPEFCGSetTruncationType(), KSPPIPEFCGGetNprealloc()
 @*/
@@ -490,7 +490,7 @@ PetscErrorCode KSPPIPEFCGSetNprealloc(KSP ksp,PetscInt nprealloc)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ksp,KSP_CLASSID,1);
-  PetscValidLogicalCollectiveEnum(ksp,nprealloc,2);
+  PetscValidLogicalCollectiveInt(ksp,nprealloc,2);
   pipefcg->nprealloc = nprealloc;
   PetscFunctionReturn(0);
 }
@@ -505,9 +505,6 @@ PetscErrorCode KSPPIPEFCGSetNprealloc(KSP ksp,PetscInt nprealloc)
 
    Output Parameter:
 .  nprealloc - the number of directions preallocated
-
-  Options Database:
-. -ksp_pipefcg_nprealloc <N>
 
    Level: advanced
 
@@ -591,9 +588,9 @@ static PetscErrorCode KSPSetFromOptions_PIPEFCG(PetscOptionItems *PetscOptionsOb
   PetscFunctionBegin;
   ierr = PetscOptionsHead(PetscOptionsObject,"KSP PIPEFCG options");CHKERRQ(ierr);
   ierr = PetscOptionsInt("-ksp_pipefcg_mmax","Number of search directions to storue","KSPPIPEFCGSetMmax",pipefcg->mmax,&mmax,&flg);CHKERRQ(ierr);
-  if (flg) ierr = KSPPIPEFCGSetMmax(ksp,mmax);CHKERRQ(ierr);
+  if (flg) {ierr = KSPPIPEFCGSetMmax(ksp,mmax);CHKERRQ(ierr);}
   ierr = PetscOptionsInt("-ksp_pipefcg_nprealloc","Number of directions to preallocate","KSPPIPEFCGSetNprealloc",pipefcg->nprealloc,&nprealloc,&flg);CHKERRQ(ierr);
-  if (flg) { ierr = KSPPIPEFCGSetNprealloc(ksp,nprealloc);CHKERRQ(ierr); }
+  if (flg) {ierr = KSPPIPEFCGSetNprealloc(ksp,nprealloc);CHKERRQ(ierr);}
   ierr = PetscOptionsEnum("-ksp_pipefcg_truncation_type","Truncation approach for directions","KSPFCGSetTruncationType",KSPFCDTruncationTypes,(PetscEnum)pipefcg->truncstrat,(PetscEnum*)&pipefcg->truncstrat,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsTail();CHKERRQ(ierr);
   PetscFunctionReturn(0);

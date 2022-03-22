@@ -33,7 +33,7 @@ PETSC_EXTERN PetscMPIInt MPIAPI Petsc_DelTmpShared(MPI_Comm comm,PetscMPIInt key
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  ierr = PetscInfo1(NULL,"Deleting tmp/shared data in an MPI_Comm %ld\n",(long)comm);CHKERRMPI(ierr);
+  ierr = PetscInfo(NULL,"Deleting tmp/shared data in an MPI_Comm %ld\n",(long)comm);CHKERRMPI(ierr);
   ierr = PetscFree(count_val);CHKERRMPI(ierr);
   PetscFunctionReturn(MPI_SUCCESS);
 }
@@ -47,24 +47,20 @@ PETSC_EXTERN PetscMPIInt MPIAPI Petsc_DelTmpShared(MPI_Comm comm,PetscMPIInt key
 +  comm - MPI_Communicator that may share /tmp
 -  len - length of string to hold name
 
-   Output Parameters:
+   Output Parameter:
 .  dir - directory name
 
    Options Database Keys:
-+    -shared_tmp
-.    -not_shared_tmp
--    -tmp tmpdir
++    -shared_tmp  - indicates the directory is shared among the MPI ranks
+.    -not_shared_tmp - indicates the directory is not shared among the MPI ranks
+-    -tmp tmpdir - name of the directory you wish to use as /tmp
 
    Environmental Variables:
-+     PETSC_SHARED_TMP
-.     PETSC_NOT_SHARED_TMP
--     PETSC_TMP
++     PETSC_SHARED_TMP - indicates the directory is shared among the MPI ranks
+.     PETSC_NOT_SHARED_TMP - indicates the directory is not shared among the MPI ranks
+-     PETSC_TMP - name of the directory you wish to use as /tmp
 
    Level: developer
-
-
-   If the environmental variable PETSC_TMP is set it will use this directory
-  as the "/tmp" directory.
 
 @*/
 PetscErrorCode  PetscGetTmp(MPI_Comm comm,char dir[],size_t len)
@@ -93,14 +89,14 @@ PetscErrorCode  PetscGetTmp(MPI_Comm comm,char dir[],size_t len)
 .  shared - PETSC_TRUE or PETSC_FALSE
 
    Options Database Keys:
-+    -shared_tmp
-.    -not_shared_tmp
--    -tmp tmpdir
++    -shared_tmp  - indicates the directory is shared among the MPI ranks
+.    -not_shared_tmp - indicates the directory is not shared among the MPI ranks
+-    -tmp tmpdir - name of the directory you wish to use as /tmp
 
    Environmental Variables:
-+     PETSC_SHARED_TMP
-.     PETSC_NOT_SHARED_TMP
--     PETSC_TMP
++     PETSC_SHARED_TMP  - indicates the directory is shared among the MPI ranks
+.     PETSC_NOT_SHARED_TMP - indicates the directory is not shared among the MPI ranks
+-     PETSC_TMP - name of the directory you wish to use as /tmp
 
    Level: developer
 
@@ -177,9 +173,9 @@ PetscErrorCode  PetscSharedTmp(MPI_Comm comm,PetscBool  *shared)
     for (i=0; i<size-1; i++) {
       if (rank == i) {
         fd = fopen(filename,"w");
-        if (!fd) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to open test file %s",filename);
+        PetscCheckFalse(!fd,PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to open test file %s",filename);
         err = fclose(fd);
-        if (err) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
+        PetscCheckFalse(err,PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
       }
       ierr = MPI_Barrier(comm);CHKERRMPI(ierr);
       if (rank >= i) {
@@ -188,7 +184,7 @@ PetscErrorCode  PetscSharedTmp(MPI_Comm comm,PetscBool  *shared)
         else cnt = 0;
         if (fd) {
           err = fclose(fd);
-          if (err) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
+          PetscCheckFalse(err,PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
         }
       } else cnt = 0;
 
@@ -198,51 +194,46 @@ PetscErrorCode  PetscSharedTmp(MPI_Comm comm,PetscBool  *shared)
       if (sum == size) {
         *shared = PETSC_TRUE;
         break;
-      } else if (sum != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP_SYS,"Subset of processes share /tmp ");
+      } else PetscCheckFalse(sum != 1,PETSC_COMM_SELF,PETSC_ERR_SUP_SYS,"Subset of processes share /tmp ");
     }
     *tagvalp = (int)*shared;
-    ierr = PetscInfo2(NULL,"processors %s %s\n",(*shared) ? "share":"do NOT share",(iflg ? tmpname:"/tmp"));CHKERRQ(ierr);
+    ierr = PetscInfo(NULL,"processors %s %s\n",(*shared) ? "share":"do NOT share",(iflg ? tmpname:"/tmp"));CHKERRQ(ierr);
   } else *shared = (PetscBool) *tagvalp;
   PetscFunctionReturn(0);
 }
 
 /*@C
-   PetscSharedWorkingDirectory - Determines if all processors in a communicator share a
-         working directory or have different ones.
+  PetscSharedWorkingDirectory - Determines if all processors in a communicator share a working directory or have different ones.
 
-   Collective
+  Collective
 
-   Input Parameters:
-.  comm - MPI_Communicator that may share working directory
+  Input Parameter:
+. comm - MPI_Communicator that may share working directory
 
-   Output Parameters:
-.  shared - PETSC_TRUE or PETSC_FALSE
+  Output Parameter:
+. shared - PETSC_TRUE or PETSC_FALSE
 
-   Options Database Keys:
-+    -shared_working_directory
--    -not_shared_working_directory
+  Options Database Keys:
++ -shared_working_directory - indicates the directory is shared among the MPI ranks
+- -not_shared_working_directory - indicates the directory is shared among the MPI ranks
 
-   Environmental Variables:
-+     PETSC_SHARED_WORKING_DIRECTORY
-.     PETSC_NOT_SHARED_WORKING_DIRECTORY
+  Environmental Variables:
++ PETSC_SHARED_WORKING_DIRECTORY - indicates the directory is shared among the MPI ranks
+- PETSC_NOT_SHARED_WORKING_DIRECTORY - indicates the directory is shared among the MPI ranks
 
-   Level: developer
+  Level: developer
 
-   Notes:
-   Stores the status as a MPI attribute so it does not have
-    to be redetermined each time.
+  Notes:
+  Stores the status as a MPI attribute so it does not have to be redetermined each time.
 
-      Assumes that all processors in a communicator either
-       1) have a common working directory or
-       2) each has a separate working directory
-      eventually we can write a fancier one that determines which processors
-      share a common working directory.
+  Assumes that all processors in a communicator either
+$   1) have a common working directory or
+$   2) each has a separate working directory
+  eventually we can write a fancier one that determines which processors share a common working directory.
 
-   This will be very slow on runs with a large number of processors since
-   it requires O(p*p) file opens.
-
+  This will be very slow on runs with a large number of processors since it requires O(p*p) file opens.
 @*/
-PetscErrorCode  PetscSharedWorkingDirectory(MPI_Comm comm,PetscBool  *shared)
+PetscErrorCode PetscSharedWorkingDirectory(MPI_Comm comm, PetscBool *shared)
 {
   PetscErrorCode     ierr;
   PetscMPIInt        size,rank,*tagvalp,sum,cnt,i;
@@ -292,9 +283,9 @@ PetscErrorCode  PetscSharedWorkingDirectory(MPI_Comm comm,PetscBool  *shared)
     for (i=0; i<size-1; i++) {
       if (rank == i) {
         fd = fopen(filename,"w");
-        if (!fd) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to open test file %s",filename);
+        PetscCheckFalse(!fd,PETSC_COMM_SELF,PETSC_ERR_FILE_OPEN,"Unable to open test file %s",filename);
         err = fclose(fd);
-        if (err) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
+        PetscCheckFalse(err,PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
       }
       ierr = MPI_Barrier(comm);CHKERRMPI(ierr);
       if (rank >= i) {
@@ -303,7 +294,7 @@ PetscErrorCode  PetscSharedWorkingDirectory(MPI_Comm comm,PetscBool  *shared)
         else cnt = 0;
         if (fd) {
           err = fclose(fd);
-          if (err) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
+          PetscCheckFalse(err,PETSC_COMM_SELF,PETSC_ERR_SYS,"fclose() failed on file");
         }
       } else cnt = 0;
 
@@ -313,14 +304,13 @@ PetscErrorCode  PetscSharedWorkingDirectory(MPI_Comm comm,PetscBool  *shared)
       if (sum == size) {
         *shared = PETSC_TRUE;
         break;
-      } else if (sum != 1) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP_SYS,"Subset of processes share working directory");
+      } else PetscCheckFalse(sum != 1,PETSC_COMM_SELF,PETSC_ERR_SUP_SYS,"Subset of processes share working directory");
     }
     *tagvalp = (int)*shared;
   } else *shared = (PetscBool) *tagvalp;
-  ierr = PetscInfo1(NULL,"processors %s working directory\n",(*shared) ? "shared" : "do NOT share");CHKERRQ(ierr);
+  ierr = PetscInfo(NULL,"processors %s working directory\n",(*shared) ? "shared" : "do NOT share");CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*@C
     PetscFileRetrieve - Obtains a file from a URL or compressed
@@ -328,12 +318,12 @@ PetscErrorCode  PetscSharedWorkingDirectory(MPI_Comm comm,PetscBool  *shared)
 
     Collective
 
-    Input Parameter:
+    Input Parameters:
 +   comm     - processors accessing the file
 .   url      - name of file, including entire URL (with or without .gz)
 -   llen     - length of localname
 
-    Output Parameter:
+    Output Parameters:
 +   localname - name of local copy of file - valid on only process zero
 -   found - if found or retrieved the file - valid on all processes
 
@@ -353,7 +343,7 @@ PetscErrorCode  PetscFileRetrieve(MPI_Comm comm,const char url[],char localname[
 
   PetscFunctionBegin;
   ierr = MPI_Comm_rank(comm,&rank);CHKERRMPI(ierr);
-  if (!rank) {
+  if (rank == 0) {
     *found = PETSC_FALSE;
 
     ierr = PetscStrstr(url,".gz",&par);CHKERRQ(ierr);
@@ -372,9 +362,9 @@ PetscErrorCode  PetscFileRetrieve(MPI_Comm comm,const char url[],char localname[
       ierr = PetscStrncpy(localname,url,llen);CHKERRQ(ierr);
       ierr = PetscTestFile(url,'r',found);CHKERRQ(ierr);
       if (*found) {
-        ierr = PetscInfo1(NULL,"Found file %s\n",url);CHKERRQ(ierr);
+        ierr = PetscInfo(NULL,"Found file %s\n",url);CHKERRQ(ierr);
       } else {
-        ierr = PetscInfo1(NULL,"Did not find file %s\n",url);CHKERRQ(ierr);
+        ierr = PetscInfo(NULL,"Did not find file %s\n",url);CHKERRQ(ierr);
       }
       goto done;
     }
@@ -418,13 +408,13 @@ PetscErrorCode  PetscFileRetrieve(MPI_Comm comm,const char url[],char localname[
 
         /* check if the file didn't exist so it downloaded an HTML message instead */
         fd = fopen(localname,"r");
-        if (!fd) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"PetscTestFile() indicates %s exists but fopen() cannot open it",localname);
+        PetscCheckFalse(!fd,PETSC_COMM_SELF,PETSC_ERR_PLIB,"PetscTestFile() indicates %s exists but fopen() cannot open it",localname);
         str = fgets(buf,sizeof(buf)-1,fd);
         while (str) {
           ierr = PetscStrstr(buf,"<!DOCTYPE html>",&substring);CHKERRQ(ierr);
-          if (substring) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Unable to download %s it does not appear to exist at this URL, dummy HTML file was downloaded",url);
+          PetscCheckFalse(substring,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Unable to download %s it does not appear to exist at this URL, dummy HTML file was downloaded",url);
           ierr = PetscStrstr(buf,"Not Found",&substring);CHKERRQ(ierr);
-          if (substring) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Unable to download %s it does not appear to exist at this URL, dummy HTML file was downloaded",url);
+          PetscCheckFalse(substring,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Unable to download %s it does not appear to exist at this URL, dummy HTML file was downloaded",url);
           str = fgets(buf,sizeof(buf)-1,fd);
         }
         fclose(fd);

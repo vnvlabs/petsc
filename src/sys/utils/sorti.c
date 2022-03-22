@@ -123,7 +123,7 @@
 /* Templates for similar functions used below */
 #define QuickSort1(FuncName,X,n,pivot,t1,ierr)                                   \
   do {                                                                           \
-    PetscInt i,j,p,l,r,hi=n-1;                                                   \
+    PetscCount i,j,p,l,r,hi=n-1;                                                 \
     if (n < 8) {                                                                 \
       for (i=0; i<n; i++) {                                                      \
         pivot = X[i];                                                            \
@@ -146,7 +146,7 @@
 /* Templates for similar functions used below */
 #define QuickSortReverse1(FuncName,X,n,pivot,t1,ierr)                            \
   do {                                                                           \
-    PetscInt i,j,p,l,r,hi=n-1;                                                   \
+    PetscCount i,j,p,l,r,hi=n-1;                                                 \
     if (n < 8) {                                                                 \
       for (i=0; i<n; i++) {                                                      \
         pivot = X[i];                                                            \
@@ -168,7 +168,7 @@
 
 #define QuickSort2(FuncName,X,Y,n,pivot,t1,t2,ierr)                              \
   do {                                                                           \
-    PetscInt i,j,p,l,r,hi=n-1;                                                   \
+    PetscCount i,j,p,l,r,hi=n-1;                                                 \
     if (n < 8) {                                                                 \
       for (i=0; i<n; i++) {                                                      \
         pivot = X[i];                                                            \
@@ -190,7 +190,7 @@
 
 #define QuickSort3(FuncName,X,Y,Z,n,pivot,t1,t2,t3,ierr)                         \
   do {                                                                           \
-    PetscInt i,j,p,l,r,hi=n-1;                                                   \
+    PetscCount i,j,p,l,r,hi=n-1;                                                 \
     if (n < 8) {                                                                 \
       for (i=0; i<n; i++) {                                                      \
         pivot = X[i];                                                            \
@@ -244,7 +244,7 @@ PetscErrorCode  PetscSortedInt(PetscInt n,const PetscInt X[],PetscBool *sorted)
 
    Notes:
    This function serves as an alternative to PetscIntSortSemiOrdered(), and may perform faster especially if the array
-   is completely random. There are exceptions to this and so it is __highly__ recomended that the user benchmark their
+   is completely random. There are exceptions to this and so it is __highly__ recommended that the user benchmark their
    code to see which routine is fastest.
 
    Level: intermediate
@@ -312,6 +312,38 @@ PetscErrorCode  PetscSortedRemoveDupsInt(PetscInt *n,PetscInt X[])
     } else s++;
   }
   *n = N - s;
+  PetscFunctionReturn(0);
+}
+
+/*@
+   PetscSortedCheckDupsInt - Checks if a sorted integer array has duplicates
+
+   Not Collective
+
+   Input Parameters:
++  n  - number of values
+-  X  - sorted array of integers
+
+   Output Parameter:
+.  dups - True if the array has dups, otherwise false
+
+   Level: intermediate
+
+.seealso: PetscSortInt(), PetscCheckDupsInt(), PetscSortRemoveDupsInt(), PetscSortedRemoveDupsInt()
+@*/
+PetscErrorCode  PetscSortedCheckDupsInt(PetscInt n,const PetscInt X[],PetscBool *flg)
+{
+  PetscInt i;
+
+  PetscFunctionBegin;
+  PetscCheckSorted(n,X);
+  *flg = PETSC_FALSE;
+  for (i=0; i<n-1; i++) {
+    if (X[i+1] == X[i]) {
+      *flg = PETSC_TRUE;
+      break;
+    }
+  }
   PetscFunctionReturn(0);
 }
 
@@ -385,13 +417,12 @@ PetscErrorCode PetscFindInt(PetscInt key, PetscInt n, const PetscInt X[], PetscI
 +  n  - number of values in the array
 -  X  - array of integers
 
-
    Output Parameter:
 .  dups - True if the array has dups, otherwise false
 
    Level: intermediate
 
-.seealso: PetscSortRemoveDupsInt()
+.seealso: PetscSortRemoveDupsInt(), PetscSortedCheckDupsInt()
 @*/
 PetscErrorCode PetscCheckDupsInt(PetscInt n,const PetscInt X[],PetscBool *dups)
 {
@@ -463,7 +494,7 @@ PetscErrorCode PetscFindMPIInt(PetscMPIInt key, PetscInt n, const PetscMPIInt X[
 
    Level: intermediate
 
-.seealso: PetscIntSortSemiOrderedWithArray(), PetscSortReal(), PetscSortIntPermutation(), PetscSortInt()
+.seealso: PetscIntSortSemiOrderedWithArray(), PetscSortReal(), PetscSortIntWithPermutation(), PetscSortInt(), PetscSortIntWithCountArray()
 @*/
 PetscErrorCode  PetscSortIntWithArray(PetscInt n,PetscInt X[],PetscInt Y[])
 {
@@ -489,7 +520,7 @@ PetscErrorCode  PetscSortIntWithArray(PetscInt n,PetscInt X[],PetscInt Y[])
 
    Level: intermediate
 
-.seealso: PetscSortReal(), PetscSortIntPermutation(), PetscSortIntWithArray(), PetscIntSortSemiOrdered()
+.seealso: PetscSortReal(), PetscSortIntWithPermutation(), PetscSortIntWithArray(), PetscIntSortSemiOrdered(), PetscSortIntWithIntCountArrayPair()
 @*/
 PetscErrorCode  PetscSortIntWithArrayPair(PetscInt n,PetscInt X[],PetscInt Y[],PetscInt Z[])
 {
@@ -498,6 +529,62 @@ PetscErrorCode  PetscSortIntWithArrayPair(PetscInt n,PetscInt X[],PetscInt Y[],P
 
   PetscFunctionBegin;
   QuickSort3(PetscSortIntWithArrayPair,X,Y,Z,n,pivot,t1,t2,t3,ierr);
+  PetscFunctionReturn(0);
+}
+
+/*@
+   PetscSortIntWithCountArray - Sorts an array of integers in place in increasing order;
+       changes a second array to match the sorted first array.
+
+   Not Collective
+
+   Input Parameters:
++  n  - number of values
+.  X  - array of integers
+-  Y  - second array of PetscCounts (signed integers)
+
+   Level: intermediate
+
+.seealso: PetscIntSortSemiOrderedWithArray(), PetscSortReal(), PetscSortIntPermutation(), PetscSortInt(), PetscSortIntWithArray()
+@*/
+PetscErrorCode  PetscSortIntWithCountArray(PetscCount n,PetscInt X[],PetscCount Y[])
+{
+  PetscErrorCode ierr;
+  PetscInt       pivot,t1;
+  PetscCount     t2;
+
+  PetscFunctionBegin;
+  QuickSort2(PetscSortIntWithCountArray,X,Y,n,pivot,t1,t2,ierr);
+  PetscFunctionReturn(0);
+}
+
+/*@
+   PetscSortIntWithIntCountArrayPair - Sorts an array of integers in place in increasing order;
+       changes an integer array and a PetscCount array to match the sorted first array.
+
+   Not Collective
+
+   Input Parameters:
++  n  - number of values
+.  X  - array of integers
+.  Y  - second array of integers (first array of the pair)
+-  Z  - third array of PetscCounts  (second array of the pair)
+
+   Level: intermediate
+
+   Notes:
+    Usually X, Y are matrix row/column indices, and Z is a permutation array and therefore Z's type is PetscCount to allow 2B+ nonzeros even with 32-bit PetscInt.
+
+.seealso: PetscSortReal(), PetscSortIntPermutation(), PetscSortIntWithArray(), PetscIntSortSemiOrdered(), PetscSortIntWithArrayPair()
+@*/
+PetscErrorCode  PetscSortIntWithIntCountArrayPair(PetscCount n,PetscInt X[],PetscInt Y[],PetscCount Z[])
+{
+  PetscErrorCode ierr;
+  PetscInt       pivot,t1,t2; /* pivot is take from X[], so its type is still PetscInt */
+  PetscCount     t3; /* temp for Z[] */
+
+  PetscFunctionBegin;
+  QuickSort3(PetscSortIntWithIntCountArrayPair,X,Y,Z,n,pivot,t1,t2,t3,ierr);
   PetscFunctionReturn(0);
 }
 
@@ -537,7 +624,7 @@ PetscErrorCode  PetscSortedMPIInt(PetscInt n,const PetscMPIInt X[],PetscBool *so
 
    Notes:
    This function serves as an alternative to PetscMPIIntSortSemiOrdered(), and may perform faster especially if the array
-   is completely random. There are exceptions to this and so it is __highly__ recomended that the user benchmark their
+   is completely random. There are exceptions to this and so it is __highly__ recommended that the user benchmark their
    code to see which routine is fastest.
 
 .seealso: PetscMPIIntSortSemiOrdered(), PetscSortReal(), PetscSortIntWithPermutation()
@@ -597,7 +684,7 @@ PetscErrorCode  PetscSortRemoveDupsMPIInt(PetscInt *n,PetscMPIInt X[])
 
    Level: intermediate
 
-.seealso: PetscMPIIntSortSemiOrderedWithArray(), PetscSortReal(), PetscSortIntPermutation(), PetscSortInt()
+.seealso: PetscMPIIntSortSemiOrderedWithArray(), PetscSortReal(), PetscSortIntWithPermutation(), PetscSortInt()
 @*/
 PetscErrorCode  PetscSortMPIIntWithArray(PetscMPIInt n,PetscMPIInt X[],PetscMPIInt Y[])
 {
@@ -650,7 +737,7 @@ PetscErrorCode PetscSortMPIIntWithIntArray(PetscMPIInt n,PetscMPIInt X[],PetscIn
 
    Level: intermediate
 
-.seealso: PetscTimSortWithArray(), PetscSortReal(), PetscSortIntPermutation(), PetscSortInt(), PetscSortIntWithArray()
+.seealso: PetscTimSortWithArray(), PetscSortReal(), PetscSortIntWithPermutation(), PetscSortInt(), PetscSortIntWithArray()
 @*/
 PetscErrorCode  PetscSortIntWithScalarArray(PetscInt n,PetscInt X[],PetscScalar Y[])
 {
@@ -679,7 +766,7 @@ PetscErrorCode  PetscSortIntWithScalarArray(PetscInt n,PetscInt X[],PetscScalar 
 
    Level: intermediate
 
-.seealso: PetscTimSortWithArray(), PetscSortReal(), PetscSortIntPermutation(), PetscSortInt(), PetscSortIntWithArray()
+.seealso: PetscTimSortWithArray(), PetscSortReal(), PetscSortIntWithPermutation(), PetscSortInt(), PetscSortIntWithArray()
 @*/
 PetscErrorCode  PetscSortIntWithDataArray(PetscInt n,PetscInt X[],void *Y,size_t size,void *t2)
 {
@@ -735,13 +822,14 @@ PetscErrorCode  PetscSortIntWithDataArray(PetscInt n,PetscInt X[],void *Y,size_t
 
    Level: intermediate
 
-.seealso: PetscSortReal(), PetscSortIntPermutation(), PetscSortInt(), PetscSortIntWithArray()
+.seealso: PetscSortReal(), PetscSortIntWithPermutation(), PetscSortInt(), PetscSortIntWithArray()
 @*/
 PetscErrorCode  PetscMergeIntArray(PetscInt an,const PetscInt aI[], PetscInt bn, const PetscInt bI[], PetscInt *n, PetscInt **L)
 {
   PetscErrorCode ierr;
   PetscInt       *L_ = *L, ak, bk, k;
 
+  PetscFunctionBegin;
   if (!L_) {
     ierr = PetscMalloc1(an+bn, L);CHKERRQ(ierr);
     L_   = *L;
@@ -799,7 +887,7 @@ PetscErrorCode  PetscMergeIntArray(PetscInt an,const PetscInt aI[], PetscInt bn,
     if L or J point to non-null arrays then this routine will assume they are of the approproate size and use them, otherwise this routine will allocate space for them
    Level: intermediate
 
-.seealso: PetscIntSortSemiOrdered(), PetscSortReal(), PetscSortIntPermutation(), PetscSortInt(), PetscSortIntWithArray()
+.seealso: PetscIntSortSemiOrdered(), PetscSortReal(), PetscSortIntWithPermutation(), PetscSortInt(), PetscSortIntWithArray()
 @*/
 PetscErrorCode  PetscMergeIntArrayPair(PetscInt an,const PetscInt aI[], const PetscInt aJ[], PetscInt bn, const PetscInt bI[], const PetscInt bJ[], PetscInt *n, PetscInt **L, PetscInt **J)
 {
@@ -862,7 +950,7 @@ PetscErrorCode  PetscMergeIntArrayPair(PetscInt an,const PetscInt aI[], const Pe
 
    Level: intermediate
 
-.seealso: PetscIntSortSemiOrdered(), PetscSortReal(), PetscSortIntPermutation(), PetscSortInt(), PetscSortIntWithArray()
+.seealso: PetscIntSortSemiOrdered(), PetscSortReal(), PetscSortIntWithPermutation(), PetscSortInt(), PetscSortIntWithArray()
 @*/
 PetscErrorCode PetscMergeMPIIntArray(PetscInt an,const PetscMPIInt aI[],PetscInt bn,const PetscMPIInt bI[],PetscInt *n,PetscMPIInt **L)
 {
@@ -913,11 +1001,11 @@ PetscErrorCode  PetscProcessTree(PetscInt n,const PetscBool mask[],const PetscIn
   PetscBool      done = PETSC_FALSE;
 
   PetscFunctionBegin;
-  if (!mask[0]) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Mask of 0th location must be set");
+  PetscCheckFalse(!mask[0],PETSC_COMM_SELF,PETSC_ERR_SUP,"Mask of 0th location must be set");
   for (i=0; i<n; i++) {
     if (mask[i]) continue;
-    if (parentid[i]  == i) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Node labeled as own parent");
-    if (parentid[i] && mask[parentid[i]]) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Parent is masked");
+    PetscCheckFalse(parentid[i]  == i,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Node labeled as own parent");
+    PetscCheckFalse(parentid[i] && mask[parentid[i]],PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Parent is masked");
   }
 
   for (i=0; i<n; i++) {
@@ -968,7 +1056,7 @@ PetscErrorCode  PetscProcessTree(PetscInt n,const PetscBool mask[],const PetscIn
     ierr  = PetscArraycpy(idbylevel+tcnt,workid,cnt);CHKERRQ(ierr);
     tcnt += cnt;
   }
-  if (tcnt != nmask) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Inconsistent count of unmasked nodes");
+  PetscCheckFalse(tcnt != nmask,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Inconsistent count of unmasked nodes");
   ierr = PetscFree2(workid,workparentid);CHKERRQ(ierr);
 
   /* for each node list its column */
@@ -1029,7 +1117,7 @@ PetscErrorCode PetscParallelSortedInt(MPI_Comm comm, PetscInt n, const PetscInt 
   prevmax = PETSC_MIN_INT;
   ierr = MPI_Exscan(&max, &prevmax, 1, MPIU_INT, MPI_MAX, comm);CHKERRMPI(ierr);
   ierr = MPI_Comm_rank(comm, &rank);CHKERRMPI(ierr);
-  if (!rank) prevmax = PETSC_MIN_INT;
+  if (rank == 0) prevmax = PETSC_MIN_INT;
   if (prevmax > min) sorted = PETSC_FALSE;
   ierr = MPI_Allreduce(&sorted, is_sorted, 1, MPIU_BOOL, MPI_LAND, comm);CHKERRMPI(ierr);
   PetscFunctionReturn(0);

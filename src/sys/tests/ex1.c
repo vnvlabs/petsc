@@ -6,7 +6,7 @@ static char help[] = "Demonstrates PETSc error handlers.\n";
 int CreateError(int n)
 {
   PetscErrorCode ierr;
-  if (!n) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_USER,"Error Created");
+  PetscCheckFalse(!n,PETSC_COMM_SELF,PETSC_ERR_USER,"Error Created");
   ierr = CreateError(n-1);CHKERRQ(ierr);
   return 0;
 }
@@ -22,8 +22,6 @@ int main(int argc,char **argv)
   ierr = PetscFinalize();
   return ierr;
 }
-
-
 
 /*TEST
 

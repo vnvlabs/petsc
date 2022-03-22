@@ -79,7 +79,7 @@ PETSC_EXTERN PetscErrorCode PetscDrawViewFromOptions(PetscDraw,PetscObject,const
 
    Not Collective
 
-   Input Parameter:
+   Input Parameters:
 +  value - value to map within the interval [min,max]
 .  min - lower end of interval
 -  max - upper end of interval
@@ -92,7 +92,7 @@ PETSC_EXTERN PetscErrorCode PetscDrawViewFromOptions(PetscDraw,PetscObject,const
 .seealso: PetscDrawPointPixel(), PetscDrawPoint(), PetscDrawLine(), PetscDrawTriangle(), PetscDrawRectangle()
 
 M*/
-PETSC_STATIC_INLINE int PetscDrawRealToColor(PetscReal value,PetscReal min,PetscReal max)
+static inline int PetscDrawRealToColor(PetscReal value,PetscReal min,PetscReal max)
 {
   value = PetscClipInterval(value,min,max);
   return PETSC_DRAW_BASIC_COLORS + (int)((255-PETSC_DRAW_BASIC_COLORS)*(value-min)/(max-min));
@@ -278,6 +278,7 @@ PETSC_EXTERN PetscErrorCode PetscDrawSPGetAxis(PetscDrawSP,PetscDrawAxis*);
 PETSC_EXTERN PetscErrorCode PetscDrawSPGetDraw(PetscDrawSP,PetscDraw*);
 PETSC_EXTERN PetscErrorCode PetscDrawSPSetLimits(PetscDrawSP,PetscReal,PetscReal,PetscReal,PetscReal);
 PETSC_EXTERN PetscErrorCode PetscDrawLGSPDraw(PetscDrawLG,PetscDrawSP);
+PETSC_EXTERN PetscErrorCode PetscDrawSPAddPointColorized(PetscDrawSP,PetscReal*,PetscReal*,PetscReal*);
 
 PETSC_EXTERN PetscClassId PETSC_DRAWHG_CLASSID;
 

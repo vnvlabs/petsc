@@ -1,6 +1,16 @@
 #include <petsc/private/dmimpl.h>     /*I      "petscdm.h"     I*/
 #include <petscds.h>
 
+// Greatest common divisor of two nonnegative integers
+PetscInt PetscGCD(PetscInt a, PetscInt b) {
+  while (b != 0) {
+    PetscInt tmp = b;
+    b = a % b;
+    a = tmp;
+  }
+  return a;
+}
+
 PetscErrorCode DMCreateGlobalVector_Section_Private(DM dm,Vec *vec)
 {
   PetscSection   gSection;
@@ -17,14 +27,12 @@ PetscErrorCode DMCreateGlobalVector_Section_Private(DM dm,Vec *vec)
     ierr = PetscSectionGetDof(gSection, p, &dof);CHKERRQ(ierr);
     ierr = PetscSectionGetConstraintDof(gSection, p, &cdof);CHKERRQ(ierr);
 
-    if (dof > 0) {
-      if (blockSize < 0 && dof-cdof > 0) {
+    if (dof - cdof > 0) {
+      if (blockSize < 0) {
         /* set blockSize */
         blockSize = dof-cdof;
-      } else if (dof-cdof != blockSize) {
-        /* non-identical blockSize, set it as 1 */
-        blockSize = 1;
-        break;
+      } else {
+        blockSize = PetscGCD(dof - cdof, blockSize);
       }
     }
   }
@@ -43,7 +51,7 @@ PetscErrorCode DMCreateGlobalVector_Section_Private(DM dm,Vec *vec)
   }
 
   ierr = PetscSectionGetConstrainedStorageSize(gSection, &localSize);CHKERRQ(ierr);
-  if (localSize%blockSize) SETERRQ2(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Mismatch between blocksize %d and local storage size %d", blockSize, localSize);
+  PetscCheck(localSize%blockSize == 0,PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Mismatch between blocksize %" PetscInt_FMT " and local storage size %" PetscInt_FMT, blockSize, localSize);
   ierr = VecCreate(PetscObjectComm((PetscObject)dm), vec);CHKERRQ(ierr);
   ierr = VecSetSizes(*vec, localSize, PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = VecSetBlockSize(*vec, bs);CHKERRQ(ierr);
@@ -67,10 +75,7 @@ PetscErrorCode DMCreateLocalVector_Section_Private(DM dm,Vec *vec)
 
     ierr = PetscSectionGetDof(section, p, &dof);CHKERRQ(ierr);
     if ((blockSize < 0) && (dof > 0)) blockSize = dof;
-    if ((dof > 0) && (dof != blockSize)) {
-      blockSize = 1;
-      break;
-    }
+    if (dof > 0) blockSize = PetscGCD(dof, blockSize);
   }
   ierr = PetscSectionGetStorageSize(section, &localSize);CHKERRQ(ierr);
   ierr = VecCreate(PETSC_COMM_SELF, vec);CHKERRQ(ierr);
@@ -113,10 +118,10 @@ PetscErrorCode DMCreateSectionSubDM(DM dm, PetscInt numFields, const PetscInt fi
   if (!numFields) PetscFunctionReturn(0);
   ierr = DMGetLocalSection(dm, &section);CHKERRQ(ierr);
   ierr = DMGetGlobalSection(dm, &sectionGlobal);CHKERRQ(ierr);
-  if (!section) SETERRQ(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Must set default section for DM before splitting fields");
-  if (!sectionGlobal) SETERRQ(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Must set default global section for DM before splitting fields");
+  PetscCheck(section,PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Must set default section for DM before splitting fields");
+  PetscCheck(sectionGlobal,PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Must set default global section for DM before splitting fields");
   ierr = PetscSectionGetNumFields(section, &Nf);CHKERRQ(ierr);
-  if (numFields > Nf) SETERRQ2(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Number of requested fields %d greater than number of DM fields %d", numFields, Nf);
+  PetscCheck(numFields <= Nf,PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Number of requested fields %" PetscInt_FMT " greater than number of DM fields %" PetscInt_FMT, numFields, Nf);
   if (is) {
     PetscInt bs, bsLocal[2], bsMinMax[2];
 
@@ -252,7 +257,7 @@ PetscErrorCode DMCreateSectionSubDM(DM dm, PetscInt numFields, const PetscInt fi
             ierr = ISIntersect(infields, dm->probs[d].fields, &dsfields);CHKERRQ(ierr);
             ierr = ISDestroy(&infields);CHKERRQ(ierr);
             ierr = ISGetLocalSize(dsfields, &nf);CHKERRQ(ierr);
-            if (!nf) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "DS cannot be supported on 0 fields");
+            PetscCheck(nf,PETSC_COMM_SELF, PETSC_ERR_PLIB, "DS cannot be supported on 0 fields");
             ierr = ISGetIndices(dsfields, &fld);CHKERRQ(ierr);
             ierr = ISGetLocalSize(dm->probs[d].fields, &onf);CHKERRQ(ierr);
             ierr = ISGetIndices(dm->probs[d].fields, &ofld);CHKERRQ(ierr);
@@ -295,7 +300,7 @@ PetscErrorCode DMCreateSectionSubDM(DM dm, PetscInt numFields, const PetscInt fi
 
   Not collective
 
-  Input Parameter:
+  Input Parameters:
 + dms - The DM objects
 - len - The number of DMs
 
@@ -325,8 +330,8 @@ PetscErrorCode DMCreateSectionSuperDM(DM dms[], PetscInt len, IS **is, DM *super
   for (i = 0 ; i < len; ++i) {
     ierr = DMGetLocalSection(dms[i], &sections[i]);CHKERRQ(ierr);
     ierr = DMGetGlobalSection(dms[i], &sectionGlobals[i]);CHKERRQ(ierr);
-    if (!sections[i]) SETERRQ(comm, PETSC_ERR_ARG_WRONG, "Must set default section for DM before splitting fields");
-    if (!sectionGlobals[i]) SETERRQ(comm, PETSC_ERR_ARG_WRONG, "Must set default global section for DM before splitting fields");
+    PetscCheck(sections[i],comm, PETSC_ERR_ARG_WRONG, "Must set default section for DM before splitting fields");
+    PetscCheck(sectionGlobals[i],comm, PETSC_ERR_ARG_WRONG, "Must set default global section for DM before splitting fields");
     ierr = PetscSectionGetNumFields(sections[i], &Nfs[i]);CHKERRQ(ierr);
     Nf += Nfs[i];
   }
@@ -358,7 +363,7 @@ PetscErrorCode DMCreateSectionSuperDM(DM dms[], PetscInt len, IS **is, DM *super
           else if (bs != gtdof) {bs = 1;}
           ierr = DMGetGlobalFieldOffset_Private(*superdm, p, startf, &start, &dummy);CHKERRQ(ierr);
           ierr = DMGetGlobalFieldOffset_Private(*superdm, p, startf+Nfs[i]-1, &dummy, &end);CHKERRQ(ierr);
-          if (end-start != gtdof) SETERRQ4(PETSC_COMM_SELF, PETSC_ERR_ARG_SIZ, "Invalid number of global dofs %D != %D for dm %D on point %D", end-start, gtdof, i, p);
+          PetscCheck(end-start == gtdof,PETSC_COMM_SELF, PETSC_ERR_ARG_SIZ, "Invalid number of global dofs %D != %D for dm %D on point %D", end-start, gtdof, i, p);
           for (d = start; d < end; ++d, ++subOff) subIndices[subOff] = d;
         }
       }

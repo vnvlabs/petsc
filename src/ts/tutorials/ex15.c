@@ -6,7 +6,6 @@ static char help[] = "Time-dependent PDE in 2d. Modified from ex13.c for illustr
    At t=0: u(x,y) = exp(c*r*r*r), if r=PetscSqrtReal((x-.5)*(x-.5) + (y-.5)*(y-.5)) < .125
            u(x,y) = 0.0           if r >= .125
 
-
    Boundary conditions:
    Drichlet BC:
    At x=0, x=1, y=0, y=1: u = 0.0
@@ -76,7 +75,7 @@ int main(int argc,char **argv)
     ierr = DMDACreate2d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE,DMDA_STENCIL_STAR,11,11,PETSC_DECIDE,PETSC_DECIDE,1,1,NULL,NULL,&da);CHKERRQ(ierr);
   } else if (user.nstencilpts == 9) {
     ierr = DMDACreate2d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE,DMDA_STENCIL_BOX,11,11,PETSC_DECIDE,PETSC_DECIDE,1,1,NULL,NULL,&da);CHKERRQ(ierr);
-  } else SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_SUP,"nstencilpts %d is not supported",user.nstencilpts);
+  } else SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"nstencilpts %d is not supported",user.nstencilpts);
   ierr = DMSetFromOptions(da);CHKERRQ(ierr);
   ierr = DMSetUp(da);CHKERRQ(ierr);
   user.da = da;
@@ -114,7 +113,7 @@ int main(int argc,char **argv)
   Jtype = 0;
   ierr  = PetscOptionsGetInt(NULL,NULL, "-Jtype",&Jtype,NULL);CHKERRQ(ierr);
   if (Jtype == 0) { /* use user provided Jacobian evaluation routine */
-    if (user.nstencilpts != 5) SETERRQ1(PETSC_COMM_WORLD,PETSC_ERR_SUP,"user Jacobian routine FormIJacobian() does not support nstencilpts=%D",user.nstencilpts);
+    PetscCheckFalse(user.nstencilpts != 5,PETSC_COMM_WORLD,PETSC_ERR_SUP,"user Jacobian routine FormIJacobian() does not support nstencilpts=%D",user.nstencilpts);
     ierr = TSSetIJacobian(ts,J,J,FormIJacobian,&user);CHKERRQ(ierr);
   } else { /* use finite difference Jacobian J as preconditioner and '-snes_mf_operator' for Mat*vec */
     ierr = TSGetSNES(ts,&snes);CHKERRQ(ierr);
@@ -170,7 +169,7 @@ PetscErrorCode FormIFunction(TS ts,PetscReal t,Vec U,Vec Udot,Vec F,void *ctx)
 
   hx = 1.0/(PetscReal)(Mx-1); sx = 1.0/(hx*hx);
   hy = 1.0/(PetscReal)(My-1); sy = 1.0/(hy*hy);
-  if (user->nstencilpts == 9 && hx != hy) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"hx must equal hy when nstencilpts = 9 for this example");
+  PetscCheckFalse(user->nstencilpts == 9 && hx != hy,PETSC_COMM_WORLD,PETSC_ERR_SUP,"hx must equal hy when nstencilpts = 9 for this example");
 
   /*
      Scatter ghost points to local vector,using the 2-step process
@@ -366,6 +365,5 @@ PetscErrorCode FormInitialSolution(Vec U,void *ptr)
       suffix: 5
       nsize: 1
       args: -da_grid_x 20 -da_grid_y 20 -boundary 0 -ts_max_steps 10 -Jtype 1 -ts_monitor
-
 
 TEST*/

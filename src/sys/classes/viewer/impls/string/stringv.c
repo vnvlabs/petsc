@@ -3,7 +3,7 @@
 
 typedef struct  {
   char      *string;         /* string where info is stored */
-  char      *head;           /* pointer to begining of unused portion */
+  char      *head;           /* pointer to beginning of unused portion */
   size_t    curlen,maxlen;
   PetscBool ownstring;       /* string viewer is responsable for freeing the string */
 } PetscViewer_String;
@@ -52,7 +52,7 @@ PetscErrorCode  PetscViewerStringSPrintf(PetscViewer viewer,const char format[],
   PetscValidCharPointer(format,2);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERSTRING,&isstring);CHKERRQ(ierr);
   if (!isstring) PetscFunctionReturn(0);
-  if (!vstr->string) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ORDER,"Must call PetscViewerStringSetString() before using");
+  PetscCheckFalse(!vstr->string,PETSC_COMM_SELF,PETSC_ERR_ORDER,"Must call PetscViewerStringSetString() before using");
 
   va_start(Argp,format);
   ierr = PetscVSNPrintf(tmp,4096,format,&fullLength,Argp);CHKERRQ(ierr);
@@ -125,7 +125,6 @@ PetscErrorCode PetscViewerRestoreSubViewer_String(PetscViewer viewer,MPI_Comm co
 /*MC
    PETSCVIEWERSTRING - A viewer that writes to a string
 
-
 .seealso:  PetscViewerStringOpen(), PetscViewerStringSPrintf(), PetscViewerSocketOpen(), PetscViewerDrawOpen(), PETSCVIEWERSOCKET,
            PetscViewerCreate(), PetscViewerASCIIOpen(), PetscViewerBinaryOpen(), PETSCVIEWERBINARY, PETSCVIEWERDRAW,
            PetscViewerMatlabOpen(), VecView(), DMView(), PetscViewerMatlabPutArray(), PETSCVIEWERASCII, PETSCVIEWERMATLAB,
@@ -180,7 +179,7 @@ PetscErrorCode  PetscViewerStringGetStringRead(PetscViewer viewer,const char *st
   PetscFunctionBegin;
   PetscValidHeaderSpecific(viewer,PETSC_VIEWER_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERSTRING,&isstring);CHKERRQ(ierr);
-  if (!isstring) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Only for PETSCVIEWERSTRING");
+  PetscCheckFalse(!isstring,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Only for PETSCVIEWERSTRING");
   if (string) *string = vstr->string;
   if (len)    *len    = vstr->maxlen;
   PetscFunctionReturn(0);
@@ -218,7 +217,7 @@ PetscErrorCode  PetscViewerStringSetString(PetscViewer viewer,char string[],size
   PetscValidCharPointer(string,2);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERSTRING,&isstring);CHKERRQ(ierr);
   if (!isstring) PetscFunctionReturn(0);
-  if (len <= 2) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"String must have length at least 2");
+  PetscCheckFalse(len <= 2,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"String must have length at least 2");
 
   ierr         = PetscArrayzero(string,len);CHKERRQ(ierr);
   vstr->string = string;
@@ -258,8 +257,4 @@ PetscErrorCode  PetscViewerStringSetOwnString(PetscViewer viewer)
   vstr->ownstring = PETSC_TRUE;
   PetscFunctionReturn(0);
 }
-
-
-
-
 

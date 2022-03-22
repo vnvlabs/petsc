@@ -31,7 +31,7 @@ PetscErrorCode DMMoabSetFieldVector(DM dm, PetscInt ifield, Vec fvec)
   PetscValidHeaderSpecific(dm, DM_CLASSID, 1);
   dmmoab = (DM_Moab*)(dm)->data;
 
-  if ((ifield < 0) || (ifield >= dmmoab->numFields)) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "The field %d should be positive and less than %d.", ifield, dmmoab->numFields);
+  PetscCheckFalse((ifield < 0) || (ifield >= dmmoab->numFields),PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "The field %d should be positive and less than %d.", ifield, dmmoab->numFields);
 
   /* Create a tag in MOAB mesh to index and keep track of number of Petsc vec tags */
   merr = dmmoab->mbiface->tag_get_handle(dmmoab->fieldNames[ifield], 1, moab::MB_TYPE_DOUBLE, ntag,
@@ -59,7 +59,6 @@ PetscErrorCode DMMoabSetFieldVector(DM dm, PetscInt ifield, Vec fvec)
 #endif
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabSetGlobalFieldVector - Sets the vector reference that represents the global solution associated
@@ -144,7 +143,6 @@ PetscErrorCode DMMoabSetGlobalFieldVector(DM dm, Vec fvec)
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabSetFieldNames - Sets the number of fields and their names to be managed by the DM
 
@@ -189,14 +187,13 @@ PetscErrorCode DMMoabSetFieldNames(DM dm, PetscInt numFields, const char* fields
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabGetFieldName - Gets the names of individual field components in multicomponent
   vectors associated with a DMDA.
 
   Not Collective
 
-  Input Parameter:
+  Input Parameters:
 + dm     - the discretization manager object
 - field - field number for the DMMoab (0, 1, ... dof-1), where dof indicates the
         number of degrees of freedom per node within the DMMoab
@@ -215,12 +212,11 @@ PetscErrorCode DMMoabGetFieldName(DM dm, PetscInt field, const char **fieldName)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm, DM_CLASSID, 1);
   dmmoab = (DM_Moab*)(dm)->data;
-  if ((field < 0) || (field >= dmmoab->numFields)) SETERRQ3(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "DM field %d should be in [%d, %d)", field, 0, dmmoab->numFields);
+  PetscCheckFalse((field < 0) || (field >= dmmoab->numFields),PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "DM field %d should be in [%d, %d)", field, 0, dmmoab->numFields);
 
   *fieldName = dmmoab->fieldNames[field];
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabSetFieldName - Sets the name of a field (component) managed by the DM
@@ -248,7 +244,7 @@ PetscErrorCode DMMoabSetFieldName(DM dm, PetscInt field, const char *fieldName)
   PetscValidCharPointer(fieldName, 3);
 
   dmmoab = (DM_Moab*)(dm)->data;
-  if ((field < 0) || (field >= dmmoab->numFields)) SETERRQ3(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "DM field %d should be in [%d, %d)", field, 0, dmmoab->numFields);
+  PetscCheckFalse((field < 0) || (field >= dmmoab->numFields),PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "DM field %d should be in [%d, %d)", field, 0, dmmoab->numFields);
 
   if (dmmoab->fieldNames[field]) {
     ierr = PetscFree(dmmoab->fieldNames[field]);CHKERRQ(ierr);
@@ -256,7 +252,6 @@ PetscErrorCode DMMoabSetFieldName(DM dm, PetscInt field, const char *fieldName)
   ierr = PetscStrallocpy(fieldName, (char**) &dmmoab->fieldNames[field]);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabGetFieldDof - Gets the global degree-of-freedom of a field (component) defined on a
@@ -288,7 +283,6 @@ PetscErrorCode DMMoabGetFieldDof(DM dm, moab::EntityHandle point, PetscInt field
               dmmoab->gidmap[dmmoab->mbiface->id_from_handle(point) - dmmoab->seqstart] * dmmoab->numFields + field);
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabGetFieldDofs - Gets the global degree-of-freedom of a field (component) defined on an
@@ -333,7 +327,6 @@ PetscErrorCode DMMoabGetFieldDofs(DM dm, PetscInt npoints, const moab::EntityHan
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabGetFieldDofsLocal - Gets the local degrees-of-freedom of a field (component) defined on an
   array of MOAB EntityHandles.
@@ -377,7 +370,6 @@ PetscErrorCode DMMoabGetFieldDofsLocal(DM dm, PetscInt npoints, const moab::Enti
   }
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabGetDofs - Gets the global degree-of-freedom for all fields (components) defined on an
@@ -469,7 +461,6 @@ PetscErrorCode DMMoabGetDofsLocal(DM dm, PetscInt npoints, const moab::EntityHan
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabGetDofsBlocked - Gets the global degree-of-freedom for the first field (component) defined on an
   array of MOAB EntityHandles. It is useful when performing Blocked(Get/Set) methods in computation
@@ -510,7 +501,6 @@ PetscErrorCode DMMoabGetDofsBlocked(DM dm, PetscInt npoints, const moab::EntityH
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabGetDofsBlockedLocal - Gets the local degree-of-freedom for the first field (component) defined on an
   array of MOAB EntityHandles. It is useful when performing local Blocked(Get/Set) methods in computation
@@ -550,7 +540,6 @@ PetscErrorCode DMMoabGetDofsBlockedLocal(DM dm, PetscInt npoints, const moab::En
   PetscFunctionReturn(0);
 }
 
-
 /*@C
   DMMoabGetVertexDofsBlocked - Gets the global degree-of-freedom for the first field (component) defined on an
   array of locally owned MOAB mesh vertices. It's utility is when performing Finite-Difference type calculations
@@ -579,7 +568,6 @@ PetscErrorCode DMMoabGetVertexDofsBlocked(DM dm, PetscInt** dof)
   *dof = dmmoab->gidmap;
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabGetVertexDofsBlockedLocal - Gets the local degree-of-freedom for the first field (component) defined on an

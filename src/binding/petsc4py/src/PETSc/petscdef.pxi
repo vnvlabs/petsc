@@ -46,8 +46,13 @@ cdef extern from * nogil:
         PETSC_OFFLOAD_CPU
         PETSC_OFFLOAD_GPU
         PETSC_OFFLOAD_BOTH
-        PETSC_OFFLOAD_VECKOKKOS
+        PETSC_OFFLOAD_KOKKOS
 
+    ctypedef enum PetscMemType:
+        PETSC_MEMTYPE_HOST
+        PETSC_MEMTYPE_CUDA
+        PETSC_MEMTYPE_HIP
+        PETSC_MEMTYPE_SYCL
 
 cdef extern from * nogil:
 

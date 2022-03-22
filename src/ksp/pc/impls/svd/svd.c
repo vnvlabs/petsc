@@ -77,7 +77,7 @@ static PetscErrorCode PCSetUp_SVD(PC pc)
     PetscBLASInt lierr;
     ierr = PetscFPTrapPush(PETSC_FP_TRAP_OFF);CHKERRQ(ierr);
     PetscStackCallBLAS("LAPACKgesvd",LAPACKgesvd_("A","A",&nb,&nb,a,&nb,d,u,&nb,v,&nb,work,&lwork,&lierr));
-    if (lierr) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"gesv() error %d",lierr);
+    PetscCheckFalse(lierr,PETSC_COMM_SELF,PETSC_ERR_LIB,"gesv() error %d",lierr);
     ierr = PetscFPTrapPop();CHKERRQ(ierr);
   }
 #else
@@ -88,7 +88,7 @@ static PetscErrorCode PCSetUp_SVD(PC pc)
     ierr = PetscMalloc1(nb,&dd);CHKERRQ(ierr);
     ierr = PetscFPTrapPush(PETSC_FP_TRAP_OFF);CHKERRQ(ierr);
     PetscStackCallBLAS("LAPACKgesvd",LAPACKgesvd_("A","A",&nb,&nb,a,&nb,dd,u,&nb,v,&nb,work,&lwork,rwork,&lierr));
-    if (lierr) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"gesv() error %d",lierr);
+    PetscCheckFalse(lierr,PETSC_COMM_SELF,PETSC_ERR_LIB,"gesv() error %d",lierr);
     ierr = PetscFree(rwork);CHKERRQ(ierr);
     for (i=0; i<n; i++) d[i] = dd[i];
     ierr = PetscFree(dd);CHKERRQ(ierr);
@@ -123,11 +123,11 @@ static PetscErrorCode PCSetUp_SVD(PC pc)
     }
     ierr = PetscViewerASCIISubtractTab(jac->monitor,((PetscObject)pc)->tablevel);CHKERRQ(ierr);
   }
-  ierr = PetscInfo2(pc,"Largest and smallest singular values %14.12e %14.12e\n",(double)PetscRealPart(d[0]),(double)PetscRealPart(d[n-1]));CHKERRQ(ierr);
+  ierr = PetscInfo(pc,"Largest and smallest singular values %14.12e %14.12e\n",(double)PetscRealPart(d[0]),(double)PetscRealPart(d[n-1]));CHKERRQ(ierr);
   for (i=0; i<n-jac->nzero; i++) d[i] = 1.0/d[i];
   for (; i<n; i++) d[i] = 0.0;
   if (jac->essrank > 0) for (i=0; i<n-jac->nzero-jac->essrank; i++) d[i] = 0.0; /* Skip all but essrank eigenvalues */
-  ierr = PetscInfo1(pc,"Number of zero or nearly singular values %D\n",jac->nzero);CHKERRQ(ierr);
+  ierr = PetscInfo(pc,"Number of zero or nearly singular values %D\n",jac->nzero);CHKERRQ(ierr);
   ierr = VecRestoreArray(jac->diag,&d);CHKERRQ(ierr);
 #if defined(foo)
   {
@@ -357,8 +357,8 @@ static PetscErrorCode PCView_SVD(PC pc,PetscViewer viewer)
    Level: advanced
 
   Options Database:
-+  -pc_svd_zero_sing <rtol> Singular values smaller than this are treated as zero
--  -pc_svd_monitor  Print information on the extreme singular values of the operator
++  -pc_svd_zero_sing <rtol> - Singular values smaller than this are treated as zero
+-  -pc_svd_monitor - Print information on the extreme singular values of the operator
 
   Developer Note:
   This implementation automatically creates a redundant copy of the

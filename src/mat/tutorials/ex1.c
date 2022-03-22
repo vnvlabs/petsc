@@ -36,7 +36,7 @@ int main(int argc,char **args)
      (matrix and right-hand-side vector).
   */
   ierr = PetscOptionsGetString(NULL,NULL,"-f",file,sizeof(file),&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_USER,"Must indicate binary file with the -f option");
+  PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_USER,"Must indicate binary file with the -f option");
 
   /* -----------------------------------------------------------
                   Beginning of loop
@@ -84,12 +84,10 @@ int main(int argc,char **args)
   return ierr;
 }
 
-
-
 /*TEST
 
    test:
-      requires: datafilespath double !complex !define(PETSC_USE_64BIT_INDICES)
+      requires: datafilespath double !complex !defined(PETSC_USE_64BIT_INDICES)
       args: -f ${DATAFILESPATH}/matrices/medium -viewer_binary_skip_info
 
 TEST*/

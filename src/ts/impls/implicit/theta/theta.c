@@ -9,7 +9,8 @@
 typedef struct {
   /* context for time stepping */
   PetscReal    stage_time;
-  Vec          X0,X,Xdot;                /* Storage for stage solution, u^n + dt a_{11} k_1, and time derivative u^{n+1}_t */
+  Vec          Stages[2];                 /* Storage for stage solutions */
+  Vec          X0,X,Xdot;                /* Storage for u^n, u^n + dt a_{11} k_1, and time derivative u^{n+1}_t */
   Vec          affine;                   /* Affine vector needed for residual at beginning of step in endpoint formulation */
   PetscReal    Theta;
   PetscReal    shift;                    /* Shift parameter for SNES Jacobian, used by forward, TLM and adjoint */
@@ -26,6 +27,7 @@ typedef struct {
   Vec          *VecsDeltaLam;            /* Increment of the adjoint sensitivity w.r.t IC at stage */
   Vec          *VecsDeltaMu;             /* Increment of the adjoint sensitivity w.r.t P at stage */
   Vec          *VecsSensiTemp;           /* Vector to be multiplied with Jacobian transpose */
+  Mat          MatFwdStages[2];          /* TLM Stages */
   Mat          MatDeltaFwdSensip;        /* Increment of the forward sensitivity at stage */
   Vec          VecDeltaFwdSensipCol;     /* Working vector for holding one column of the sensitivity matrix */
   Mat          MatFwdSensip0;            /* backup for roll-backs due to events */
@@ -252,7 +254,7 @@ static PetscErrorCode TSStep_Theta(TS ts)
     ts->reject++; accept = PETSC_FALSE;
     if (!ts->reason && ++rejections > ts->max_reject && ts->max_reject >= 0) {
       ts->reason = TS_DIVERGED_STEP_REJECTED;
-      ierr = PetscInfo2(ts,"Step=%D, step rejections %D greater than current TS allowed, stopping solve\n",ts->steps,rejections);CHKERRQ(ierr);
+      ierr = PetscInfo(ts,"Step=%D, step rejections %D greater than current TS allowed, stopping solve\n",ts->steps,rejections);CHKERRQ(ierr);
     }
   }
   PetscFunctionReturn(0);
@@ -320,7 +322,7 @@ static PetscErrorCode TSAdjointStepBEuler_Private(TS ts)
     ierr = KSPGetConvergedReason(ksp,&kspreason);CHKERRQ(ierr);
     if (kspreason < 0) {
       ts->reason = TSADJOINT_DIVERGED_LINEAR_SOLVE;
-      ierr = PetscInfo2(ts,"Step=%D, %Dth cost function, transposed linear solve fails, stopping 1st-order adjoint solve\n",ts->steps,nadj);CHKERRQ(ierr);
+      ierr = PetscInfo(ts,"Step=%D, %Dth cost function, transposed linear solve fails, stopping 1st-order adjoint solve\n",ts->steps,nadj);CHKERRQ(ierr);
     }
   }
 
@@ -347,7 +349,7 @@ static PetscErrorCode TSAdjointStepBEuler_Private(TS ts)
       ierr = KSPGetConvergedReason(ksp,&kspreason);CHKERRQ(ierr);
       if (kspreason < 0) {
         ts->reason = TSADJOINT_DIVERGED_LINEAR_SOLVE;
-        ierr = PetscInfo2(ts,"Step=%D, %Dth cost function, transposed linear solve fails, stopping 2nd-order adjoint solve\n",ts->steps,nadj);CHKERRQ(ierr);
+        ierr = PetscInfo(ts,"Step=%D, %Dth cost function, transposed linear solve fails, stopping 2nd-order adjoint solve\n",ts->steps,nadj);CHKERRQ(ierr);
       }
     }
   }
@@ -357,15 +359,15 @@ static PetscErrorCode TSAdjointStepBEuler_Private(TS ts)
     th->shift = 0.0;
     ierr = TSComputeSNESJacobian(ts,ts->vec_sol,J,Jpre);CHKERRQ(ierr);
     ierr = KSPSetOperators(ksp,J,Jpre);CHKERRQ(ierr);
-    ierr = MatScale(J,-1.);CHKERRQ(ierr);
     for (nadj=0; nadj<ts->numcost; nadj++) {
       /* Add f_U \lambda_s to the original RHS */
+      ierr = VecScale(VecsSensiTemp[nadj],-1.);CHKERRQ(ierr);
       ierr = MatMultTransposeAdd(J,VecsDeltaLam[nadj],VecsSensiTemp[nadj],VecsSensiTemp[nadj]);CHKERRQ(ierr);
-      ierr = VecScale(VecsSensiTemp[nadj],adjoint_time_step);CHKERRQ(ierr);
+      ierr = VecScale(VecsSensiTemp[nadj],-adjoint_time_step);CHKERRQ(ierr);
       ierr = VecCopy(VecsSensiTemp[nadj],ts->vecs_sensi[nadj]);CHKERRQ(ierr);
       if (ts->vecs_sensi2) {
         ierr = MatMultTransposeAdd(J,VecsDeltaLam2[nadj],VecsSensi2Temp[nadj],VecsSensi2Temp[nadj]);CHKERRQ(ierr);
-        ierr = VecScale(VecsSensi2Temp[nadj],adjoint_time_step);CHKERRQ(ierr);
+        ierr = VecScale(VecsSensi2Temp[nadj],-adjoint_time_step);CHKERRQ(ierr);
         ierr = VecCopy(VecsSensi2Temp[nadj],ts->vecs_sensi2[nadj]);CHKERRQ(ierr);
       }
     }
@@ -488,13 +490,13 @@ static PetscErrorCode TSAdjointStep_Theta(TS ts)
     ierr = KSPGetConvergedReason(ksp,&kspreason);CHKERRQ(ierr);
     if (kspreason < 0) {
       ts->reason = TSADJOINT_DIVERGED_LINEAR_SOLVE;
-      ierr = PetscInfo2(ts,"Step=%D, %Dth cost function, transposed linear solve fails, stopping 1st-order adjoint solve\n",ts->steps,nadj);CHKERRQ(ierr);
+      ierr = PetscInfo(ts,"Step=%D, %Dth cost function, transposed linear solve fails, stopping 1st-order adjoint solve\n",ts->steps,nadj);CHKERRQ(ierr);
     }
   }
 
   /* Second-order adjoint */
   if (ts->vecs_sensi2) { /* U_{n+1} */
-    if (!th->endpoint) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Operation not implemented in TS_Theta");
+    PetscCheckFalse(!th->endpoint,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Operation not implemented in TS_Theta");
     /* Get w1 at t_{n+1} from TLM matrix */
     ierr = MatDenseGetColumn(ts->mat_sensip,0,&xarr);CHKERRQ(ierr);
     ierr = VecPlaceArray(ts->vec_sensip_col,xarr);CHKERRQ(ierr);
@@ -519,7 +521,7 @@ static PetscErrorCode TSAdjointStep_Theta(TS ts)
       ierr = KSPGetConvergedReason(ksp,&kspreason);CHKERRQ(ierr);
       if (kspreason < 0) {
         ts->reason = TSADJOINT_DIVERGED_LINEAR_SOLVE;
-        ierr = PetscInfo2(ts,"Step=%D, %Dth cost function, transposed linear solve fails, stopping 2nd-order adjoint solve\n",ts->steps,nadj);CHKERRQ(ierr);
+        ierr = PetscInfo(ts,"Step=%D, %Dth cost function, transposed linear solve fails, stopping 2nd-order adjoint solve\n",ts->steps,nadj);CHKERRQ(ierr);
       }
     }
   }
@@ -857,7 +859,7 @@ static PetscErrorCode TSForwardStep_Theta(TS ts)
     ierr = KSPGetConvergedReason(ksp,&kspreason);CHKERRQ(ierr);
     if (kspreason < 0) {
       ts->reason = TSFORWARD_DIVERGED_LINEAR_SOLVE;
-      ierr = PetscInfo2(ts,"Step=%D, %Dth tangent linear solve, linear solve fails, stopping tangent linear solve\n",ts->steps,ntlm);CHKERRQ(ierr);
+      ierr = PetscInfo(ts,"Step=%D, %Dth tangent linear solve, linear solve fails, stopping tangent linear solve\n",ts->steps,ntlm);CHKERRQ(ierr);
     }
     ierr = VecResetArray(VecDeltaFwdSensipCol);CHKERRQ(ierr);
     ierr = MatDenseRestoreColumn(MatDeltaFwdSensip,&barr);CHKERRQ(ierr);
@@ -891,14 +893,23 @@ static PetscErrorCode TSForwardStep_Theta(TS ts)
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode TSForwardGetStages_Theta(TS ts,PetscInt *ns,Mat **stagesensip)
+static PetscErrorCode TSForwardGetStages_Theta(TS ts,PetscInt *ns,Mat *stagesensip[])
 {
-  TS_Theta *th = (TS_Theta*)ts->data;
+  TS_Theta       *th = (TS_Theta*)ts->data;
 
   PetscFunctionBegin;
-  if (ns) *ns = 1;
+  if (ns) {
+    if (!th->endpoint && th->Theta != 1.0) *ns = 1; /* midpoint form */
+    else *ns = 2; /* endpoint form */
+  }
   if (stagesensip) {
-    *stagesensip = (!th->endpoint && th->Theta != 1.0) ? &(th->MatDeltaFwdSensip) : &(th->MatFwdSensip0);
+    if (!th->endpoint && th->Theta != 1.0) {
+      th->MatFwdStages[0] = th->MatDeltaFwdSensip;
+    } else {
+      th->MatFwdStages[0] = th->MatFwdSensip0;
+      th->MatFwdStages[1] = ts->mat_sensip; /* stiffly accurate */
+    }
+    *stagesensip = th->MatFwdStages;
   }
   PetscFunctionReturn(0);
 }
@@ -1087,6 +1098,8 @@ static PetscErrorCode TSSetUp_Theta(TS ts)
     ierr = VecDuplicate(ts->vec_sol,&th->vec_lte_work);CHKERRQ(ierr);
   }
   ierr = TSGetSNES(ts,&ts->snes);CHKERRQ(ierr);
+
+  ts->stifflyaccurate = (!th->endpoint && th->Theta != 1.0) ? PETSC_FALSE : PETSC_TRUE;
   PetscFunctionReturn(0);
 }
 
@@ -1164,7 +1177,7 @@ static PetscErrorCode TSThetaSetTheta_Theta(TS ts,PetscReal theta)
   TS_Theta *th = (TS_Theta*)ts->data;
 
   PetscFunctionBegin;
-  if (theta <= 0 || 1 < theta) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Theta %g not in range (0,1]",(double)theta);
+  PetscCheckFalse(theta <= 0 || 1 < theta,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_OUTOFRANGE,"Theta %g not in range (0,1]",(double)theta);
   th->Theta = theta;
   th->order = (th->Theta == 0.5) ? 2 : 1;
   PetscFunctionReturn(0);
@@ -1203,14 +1216,23 @@ static PetscErrorCode TSComputeLinearStability_Theta(TS ts,PetscReal xr,PetscRea
 }
 #endif
 
-static PetscErrorCode TSGetStages_Theta(TS ts,PetscInt *ns,Vec **Y)
+static PetscErrorCode TSGetStages_Theta(TS ts,PetscInt *ns,Vec *Y[])
 {
-  TS_Theta     *th = (TS_Theta*)ts->data;
+  TS_Theta       *th = (TS_Theta*)ts->data;
 
   PetscFunctionBegin;
-  if (ns) *ns = 1;
+  if (ns) {
+    if (!th->endpoint && th->Theta != 1.0) *ns = 1; /* midpoint form */
+    else *ns = 2; /* endpoint form */
+  }
   if (Y) {
-    *Y = (!th->endpoint && th->Theta != 1.0) ? &(th->X) : &(th->X0);
+    if (!th->endpoint && th->Theta != 1.0) {
+      th->Stages[0] = th->X;
+    } else {
+      th->Stages[0] = th->X0;
+      th->Stages[1] = ts->vec_sol; /* stiffly accurate */
+    }
+    *Y = th->Stages;
   }
   PetscFunctionReturn(0);
 }
@@ -1231,9 +1253,9 @@ $  -ts_type theta -ts_theta_theta 1.0 corresponds to backward Euler (TSBEULER)
 $  -ts_type theta -ts_theta_theta 0.5 corresponds to the implicit midpoint rule
 $  -ts_type theta -ts_theta_theta 0.5 -ts_theta_endpoint corresponds to Crank-Nicholson (TSCN)
 
-   This method can be applied to DAE.
+   The endpoint variant of the Theta method and backward Euler can be applied to DAE. The midpoint variant is not suitable for DAEs because it is not stiffly accurate.
 
-   This method is cast as a 1-stage implicit Runge-Kutta method.
+   The midpoint variant is cast as a 1-stage implicit Runge-Kutta method.
 
 .vb
   Theta | Theta
@@ -1351,12 +1373,12 @@ PetscErrorCode  TSThetaGetTheta(TS ts,PetscReal *theta)
 
   Not Collective
 
-  Input Parameter:
+  Input Parameters:
 +  ts - timestepping context
 -  theta - stage abscissa
 
   Options Database:
-.  -ts_theta_theta <theta>
+.  -ts_theta_theta <theta> - set theta
 
   Level: Intermediate
 
@@ -1403,12 +1425,12 @@ PetscErrorCode TSThetaGetEndpoint(TS ts,PetscBool *endpoint)
 
   Not Collective
 
-  Input Parameter:
+  Input Parameters:
 +  ts - timestepping context
 -  flg - PETSC_TRUE to use the endpoint variant
 
   Options Database:
-.  -ts_theta_endpoint <flg>
+.  -ts_theta_endpoint <flg> - use the endpoint variant
 
   Level: Intermediate
 
@@ -1435,8 +1457,8 @@ static PetscErrorCode TSSetUp_BEuler(TS ts)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (th->Theta != 1.0) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_OPT_OVERWRITE,"Can not change the default value (1) of theta when using backward Euler\n");
-  if (th->endpoint) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_OPT_OVERWRITE,"Can not change to the endpoint form of the Theta methods when using backward Euler\n");
+  PetscCheckFalse(th->Theta != 1.0,PetscObjectComm((PetscObject)ts),PETSC_ERR_OPT_OVERWRITE,"Can not change the default value (1) of theta when using backward Euler");
+  PetscCheckFalse(th->endpoint,PetscObjectComm((PetscObject)ts),PETSC_ERR_OPT_OVERWRITE,"Can not change to the endpoint form of the Theta methods when using backward Euler");
   ierr = TSSetUp_Theta(ts);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -1479,8 +1501,8 @@ static PetscErrorCode TSSetUp_CN(TS ts)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (th->Theta != 0.5) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_OPT_OVERWRITE,"Can not change the default value (0.5) of theta when using Crank-Nicolson\n");
-  if (!th->endpoint) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_OPT_OVERWRITE,"Can not change to the midpoint form of the Theta methods when using Crank-Nicolson\n");
+  PetscCheckFalse(th->Theta != 0.5,PetscObjectComm((PetscObject)ts),PETSC_ERR_OPT_OVERWRITE,"Can not change the default value (0.5) of theta when using Crank-Nicolson");
+  PetscCheckFalse(!th->endpoint,PetscObjectComm((PetscObject)ts),PETSC_ERR_OPT_OVERWRITE,"Can not change to the midpoint form of the Theta methods when using Crank-Nicolson");
   ierr = TSSetUp_Theta(ts);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

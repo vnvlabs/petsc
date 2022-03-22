@@ -13,10 +13,10 @@ PetscErrorCode KSPComputeEigenvalues_CG(KSP ksp,PetscInt nmax,PetscReal *r,Petsc
   PetscScalar    *d,*e;
   PetscReal      *ee;
   PetscErrorCode ierr;
-  PetscInt       j,n = cgP->ned;
+  PetscInt       j,n = ksp->its;
 
   PetscFunctionBegin;
-  if (nmax < n) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_SIZ,"Not enough room in work space r and c for eigenvalues");
+  PetscCheckFalse(nmax < n,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_SIZ,"Not enough room in work space r and c for eigenvalues");
   *neig = n;
 
   ierr = PetscArrayzero(c,nmax);CHKERRQ(ierr);
@@ -32,7 +32,7 @@ PetscErrorCode KSPComputeEigenvalues_CG(KSP ksp,PetscInt nmax,PetscReal *r,Petsc
   }
 
   LINPACKcgtql1(&n,r,ee,&j);
-  if (j != 0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"Error from tql1(); eispack eigenvalue routine");
+  PetscCheckFalse(j != 0,PETSC_COMM_SELF,PETSC_ERR_LIB,"Error from tql1(); eispack eigenvalue routine");
   ierr = PetscSortReal(n,r);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -42,7 +42,7 @@ PetscErrorCode KSPComputeExtremeSingularValues_CG(KSP ksp,PetscReal *emax,PetscR
   KSP_CG      *cgP = (KSP_CG*)ksp->data;
   PetscScalar *d,*e;
   PetscReal   *dd,*ee;
-  PetscInt    j,n = cgP->ned;
+  PetscInt    j,n = ksp->its;
 
   PetscFunctionBegin;
   if (!n) {
@@ -58,7 +58,7 @@ PetscErrorCode KSPComputeExtremeSingularValues_CG(KSP ksp,PetscReal *emax,PetscR
   }
 
   LINPACKcgtql1(&n,dd,ee,&j);
-  if (j != 0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"Error from tql1(); eispack eigenvalue routine");
+  PetscCheckFalse(j != 0,PETSC_COMM_SELF,PETSC_ERR_LIB,"Error from tql1(); eispack eigenvalue routine");
   *emin = dd[0]; *emax = dd[n-1];
   PetscFunctionReturn(0);
 }
@@ -141,7 +141,6 @@ static PetscErrorCode LINPACKcgtql1(PetscInt *n,PetscReal *d,PetscReal *e,PetscI
 
   *ierr = 0;
   if (*n == 1) goto L1001;
-
 
   i__1 = *n;
   for (i = 2; i <= i__1; ++i) e[i - 1] = e[i];
@@ -257,7 +256,6 @@ static PetscReal LINPACKcgpthy(PetscReal *a,PetscReal *b)
   PetscFunctionBegin;
 /*     FINDS DSQRT(A**2+B**2) WITHOUT OVERFLOW OR DESTRUCTIVE UNDERFLOW */
 
-
 /* Computing MAX */
   d__1 = PetscAbsReal(*a);
   d__2 = PetscAbsReal(*b);
@@ -283,5 +281,4 @@ L20:
   ret_val = p;
   PetscFunctionReturn(ret_val);
 } /* cgpthy_ */
-
 

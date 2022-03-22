@@ -160,7 +160,7 @@ static PetscErrorCode CreateSystem(DM dmSol,Mat *pA,Vec *pRhs, PetscBool pinPres
 
   ierr = DMStagGetCorners(dmSol,&startx,&starty,&startz,&nx,&ny,&nz,NULL,NULL,NULL);CHKERRQ(ierr);
   ierr = DMStagGetGlobalSizes(dmSol,&N[0],&N[1],&N[2]);CHKERRQ(ierr);
-  if (N[0] < 2 || N[1] < 2 || N[2] < 2) SETERRQ(PetscObjectComm((PetscObject)dmSol),PETSC_ERR_ARG_SIZ,"This example requires at least two elements in each dimensions");
+  PetscCheckFalse(N[0] < 2 || N[1] < 2 || N[2] < 2,PetscObjectComm((PetscObject)dmSol),PETSC_ERR_ARG_SIZ,"This example requires at least two elements in each dimensions");
   hx = 1.0/N[0]; hy = 1.0/N[1]; hz = 1.0/N[2];
   ierr = DMGetCoordinateDM(dmSol,&dmCoord);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(dmSol,&coordLocal);CHKERRQ(ierr);
@@ -758,7 +758,7 @@ static PetscErrorCode CheckSolution(Vec sol,Vec solRef)
       suffix: 2
       requires: !single
       nsize: 4
-      args: -ksp_monitor_short -ksp_converged_reason -pc_fieldsplit_schur_fact_type diag -fieldsplit_0_ksp_type preonly -fieldsplit_1_pc_type none -fieldsplit_0_pc_type gamg -fieldsplit_0_mg_levels_ksp_max_it 3 -fieldsplit_1_ksp_type gmres -fieldsplit_1_ksp_max_it 20 -fieldsplit_0_pc_gamg_esteig_ksp_type gmres
+      args: -ksp_monitor_short -ksp_converged_reason -pc_fieldsplit_schur_fact_type diag -fieldsplit_0_ksp_type preonly -fieldsplit_1_pc_type none -fieldsplit_0_pc_type gamg -fieldsplit_0_ksp_type gmres -fieldsplit_0_pc_gamg_esteig_ksp_max_it 5
 
    test:
       suffix: direct_umfpack

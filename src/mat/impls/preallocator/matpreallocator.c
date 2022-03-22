@@ -6,6 +6,7 @@ typedef struct {
   PetscInt   *dnz, *onz;
   PetscInt   *dnzu, *onzu;
   PetscBool   nooffproc;
+  PetscBool   used;
 } Mat_Preallocator;
 
 PetscErrorCode MatDestroy_Preallocator(Mat A)
@@ -90,7 +91,7 @@ PetscErrorCode MatAssemblyBegin_Preallocator(Mat A, MatAssemblyType type)
   PetscFunctionBegin;
   ierr = MatStashScatterBegin_Private(A, &A->stash, A->rmap->range);CHKERRQ(ierr);
   ierr = MatStashGetInfo_Private(&A->stash, &nstash, &reallocs);CHKERRQ(ierr);
-  ierr = PetscInfo2(A, "Stash has %D entries, uses %D mallocs.\n", nstash, reallocs);CHKERRQ(ierr);
+  ierr = PetscInfo(A, "Stash has %" PetscInt_FMT " entries, uses %" PetscInt_FMT " mallocs.\n", nstash, reallocs);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -146,6 +147,9 @@ PetscErrorCode MatPreallocatorPreallocate_Preallocator(Mat mat, PetscBool fill, 
   PetscErrorCode    ierr;
 
   PetscFunctionBegin;
+  PetscCheck(!p->used,PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"MatPreallocatorPreallocate() can only be used once for a give MatPreallocator object. Consider using MatDuplicate() after preallocation.");
+  p->used = PETSC_TRUE;
+  if (!fill) {ierr = PetscHSetIJDestroy(&p->ht);CHKERRQ(ierr);}
   ierr = MatGetBlockSize(mat, &bs);CHKERRQ(ierr);
   ierr = MatXAIJSetPreallocation(A, bs, p->dnz, p->onz, p->dnzu, p->onzu);CHKERRQ(ierr);
   ierr = MatSetUp(A);CHKERRQ(ierr);
@@ -155,16 +159,40 @@ PetscErrorCode MatPreallocatorPreallocate_Preallocator(Mat mat, PetscBool fill, 
     PetscHashIter  hi;
     PetscHashIJKey key;
     PetscScalar    *zeros;
+    PetscInt       n,maxrow=1,*cols,rStart,rEnd,*rowstarts;
 
-    ierr = PetscCalloc1(bs*bs,&zeros);CHKERRQ(ierr);
+    ierr = MatGetOwnershipRange(A, &rStart, &rEnd);CHKERRQ(ierr);
+    // Ownership range is in terms of scalar entries, but we deal with blocks
+    rStart /= bs;
+    rEnd /= bs;
+    ierr = PetscHSetIJGetSize(p->ht,&n);CHKERRQ(ierr);
+    ierr = PetscMalloc2(n,&cols,rEnd-rStart+1,&rowstarts);CHKERRQ(ierr);
+    rowstarts[0] = 0;
+    for (PetscInt i=0; i<rEnd-rStart; i++) {
+      rowstarts[i+1] = rowstarts[i] + p->dnz[i] + p->onz[i];
+      maxrow = PetscMax(maxrow, p->dnz[i] + p->onz[i]);
+    }
+    PetscCheckFalse(rowstarts[rEnd-rStart] != n,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Hash claims %" PetscInt_FMT " entries, but dnz+onz counts %" PetscInt_FMT,n,rowstarts[rEnd-rStart]);
 
     PetscHashIterBegin(p->ht,hi);
-    while (!PetscHashIterAtEnd(p->ht,hi)) {
+    for (PetscInt i=0; !PetscHashIterAtEnd(p->ht,hi); i++) {
       PetscHashIterGetKey(p->ht,hi,key);
+      PetscInt lrow = key.i - rStart;
+      cols[rowstarts[lrow]] = key.j;
+      rowstarts[lrow]++;
       PetscHashIterNext(p->ht,hi);
-      ierr = MatSetValuesBlocked(A,1,&key.i,1,&key.j,zeros,INSERT_VALUES);CHKERRQ(ierr);
+    }
+    ierr = PetscHSetIJDestroy(&p->ht);CHKERRQ(ierr);
+
+    ierr = PetscCalloc1(maxrow*bs*bs,&zeros);CHKERRQ(ierr);
+    for (PetscInt i=0; i<rEnd-rStart; i++) {
+      PetscInt grow = rStart + i;
+      PetscInt end = rowstarts[i], start = end - p->dnz[i] - p->onz[i];
+      ierr = PetscSortInt(end-start,&cols[start]);CHKERRQ(ierr);
+      ierr = MatSetValuesBlocked(A, 1, &grow, end-start, &cols[start], zeros, INSERT_VALUES);CHKERRQ(ierr);
     }
     ierr = PetscFree(zeros);CHKERRQ(ierr);
+    ierr = PetscFree2(cols,rowstarts);CHKERRQ(ierr);
 
     ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
     ierr = MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
@@ -175,7 +203,7 @@ PetscErrorCode MatPreallocatorPreallocate_Preallocator(Mat mat, PetscBool fill, 
 /*@
   MatPreallocatorPreallocate - Preallocates the A matrix, using information from mat, optionally filling A with zeros
 
-  Input Parameter:
+  Input Parameters:
 + mat  - the preallocator
 . fill - fill the matrix with zeros
 - A    - the matrix to be preallocated
@@ -185,7 +213,7 @@ PetscErrorCode MatPreallocatorPreallocate_Preallocator(Mat mat, PetscBool fill, 
   preallocation data for a given nonzero structure. Use this object like a
   regular matrix, e.g. loop over the nonzero structure of the matrix and
   call MatSetValues() or MatSetValuesBlocked() to indicate the nonzero locations.
-  The matrix entires provided to MatSetValues() will be ignored, it only uses
+  The matrix entries provided to MatSetValues() will be ignored, it only uses
   the row / col indices provided to determine the information required to be
   passed to MatXAIJSetPreallocation(). Once you have looped over the nonzero
   structure, you must call MatAssemblyBegin(), MatAssemblyEnd() on mat.
@@ -194,6 +222,10 @@ PetscErrorCode MatPreallocatorPreallocate_Preallocator(Mat mat, PetscBool fill, 
   to define the preallocation information on the matrix (A). Setting the parameter
   fill = PETSC_TRUE will insert zeros into the matrix A. Internally MatPreallocatorPreallocate()
   will call MatSetOption(A, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_TRUE);
+
+  This function may only be called once for a given MatPreallocator object. If
+  multiple Mats need to be preallocated, consider using MatDuplicate() after
+  this function.
 
   Level: advanced
 
@@ -204,9 +236,10 @@ PetscErrorCode MatPreallocatorPreallocate(Mat mat, PetscBool fill, Mat A)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  PetscValidHeaderSpecific(mat, MAT_CLASSID, 1);
-  PetscValidHeaderSpecific(A,   MAT_CLASSID, 3);
-  ierr = PetscUseMethod(mat, "MatPreallocatorPreallocate_C", (Mat,PetscBool,Mat),(mat,fill,A));CHKERRQ(ierr);
+  PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
+  PetscValidLogicalCollectiveBool(mat,fill,2);
+  PetscValidHeaderSpecific(A,MAT_CLASSID,3);
+  ierr = PetscUseMethod(mat,"MatPreallocatorPreallocate_C",(Mat,PetscBool,Mat),(mat,fill,A));CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -214,14 +247,16 @@ PetscErrorCode MatPreallocatorPreallocate(Mat mat, PetscBool fill, Mat A)
    MATPREALLOCATOR - MATPREALLOCATOR = "preallocator" - A matrix type to be used for computing a matrix preallocation.
 
    Operations Provided:
-.  MatSetValues()
+.vb
+  MatSetValues()
+.ve
 
    Options Database Keys:
 . -mat_type preallocator - sets the matrix type to "preallocator" during a call to MatSetFromOptions()
 
   Level: advanced
 
-.seealso: Mat
+.seealso: Mat, MatPreallocatorPreallocate()
 
 M*/
 
@@ -239,6 +274,7 @@ PETSC_EXTERN PetscErrorCode MatCreate_Preallocator(Mat A)
   p->onz  = NULL;
   p->dnzu = NULL;
   p->onzu = NULL;
+  p->used = PETSC_FALSE;
 
   /* matrix ops */
   ierr = PetscMemzero(A->ops, sizeof(struct _MatOps));CHKERRQ(ierr);
