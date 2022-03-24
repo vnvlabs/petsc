@@ -66,11 +66,11 @@ int main(int argc,char **argv)
 
   /* Ensure that the requested slice is not out of bounds for the selected axis */
   if (sliceaxis==DM_X) {
-    if (gp>Mx) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER_INPUT, "grid point along sliceaxis is larger than largest index!");
+    PetscCheckFalse(gp>Mx,PETSC_COMM_WORLD, PETSC_ERR_USER_INPUT, "grid point along sliceaxis is larger than largest index!");
   } else if (sliceaxis==DM_Y) {
-    if (gp>My) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER_INPUT, "grid point along sliceaxis is larger than largest index!");
+    PetscCheckFalse(gp>My,PETSC_COMM_WORLD, PETSC_ERR_USER_INPUT, "grid point along sliceaxis is larger than largest index!");
   } else if (sliceaxis==DM_Z) {
-    if (gp>Mz) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER_INPUT, "grid point along sliceaxis is larger than largest index!");
+    PetscCheckFalse(gp>Mz,PETSC_COMM_WORLD, PETSC_ERR_USER_INPUT, "grid point along sliceaxis is larger than largest index!");
   }
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -98,7 +98,7 @@ int main(int argc,char **argv)
      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   ierr = DMDAGetCorners(da3D, &ixs, &iys, &izs, &ixm, &iym, &izm);CHKERRQ(ierr);
   ierr = DMDAVecGetArray(da3D, vec_full, &vecdata3d);CHKERRQ(ierr);
-  for (k=izs; k<izs+izm; k++){
+  for (k=izs; k<izs+izm; k++) {
     for (j=iys; j<iys+iym; j++) {
       for (i=ixs; i<ixs+ixm; i++) {
         vecdata3d[k][j][i] = ((i-Mx/2.0)*(j+Mx/2.0))+k*100;

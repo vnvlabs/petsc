@@ -1,4 +1,3 @@
-
 #include <petsc/private/petscimpl.h>
 #include <petsc/private/matimpl.h>
 #include <petsc/private/pcimpl.h>
@@ -59,7 +58,7 @@ PetscErrorCode PCTelescopeTestValidSubcomm(MPI_Comm comm_f,MPI_Comm comm_c,Petsc
   PetscMPIInt    *ranks_f,*ranks_c;
 
   PetscFunctionBegin;
-  if (comm_f == MPI_COMM_NULL) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"comm_f cannot be MPI_COMM_NULL");
+  PetscCheckFalse(comm_f == MPI_COMM_NULL,PETSC_COMM_SELF,PETSC_ERR_SUP,"comm_f cannot be MPI_COMM_NULL");
 
   ierr = MPI_Comm_group(comm_f,&group_f);CHKERRMPI(ierr);
   if (comm_c != MPI_COMM_NULL) {
@@ -142,6 +141,7 @@ PetscErrorCode PCTelescopeSetUp_default(PC pc,PC_Telescope sred)
   MPI_Comm       comm,subcomm;
   VecScatter     scatter;
   IS             isin;
+  VecType        vectype;
 
   PetscFunctionBegin;
   ierr = PetscInfo(pc,"PCTelescope: setup (default)\n");CHKERRQ(ierr);
@@ -152,6 +152,7 @@ PetscErrorCode PCTelescopeSetUp_default(PC pc,PC_Telescope sred)
   ierr = MatGetSize(B,&M,NULL);CHKERRQ(ierr);
   ierr = MatGetBlockSize(B,&bs);CHKERRQ(ierr);
   ierr = MatCreateVecs(B,&x,NULL);CHKERRQ(ierr);
+  ierr = MatGetVecType(B,&vectype);CHKERRQ(ierr);
 
   xred = NULL;
   m    = 0;
@@ -159,6 +160,7 @@ PetscErrorCode PCTelescopeSetUp_default(PC pc,PC_Telescope sred)
     ierr = VecCreate(subcomm,&xred);CHKERRQ(ierr);
     ierr = VecSetSizes(xred,PETSC_DECIDE,M);CHKERRQ(ierr);
     ierr = VecSetBlockSize(xred,bs);CHKERRQ(ierr);
+    ierr = VecSetType(xred,vectype);CHKERRQ(ierr); /* Use the preconditioner matrix's vectype by default */
     ierr = VecSetFromOptions(xred);CHKERRQ(ierr);
     ierr = VecGetLocalSize(xred,&m);CHKERRQ(ierr);
   }
@@ -171,7 +173,7 @@ PetscErrorCode PCTelescopeSetUp_default(PC pc,PC_Telescope sred)
   ierr = VecCreate(comm,&xtmp);CHKERRQ(ierr);
   ierr = VecSetSizes(xtmp,m,PETSC_DECIDE);CHKERRQ(ierr);
   ierr = VecSetBlockSize(xtmp,bs);CHKERRQ(ierr);
-  ierr = VecSetType(xtmp,((PetscObject)x)->type_name);CHKERRQ(ierr);
+  ierr = VecSetType(xtmp,vectype);CHKERRQ(ierr);
 
   if (PCTelescope_isActiveRank(sred)) {
     ierr = VecGetOwnershipRange(xred,&st,&ed);CHKERRQ(ierr);
@@ -198,7 +200,7 @@ PetscErrorCode PCTelescopeMatCreate_default(PC pc,PC_Telescope sred,MatReuse reu
   PetscErrorCode ierr;
   MPI_Comm       comm,subcomm;
   Mat            Bred,B;
-  PetscInt       nr,nc;
+  PetscInt       nr,nc,bs;
   IS             isrow,iscol;
   Mat            Blocal,*_Blocal;
 
@@ -211,6 +213,8 @@ PetscErrorCode PCTelescopeMatCreate_default(PC pc,PC_Telescope sred,MatReuse reu
   isrow = sred->isin;
   ierr = ISCreateStride(PETSC_COMM_SELF,nc,0,1,&iscol);CHKERRQ(ierr);
   ierr = ISSetIdentity(iscol);CHKERRQ(ierr);
+  ierr = MatGetBlockSizes(B,NULL,&bs);CHKERRQ(ierr);
+  ierr = ISSetBlockSize(iscol,bs);CHKERRQ(ierr);
   ierr = MatSetOption(B,MAT_SUBMAT_SINGLEIS,PETSC_TRUE);CHKERRQ(ierr);
   ierr = MatCreateSubMatrices(B,1,&isrow,&iscol,MAT_INITIAL_MATRIX,&_Blocal);CHKERRQ(ierr);
   Blocal = *_Blocal;
@@ -277,8 +281,8 @@ static PetscErrorCode PCTelescopeSubNullSpaceCreate_Telescope(PC pc,PC_Telescope
     /* create new (near) nullspace for redundant object */
     ierr = MatNullSpaceCreate(subcomm,has_const,n,sub_vecs,sub_nullspace);CHKERRQ(ierr);
     ierr = VecDestroyVecs(n,&sub_vecs);CHKERRQ(ierr);
-    if (nullspace->remove) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Propagation of custom remove callbacks not supported when propagating (near) nullspaces with PCTelescope");
-    if (nullspace->rmctx) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Propagation of custom remove callback context not supported when propagating (near) nullspaces with PCTelescope");
+    PetscCheckFalse(nullspace->remove,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Propagation of custom remove callbacks not supported when propagating (near) nullspaces with PCTelescope");
+    PetscCheckFalse(nullspace->rmctx,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Propagation of custom remove callback context not supported when propagating (near) nullspaces with PCTelescope");
   }
   PetscFunctionReturn(0);
 }
@@ -529,7 +533,7 @@ static PetscErrorCode PCSetUp_Telescope(PC pc)
       ierr = DMGetCoarseDM(dm,&dm_coarse_partition);CHKERRQ(ierr);
       if (dm_coarse_partition) { cnt = 1; }
       ierr = MPI_Allreduce(MPI_IN_PLACE,&cnt,1,MPI_INT,MPI_SUM,comm_fine);CHKERRMPI(ierr);
-      if (cnt == 0) SETERRQ(comm_fine,PETSC_ERR_SUP,"Zero instances of a coarse DM were found");
+      PetscCheckFalse(cnt == 0,comm_fine,PETSC_ERR_SUP,"Zero instances of a coarse DM were found");
 
       ierr = MPI_Comm_size(comm_fine,&csize_fine);CHKERRMPI(ierr);
       if (dm_coarse_partition) {
@@ -540,10 +544,10 @@ static PetscErrorCode PCSetUp_Telescope(PC pc)
       cs[0] = csize_fine;
       cs[1] = csize_coarse_partition;
       ierr = MPI_Allreduce(cs,csg,2,MPI_INT,MPI_MAX,comm_fine);CHKERRMPI(ierr);
-      if (csg[0] == csg[1]) SETERRQ(comm_fine,PETSC_ERR_SUP,"Coarse DM uses the same size communicator as the parent DM attached to the PC");
+      PetscCheckFalse(csg[0] == csg[1],comm_fine,PETSC_ERR_SUP,"Coarse DM uses the same size communicator as the parent DM attached to the PC");
 
       ierr = PCTelescopeTestValidSubcomm(comm_fine,comm_coarse_partition,&isvalidsubcomm);CHKERRQ(ierr);
-      if (!isvalidsubcomm) SETERRQ(comm_fine,PETSC_ERR_SUP,"Coarse DM communicator is not a sub-communicator of parentDM->comm");
+      PetscCheckFalse(!isvalidsubcomm,comm_fine,PETSC_ERR_SUP,"Coarse DM communicator is not a sub-communicator of parentDM->comm");
       sred->subcomm = comm_coarse_partition;
     }
   }
@@ -586,7 +590,7 @@ static PetscErrorCode PCSetUp_Telescope(PC pc)
   /* common - no construction */
   if (PCTelescope_isActiveRank(sred)) {
     ierr = KSPSetOperators(sred->ksp,sred->Bred,sred->Bred);CHKERRQ(ierr);
-    if (pc->setfromoptionscalled && !pc->setupcalled){
+    if (pc->setfromoptionscalled && !pc->setupcalled) {
       ierr = KSPSetFromOptions(sred->ksp);CHKERRQ(ierr);
     }
   }
@@ -664,7 +668,7 @@ static PetscErrorCode PCApplyRichardson_Telescope(PC pc,Vec x,Vec y,Vec w,PetscR
   scatter = sred->scatter;
   yred    = sred->yred;
 
-  if (its > 1) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"PCApplyRichardson_Telescope only supports max_it = 1");
+  PetscCheckFalse(its > 1,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"PCApplyRichardson_Telescope only supports max_it = 1");
   *reason = (PCRichardsonConvergedReason)0;
 
   if (!zeroguess) {
@@ -689,7 +693,7 @@ static PetscErrorCode PCApplyRichardson_Telescope(PC pc,Vec x,Vec y,Vec w,PetscR
 
   if (PCTelescope_isActiveRank(sred)) {
     ierr = KSPGetInitialGuessNonzero(sred->ksp,&default_init_guess_value);CHKERRQ(ierr);
-    if (!zeroguess) ierr = KSPSetInitialGuessNonzero(sred->ksp,PETSC_TRUE);CHKERRQ(ierr);
+    if (!zeroguess) {ierr = KSPSetInitialGuessNonzero(sred->ksp,PETSC_TRUE);CHKERRQ(ierr);}
   }
 
   ierr = PCApply_Telescope(pc,x,y);CHKERRQ(ierr);
@@ -708,6 +712,7 @@ static PetscErrorCode PCReset_Telescope(PC pc)
   PC_Telescope   sred = (PC_Telescope)pc->data;
   PetscErrorCode ierr;
 
+  PetscFunctionBegin;
   ierr = ISDestroy(&sred->isin);CHKERRQ(ierr);
   ierr = VecScatterDestroy(&sred->scatter);CHKERRQ(ierr);
   ierr = VecDestroy(&sred->xred);CHKERRQ(ierr);
@@ -753,7 +758,7 @@ static PetscErrorCode PCSetFromOptions_Telescope(PetscOptionItems *PetscOptionsO
     ierr = PCTelescopeSetSubcommType(pc,subcommtype);CHKERRQ(ierr);
   }
   ierr = PetscOptionsInt("-pc_telescope_reduction_factor","Factor to reduce comm size by","PCTelescopeSetReductionFactor",sred->redfactor,&sred->redfactor,NULL);CHKERRQ(ierr);
-  if (sred->redfactor > size) SETERRQ(comm,PETSC_ERR_ARG_WRONG,"-pc_telescope_reduction_factor <= comm size");
+  PetscCheckFalse(sred->redfactor > size,comm,PETSC_ERR_ARG_WRONG,"-pc_telescope_reduction_factor <= comm size");
   ierr = PetscOptionsBool("-pc_telescope_ignore_dm","Ignore any DM attached to the PC","PCTelescopeSetIgnoreDM",sred->ignore_dm,&sred->ignore_dm,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-pc_telescope_ignore_kspcomputeoperators","Ignore method used to compute A","PCTelescopeSetIgnoreKSPComputeOperators",sred->ignore_kspcomputeoperators,&sred->ignore_kspcomputeoperators,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-pc_telescope_use_coarse_dm","Define sub-communicator from the coarse DM","PCTelescopeSetUseCoarseDM",sred->use_coarse_dm,&sred->use_coarse_dm,NULL);CHKERRQ(ierr);
@@ -784,7 +789,7 @@ static PetscErrorCode PCTelescopeSetSubcommType_Telescope(PC pc,PetscSubcommType
   PC_Telescope     red = (PC_Telescope)pc->data;
 
   PetscFunctionBegin;
-  if (pc->setupcalled) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONGSTATE,"You cannot change the subcommunicator type for PCTelescope after it has been set up.");
+  PetscCheckFalse(pc->setupcalled,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONGSTATE,"You cannot change the subcommunicator type for PCTelescope after it has been set up.");
   red->subcommtype = subcommtype;
   PetscFunctionReturn(0);
 }
@@ -805,8 +810,8 @@ static PetscErrorCode PCTelescopeSetReductionFactor_Telescope(PC pc,PetscInt fac
 
   PetscFunctionBegin;
   ierr = MPI_Comm_size(PetscObjectComm((PetscObject)pc),&size);CHKERRMPI(ierr);
-  if (fact <= 0) SETERRQ1(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Reduction factor of telescoping PC %D must be positive",fact);
-  if (fact > size) SETERRQ1(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Reduction factor of telescoping PC %D must be <= comm.size",fact);
+  PetscCheckFalse(fact <= 0,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Reduction factor of telescoping PC %D must be positive",fact);
+  PetscCheckFalse(fact > size,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Reduction factor of telescoping PC %D must be <= comm.size",fact);
   red->redfactor = fact;
   PetscFunctionReturn(0);
 }
@@ -1190,7 +1195,7 @@ PetscErrorCode PCTelescopeGetDM(PC pc,DM *subdm)
 
  Logically Collective
 
- Input Parameter:
+ Input Parameters:
 +  pc - the preconditioner context
 -  subcommtype - the subcommunicator type (see PetscSubcommType)
 
@@ -1258,7 +1263,7 @@ PetscErrorCode PCTelescopeGetSubcommType(PC pc, PetscSubcommType *subcommtype)
 
    [1] Default setup
    The sub-communicator c' is created via PetscSubcommCreate().
-   Explicitly defined nullspace and near nullspace vectors will be propogated from B to B'.
+   Explicitly defined nullspace and near nullspace vectors will be propagated from B to B'.
    Currently there is no support define nullspaces via a user supplied method (e.g. as passed to MatNullSpaceSetFunction()).
    No support is provided for KSPSetComputeOperators().
    Currently there is no support for the flag -pc_use_amat.
@@ -1286,7 +1291,7 @@ PetscErrorCode PCTelescopeGetSubcommType(PC pc, PetscSubcommType *subcommtype)
    Currently there is no support define nullspaces via a user supplied method (e.g. as passed to MatNullSpaceSetFunction()).
    There is no general method to permute field orderings, hence only KSPSetComputeOperators() is supported.
    The user must use PetscObjectComposeFunction() with dmfine to define the method to scatter fields from dmfine to dmcoarse.
-   Propogation of the user context for KSPSetComputeOperators() on the sub KSP is attempted by querying the DM contexts associated with dmfine and dmcoarse. Alternatively, the user may use PetscObjectComposeFunction() with dmcoarse to define a method which will return the appropriate user context for KSPSetComputeOperators().
+   Propagation of the user context for KSPSetComputeOperators() on the sub KSP is attempted by querying the DM contexts associated with dmfine and dmcoarse. Alternatively, the user may use PetscObjectComposeFunction() with dmcoarse to define a method which will return the appropriate user context for KSPSetComputeOperators().
    Currently there is no support for the flag -pc_use_amat.
    This setup can be invoked by the option -pc_telescope_use_coarse_dm or by calling PCTelescopeSetUseCoarseDM(pc,PETSC_TRUE);
    Further information about the user-provided methods required by this setup type are described here PCTelescopeSetUseCoarseDM().
@@ -1319,9 +1324,9 @@ PetscErrorCode PCTelescopeGetSubcommType(PC pc, PetscSubcommType *subcommtype)
    VecPlaceArray() could be used within PCApply() to improve efficiency and reduce memory usage.
    A unified mechanism to query for user contexts as required by KSPSetComputeOperators() and MatNullSpaceSetFunction().
 
-   The symmetric permutation used when a DMDA is encountered is performed via explicitly assmbleming a permutation matrix P,
+   The symmetric permutation used when a DMDA is encountered is performed via explicitly assembling a permutation matrix P,
    and performing P^T.A.P. Possibly it might be more efficient to use MatPermute(). We opted to use P^T.A.P as it appears
-   VecPermute() does not supported for the use case required here. By computing P, one can permute both the operator and RHS in a
+   VecPermute() does not support the use case required here. By computing P, one can permute both the operator and RHS in a
    consistent manner.
 
    Mapping of vectors (default setup mode) is performed in the following way.
@@ -1351,7 +1356,6 @@ PetscErrorCode PCTelescopeGetSubcommType(PC pc, PetscSubcommType *subcommtype)
 .ve
 
    The entries on rank 1 and 3 (ranks which do not have a color = 0 in c') have no values
-
 
    [2] Copy the values from ranks 0, 2 (indices with respect to comm c) into the vector xred which is defined on communicator c'.
    Ranks 0 and 2 are the only ranks in the subcomm which have a color = 0.

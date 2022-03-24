@@ -23,7 +23,7 @@ static PetscErrorCode testOrthogonality(PetscInt dim, PetscInt deg)
       PetscReal exact = (i == j) ? 1. : 0.;
 
       for (k = 0; k < npoints; k++) integral += weights[k] * p[i * npoints + k] * p[j * npoints + k];
-      if (PetscAbsReal(integral - exact) > PETSC_SMALL) SETERRQ5(PETSC_COMM_SELF, PETSC_ERR_PLIB, "<P[%D], P[%D]> = %g != delta_{%D,%D}", i, j, (double) integral, i, j);
+      PetscCheckFalse(PetscAbsReal(integral - exact) > PETSC_SMALL,PETSC_COMM_SELF, PETSC_ERR_PLIB, "<P[%D], P[%D]> = %g != delta_{%D,%D}", i, j, (double) integral, i, j);
     }
   }
   ierr = PetscFree(p);CHKERRQ(ierr);
@@ -165,9 +165,8 @@ static PetscErrorCode testDerivativesLegendre(PetscInt dim, PetscInt deg, PetscI
     PetscReal scale = 1. + PetscAbsReal(lgndre_jet[i]) + PetscAbsReal(pkd_jet[i]);
     PetscReal tol = 10. * PETSC_SMALL * scale;
 
-    if (PetscAbsReal(diff) > tol) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Jet mismatch between PKD and tensor Legendre bases: error %g at tolerance %g\n", (double) diff, (double) tol);
+    PetscCheckFalse(PetscAbsReal(diff) > tol,PETSC_COMM_SELF, PETSC_ERR_PLIB, "Jet mismatch between PKD and tensor Legendre bases: error %g at tolerance %g", (double) diff, (double) tol);
   }
-
 
   ierr = PetscFree2(degtup,ktup);CHKERRQ(ierr);
   ierr = PetscFree(degrees);CHKERRQ(ierr);
@@ -193,7 +192,7 @@ int main(int argc, char **argv)
   ierr = PetscOptionsInt("-dim", "Dimension of the simplex","ex9.c",dim,&dim,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-degree", "The degree of the polynomial space","ex9.c",deg,&deg,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsInt("-k", "The number of derivatives to use in the taylor test","ex9.c",k,&k,NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
   ierr = testOrthogonality(dim, deg);CHKERRQ(ierr);
   ierr = testDerivativesLegendre(dim, deg, k);CHKERRQ(ierr);
   ierr = PetscFinalize();

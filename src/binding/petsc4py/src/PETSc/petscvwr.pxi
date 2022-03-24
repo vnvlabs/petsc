@@ -92,6 +92,9 @@ cdef extern from * nogil:
     int PetscViewerPushFormat(PetscViewer,PetscViewerFormat)
     int PetscViewerPopFormat(PetscViewer)
 
+    int PetscViewerGetSubViewer(PetscViewer,MPI_Comm,PetscViewer*)
+    int PetscViewerRestoreSubViewer(PetscViewer,MPI_Comm,PetscViewer*)
+
     int PetscViewerASCIISetTab(PetscViewer,PetscInt)
     int PetscViewerASCIIGetTab(PetscViewer,PetscInt*)
     int PetscViewerASCIIAddTab(PetscViewer,PetscInt)
@@ -113,6 +116,8 @@ cdef extern from * nogil:
     int PetscViewerDrawClear(PetscViewer)
     int PetscViewerDrawSetInfo(PetscViewer,char[],char[],int,int,int,int)
 
+    int PetscViewerHDF5PushTimestepping(PetscViewer)
+    int PetscViewerHDF5PopTimestepping(PetscViewer)
     int PetscViewerHDF5GetTimestep(PetscViewer,PetscInt*)
     int PetscViewerHDF5SetTimestep(PetscViewer,PetscInt)
     int PetscViewerHDF5IncrementTimestep(PetscViewer)

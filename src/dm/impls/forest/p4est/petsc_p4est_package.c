@@ -1,6 +1,5 @@
 #include <petscdmforest.h>
 #include <petsc/private/petscimpl.h>
-#include <p4est_base.h>
 #include "petsc_p4est_package.h"
 
 static const char*const SCLogTypes[] = {"DEFAULT","ALWAYS","TRACE","DEBUG","VERBOSE","INFO","STATISTICS","PRODUCTION","ESSENTIAL","ERROR","SILENT","SCLogTypes","SC_LP_", NULL};
@@ -88,7 +87,7 @@ PetscErrorCode PetscP4estInitialize(void)
     ierr         = PetscOptionsGetEnum(NULL,NULL,"-petsc_sc_log_threshold",SCLogTypes,(PetscEnum*)&log_threshold_shifted,&set);CHKERRQ(ierr);
     if (set) psc_log_threshold = log_threshold_shifted - 1;
     sc_init(PETSC_COMM_WORLD,(int)psc_catch_signals,(int)psc_print_backtrace,PetscScLogHandler,psc_log_threshold);
-    if (sc_package_id == -1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_LIB,"Could not initialize libsc package used by p4est");
+    PetscCheckFalse(sc_package_id == -1,PETSC_COMM_WORLD,PETSC_ERR_LIB,"Could not initialize libsc package used by p4est");
     sc_set_abort_handler(PetscScAbort);
   }
   if (p4est_package_id == -1) {
@@ -98,7 +97,7 @@ PetscErrorCode PetscP4estInitialize(void)
     ierr = PetscOptionsGetEnum(NULL,NULL,"-petsc_p4est_log_threshold",SCLogTypes,(PetscEnum*)&log_threshold_shifted,&set);CHKERRQ(ierr);
     if (set) pp4est_log_threshold = log_threshold_shifted - 1;
     PetscStackCallP4est(p4est_init,(PetscScLogHandler,pp4est_log_threshold));
-    if (p4est_package_id == -1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_LIB,"Could not initialize p4est");
+    PetscCheckFalse(p4est_package_id == -1,PETSC_COMM_WORLD,PETSC_ERR_LIB,"Could not initialize p4est");
   }
   ierr = DMForestRegisterType(DMP4EST);CHKERRQ(ierr);
   ierr = DMForestRegisterType(DMP8EST);CHKERRQ(ierr);

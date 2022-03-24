@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # This script builds the PETSc tar file distribution
 #
@@ -17,10 +17,9 @@
 #echo "(2) Set the version number and release date in petscversion.h?"
 #echo "(3) Made sure Fortran include files match C ones?"
 #echo "(4) Latest version of win32fe.exe is copied over into /sandbox/petsc/petsc-dist on login.mcs"
-#echo "(5) Update update-docs.py with additional docs on the petsc web page (for eg new changes file)"
-#echo "(6) Update version info on all petsc web pages"
-#echo "(7) tag the new release with git and make a new clone for the release"
-#echo "(8) got the users manual CLEARED by ANL publications for release"
+#echo "(5) Update version info on all petsc web pages"
+#echo "(6) tag the new release with git and make a new clone for the release"
+#echo "(7) got the users manual CLEARED by ANL publications for release"
 
 # If version specified on the commandline, set the version
 echo "Starting date: `date +'%a, %d %b %Y %H:%M:%S %z'`"
@@ -57,7 +56,7 @@ PETSC_DIR=`cd $petscrepo;pwd -P`; export PETSC_DIR
 
 # Clean and Update the git repository and check for branch
 cd $PETSC_DIR
-/bin/rm -rf $PETSC_DIR/$PETSC_ARCH
+/bin/rm -rf $PETSC_DIR/$PETSC_ARCH $PETSC_DIR/arch-classic-docs
 git clean -q -f -d -x
 git fetch -q origin
 git checkout -f origin/$branch
@@ -105,19 +104,27 @@ if [ ${version}foo = foo ]; then
 fi
 echo "Building ~/petsc$version.tar.gz and ~/petsc-with-docs$version.tar.gz"
 
-# create fortran stubdocs and cleanup
+# build docs
+VENV=$PETSC_DIR/arch-classic-docs/venv-petsc-docs
+python3 -m venv $VENV
+source $VENV/bin/activate
+cd $PETSC_DIR/doc
+python3 -m pip install -r requirements.txt
+make html BUILDDIR="../docs" SPHINXOPTS="-T -E"
+mv ../docs/html/* ../docs/html/.[!.]* ../docs
+make latexpdf && cp _build/latex/manual.pdf ../docs/html/docs/manual/
+rm -rf ../docs/doctrees
+make clean
+rm -rf images
+
+
+# petsc4py docs (and fortranstubs - hence --download-sowing below) and tarball
 cd $PETSC_DIR
-# we should have an option of running configure - without compilers/mpi/blas etc..
-python3 ./config/configure.py --with-mpi=0 --download-c2html=1 --download-sowing=1
-make allfortranstubs
-make sphinx-docs-check-python
-make alldoc LOC=${PETSC_DIR} DOCSETDATE_PRUNE_LIST="" GONULL=""
-# petsc4py docs and tarball
 export PETSC_ARCH=arch-pydoc
-python2 ./config/configure.py --with-mpi=0 --with-cxx=0 --with-fc=0
+python2 ./config/configure.py --with-mpi=0 --with-cxx=0 --download-sowing=1
 make all
 cd $PETSC_DIR/src/binding/petsc4py
-  make sdist PYTHON=python2 PYTHON2=python2
+  make sdist PYTHON=python2 PYTHON2=python2 SHELL=/bin/bash
   cp dist/*.gz ~/
   make srcclean
 cd $PETSC_DIR

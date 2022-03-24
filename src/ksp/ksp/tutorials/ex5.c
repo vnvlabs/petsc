@@ -12,8 +12,6 @@ also uses multiple profiling stages.  Input arguments are\n\
    Processors: n
 T*/
 
-
-
 /*
   Include "petscksp.h" so that we can use KSP solvers.  Note that this file
   automatically includes:
@@ -254,7 +252,7 @@ int main(int argc,char **args)
     PetscRandom    rctx;
 
     /* Scale a(0,0) and a(M-1,M-1) */
-    if (!rank) {
+    if (rank == 0) {
       v = 6.0*0.00001; Ii = 0; J = 0;
       ierr = MatSetValues(C,1,&Ii,1,&J,&v,INSERT_VALUES);CHKERRQ(ierr);
     } else if (rank == size -1) {
@@ -333,9 +331,6 @@ int main(int argc,char **args)
   ierr = PetscFinalize();
   return ierr;
 }
-
-
-
 
 /*TEST
 

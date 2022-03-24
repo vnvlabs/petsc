@@ -1,7 +1,8 @@
 #include <../src/vec/is/sf/impls/basic/sfpack.h>
-#include <hip/hip_runtime.h>
-#include <petschipblas.h> /* For CHKERRHIP */
+#include <petscpkg_version.h>
 
+/* compilation issues on SPOCK */
+#undef PETSC_HAVE_COMPLEX
 
 /* Map a thread id to an index in root/leaf space through a series of 3D subdomains. See PetscSFPackOpt. */
 __device__ static inline PetscInt MapTidToIndex(const PetscInt *opt,PetscInt tid)
@@ -21,6 +22,7 @@ __device__ static inline PetscInt MapTidToIndex(const PetscInt *opt,PetscInt tid
   k = m/(dx[r]*dy[r]);
   j = (m - k*dx[r]*dy[r])/dx[r];
   i = m - k*dx[r]*dy[r] - j*dx[r];
+
   return (start[r] + k*X[r]*Y[r] + j*X[r] + i);
 }
 
@@ -173,7 +175,9 @@ template<typename Type> struct Maxloc {
 
   See Cuda version
 */
+#if PETSC_PKG_HIP_VERSION_LT(4,4,0)
 __device__ static double atomicExch(double* address,double val) {return __longlong_as_double(atomicExch((ullint*)address,__double_as_longlong(val)));}
+#endif
 
 __device__ static llint atomicExch(llint* address,llint val) {return (llint)(atomicExch((ullint*)address,(ullint)val));}
 
@@ -284,23 +288,19 @@ __device__ static llint atomicMult(llint* address,llint val)
   ullint old = *address_as_ull, assumed;
   do {
     assumed = old;
-    old     = atomicCAS(address_as_ull, assumed, (ullint)(val*(PetscInt)assumed));
+    old     = atomicCAS(address_as_ull, assumed, (ullint)(val*(llint)assumed));
   } while (assumed != old);
-  return (PetscInt)old;
+  return (llint)old;
 }
 
 template<typename Type> struct AtomicMult {__device__ Type operator() (Type& x,Type y) const {return atomicMult(&x,y);}};
-
 
 /*
   Atomic Min/Max operations
 
   See CUDA version for comments.
  */
-
-
-
-
+#if PETSC_PKG_HIP_VERSION_LT(4,4,0)
 #if defined(PETSC_USE_REAL_DOUBLE)
 __device__ static double atomicMin(double* address, double val)
 {
@@ -346,6 +346,7 @@ __device__ static float atomicMax(float* address,float val)
   return __int_as_float(old);
 }
 #endif
+#endif
 
 /* As of ROCm 3.10 llint atomicMin/Max(llint*, llint) is not supported */
 __device__ static llint atomicMin(llint* address,llint val)
@@ -369,7 +370,6 @@ __device__ static llint atomicMax(llint* address,llint val)
   } while (assumed != old);
   return (llint)old;
 }
-
 
 template<typename Type> struct AtomicMin {__device__ Type operator() (Type& x,Type y) const {return atomicMin(&x,y);}};
 template<typename Type> struct AtomicMax {__device__ Type operator() (Type& x,Type y) const {return atomicMax(&x,y);}};
@@ -485,7 +485,7 @@ static PetscErrorCode Pack(PetscSFLink link,PetscInt count,PetscInt start,PetscS
 template<typename Type,class Op,PetscInt BS,PetscInt EQ>
 static PetscErrorCode UnpackAndOp(PetscSFLink link,PetscInt count,PetscInt start,PetscSFPackOpt opt,const PetscInt *idx,void *data,const void *buf)
 {
-  hipError_t        cerr;
+  hipError_t         cerr;
   PetscInt           nthreads=256;
   PetscInt           nblocks=(count+nthreads-1)/nthreads;
   const PetscInt     *iarray=opt ? opt->array : NULL;
@@ -501,15 +501,15 @@ static PetscErrorCode UnpackAndOp(PetscSFLink link,PetscInt count,PetscInt start
 template<typename Type,class Op,PetscInt BS,PetscInt EQ>
 static PetscErrorCode FetchAndOp(PetscSFLink link,PetscInt count,PetscInt start,PetscSFPackOpt opt,const PetscInt *idx,void *data,void *buf)
 {
-  hipError_t        cerr;
+  hipError_t         cerr;
   PetscInt           nthreads=256;
   PetscInt           nblocks=(count+nthreads-1)/nthreads;
-/*  const PetscInt     *iarray=opt ? opt->array : NULL; */
+  const PetscInt     *iarray=opt ? opt->array : NULL;
 
   PetscFunctionBegin;
   if (!count) PetscFunctionReturn(0);
   nblocks = PetscMin(nblocks,link->maxResidentThreadsPerGPU/nthreads);
-/*  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_FetchAndOp<Type,Op,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,start,iarray,idx,(Type*)data,(Type*)buf); */
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_FetchAndOp<Type,Op,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,start,iarray,idx,(Type*)data,(Type*)buf);
   cerr = hipGetLastError();CHKERRHIP(cerr);
   PetscFunctionReturn(0);
 }
@@ -517,7 +517,7 @@ static PetscErrorCode FetchAndOp(PetscSFLink link,PetscInt count,PetscInt start,
 template<typename Type,class Op,PetscInt BS,PetscInt EQ>
 static PetscErrorCode ScatterAndOp(PetscSFLink link,PetscInt count,PetscInt srcStart,PetscSFPackOpt srcOpt,const PetscInt *srcIdx,const void *src,PetscInt dstStart,PetscSFPackOpt dstOpt,const PetscInt *dstIdx,void *dst)
 {
-  hipError_t        cerr;
+  hipError_t         cerr;
   PetscInt           nthreads=256;
   PetscInt           nblocks=(count+nthreads-1)/nthreads;
   PetscInt           srcx=0,srcy=0,srcX=0,srcY=0,dstx=0,dsty=0,dstX=0,dstY=0;
@@ -533,7 +533,7 @@ static PetscErrorCode ScatterAndOp(PetscSFLink link,PetscInt count,PetscInt srcS
   if (dstOpt)       {dstx = dstOpt->dx[0]; dsty = dstOpt->dy[0]; dstX = dstOpt->X[0]; dstY = dstOpt->Y[0]; dstStart = dstOpt->start[0]; dstIdx = NULL;}
   else if (!dstIdx) {dstx = dstX = count; dsty = dstY = 1;}
 
-/*  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_ScatterAndOp<Type,Op,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,srcx,srcy,srcX,srcY,srcStart,srcIdx,(const Type*)src,dstx,dsty,dstX,dstY,dstStart,dstIdx,(Type*)dst); */
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(d_ScatterAndOp<Type,Op,BS,EQ>), dim3(nblocks), dim3(nthreads), 0, link->stream, link->bs,count,srcx,srcy,srcX,srcY,srcStart,srcIdx,(const Type*)src,dstx,dsty,dstX,dstY,dstStart,dstIdx,(Type*)dst);
   cerr = hipGetLastError();CHKERRHIP(cerr);
   PetscFunctionReturn(0);
 }
@@ -559,7 +559,7 @@ static PetscErrorCode ScatterAndInsert(PetscSFLink link,PetscInt count,PetscInt 
 template<typename Type,class Op,PetscInt BS,PetscInt EQ>
 static PetscErrorCode FetchAndOpLocal(PetscSFLink link,PetscInt count,PetscInt rootstart,PetscSFPackOpt rootopt,const PetscInt *rootidx,void *rootdata,PetscInt leafstart,PetscSFPackOpt leafopt,const PetscInt *leafidx,const void *leafdata,void *leafupdate)
 {
-  hipError_t       cerr;
+  hipError_t        cerr;
   PetscInt          nthreads=256;
   PetscInt          nblocks=(count+nthreads-1)/nthreads;
   const PetscInt    *rarray = rootopt ? rootopt->array : NULL;
@@ -615,7 +615,8 @@ static void PackInit_RealType(PetscSFLink link)
 /* Have this templated class to specialize for char integers */
 template<typename Type,PetscInt BS,PetscInt EQ,PetscInt size/*sizeof(Type)*/>
 struct PackInit_IntegerType_Atomic {
-  static void Init(PetscSFLink link) {
+  static void Init(PetscSFLink link)
+  {
     link->da_UnpackAndInsert  = UnpackAndOp<Type,AtomicInsert<Type>,BS,EQ>;
     link->da_UnpackAndAdd     = UnpackAndOp<Type,AtomicAdd<Type>   ,BS,EQ>;
     link->da_UnpackAndMult    = UnpackAndOp<Type,AtomicMult<Type>  ,BS,EQ>;
@@ -769,24 +770,23 @@ static PetscErrorCode PetscSFLinkMemcpy_HIP(PetscSFLink link,PetscMemType dstmty
   PetscFunctionReturn(0);
 }
 
-PETSC_EXTERN PetscErrorCode PetscSFMalloc_HIP(PetscMemType mtype,size_t size,void** ptr)
+PetscErrorCode PetscSFMalloc_HIP(PetscMemType mtype,size_t size,void** ptr)
 {
   PetscFunctionBegin;
   if (PetscMemTypeHost(mtype)) {PetscErrorCode ierr = PetscMalloc(size,ptr);CHKERRQ(ierr);}
   else if (PetscMemTypeDevice(mtype)) {
-    if (!PetscHIPInitialized) { PetscErrorCode ierr = PetscHIPInitializeCheck();CHKERRQ(ierr); }
-    hipError_t err = hipMalloc(ptr,size);CHKERRHIP(err);
-  }
-  else SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Wrong PetscMemType %d", (int)mtype);
+    PetscErrorCode ierr = PetscDeviceInitialize(PETSC_DEVICE_HIP);CHKERRQ(ierr);
+    hipError_t     err  = hipMalloc(ptr,size);CHKERRHIP(err);
+  } else SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Wrong PetscMemType %d", (int)mtype);
   PetscFunctionReturn(0);
 }
 
-PETSC_EXTERN PetscErrorCode PetscSFFree_HIP(PetscMemType mtype,void* ptr)
+PetscErrorCode PetscSFFree_HIP(PetscMemType mtype,void* ptr)
 {
   PetscFunctionBegin;
   if (PetscMemTypeHost(mtype)) {PetscErrorCode ierr = PetscFree(ptr);CHKERRQ(ierr);}
   else if (PetscMemTypeDevice(mtype)) {hipError_t err = hipFree(ptr);CHKERRHIP(err);}
-  else SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Wrong PetscMemType %d",(int)mtype);
+  else SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"Wrong PetscMemType %d",(int)mtype);
   PetscFunctionReturn(0);
 }
 
@@ -808,7 +808,7 @@ static PetscErrorCode PetscSFLinkDestroy_MPI_HIP(PetscSF sf,PetscSFLink link)
 /*====================================================================================*/
 
 /* Some fields of link are initialized by PetscSFPackSetUp_Host. This routine only does what needed on device */
-PETSC_INTERN PetscErrorCode PetscSFLinkSetUp_HIP(PetscSF sf,PetscSFLink link,MPI_Datatype unit)
+PetscErrorCode PetscSFLinkSetUp_HIP(PetscSF sf,PetscSFLink link,MPI_Datatype unit)
 {
   PetscErrorCode ierr;
   hipError_t     cerr;
@@ -837,51 +837,75 @@ PETSC_INTERN PetscErrorCode PetscSFLinkSetUp_HIP(PetscSF sf,PetscSFLink link,MPI
   } else if (is2PetscInt) { /* TODO: when is2PetscInt and nPetscInt=2, we don't know which path to take. The two paths support different ops. */
     PackInit_PairType<PairPetscInt>(link);
   } else if (nPetscReal) {
+   #if !defined(PETSC_HAVE_DEVICE)
     if      (nPetscReal == 8) PackInit_RealType<PetscReal,8,1>(link); else if (nPetscReal%8 == 0) PackInit_RealType<PetscReal,8,0>(link);
     else if (nPetscReal == 4) PackInit_RealType<PetscReal,4,1>(link); else if (nPetscReal%4 == 0) PackInit_RealType<PetscReal,4,0>(link);
     else if (nPetscReal == 2) PackInit_RealType<PetscReal,2,1>(link); else if (nPetscReal%2 == 0) PackInit_RealType<PetscReal,2,0>(link);
-    else if (nPetscReal == 1) PackInit_RealType<PetscReal,1,1>(link); else if (nPetscReal%1 == 0) PackInit_RealType<PetscReal,1,0>(link);
+    else if (nPetscReal == 1) PackInit_RealType<PetscReal,1,1>(link); else if (nPetscReal%1 == 0)
+   #endif
+    PackInit_RealType<PetscReal,1,0>(link);
   } else if (nPetscInt && sizeof(PetscInt) == sizeof(llint)) {
+   #if !defined(PETSC_HAVE_DEVICE)
     if      (nPetscInt == 8) PackInit_IntegerType<llint,8,1>(link); else if (nPetscInt%8 == 0) PackInit_IntegerType<llint,8,0>(link);
     else if (nPetscInt == 4) PackInit_IntegerType<llint,4,1>(link); else if (nPetscInt%4 == 0) PackInit_IntegerType<llint,4,0>(link);
     else if (nPetscInt == 2) PackInit_IntegerType<llint,2,1>(link); else if (nPetscInt%2 == 0) PackInit_IntegerType<llint,2,0>(link);
-    else if (nPetscInt == 1) PackInit_IntegerType<llint,1,1>(link); else if (nPetscInt%1 == 0) PackInit_IntegerType<llint,1,0>(link);
+    else if (nPetscInt == 1) PackInit_IntegerType<llint,1,1>(link); else if (nPetscInt%1 == 0)
+   #endif
+    PackInit_IntegerType<llint,1,0>(link);
   } else if (nInt) {
+   #if !defined(PETSC_HAVE_DEVICE)
     if      (nInt == 8) PackInit_IntegerType<int,8,1>(link); else if (nInt%8 == 0) PackInit_IntegerType<int,8,0>(link);
     else if (nInt == 4) PackInit_IntegerType<int,4,1>(link); else if (nInt%4 == 0) PackInit_IntegerType<int,4,0>(link);
     else if (nInt == 2) PackInit_IntegerType<int,2,1>(link); else if (nInt%2 == 0) PackInit_IntegerType<int,2,0>(link);
-    else if (nInt == 1) PackInit_IntegerType<int,1,1>(link); else if (nInt%1 == 0) PackInit_IntegerType<int,1,0>(link);
+    else if (nInt == 1) PackInit_IntegerType<int,1,1>(link); else if (nInt%1 == 0)
+   #endif
+    PackInit_IntegerType<int,1,0>(link);
   } else if (nSignedChar) {
+   #if !defined(PETSC_HAVE_DEVICE)
     if      (nSignedChar == 8) PackInit_IntegerType<SignedChar,8,1>(link); else if (nSignedChar%8 == 0) PackInit_IntegerType<SignedChar,8,0>(link);
     else if (nSignedChar == 4) PackInit_IntegerType<SignedChar,4,1>(link); else if (nSignedChar%4 == 0) PackInit_IntegerType<SignedChar,4,0>(link);
     else if (nSignedChar == 2) PackInit_IntegerType<SignedChar,2,1>(link); else if (nSignedChar%2 == 0) PackInit_IntegerType<SignedChar,2,0>(link);
-    else if (nSignedChar == 1) PackInit_IntegerType<SignedChar,1,1>(link); else if (nSignedChar%1 == 0) PackInit_IntegerType<SignedChar,1,0>(link);
+    else if (nSignedChar == 1) PackInit_IntegerType<SignedChar,1,1>(link); else if (nSignedChar%1 == 0)
+   #endif
+    PackInit_IntegerType<SignedChar,1,0>(link);
   }  else if (nUnsignedChar) {
+   #if !defined(PETSC_HAVE_DEVICE)
     if      (nUnsignedChar == 8) PackInit_IntegerType<UnsignedChar,8,1>(link); else if (nUnsignedChar%8 == 0) PackInit_IntegerType<UnsignedChar,8,0>(link);
     else if (nUnsignedChar == 4) PackInit_IntegerType<UnsignedChar,4,1>(link); else if (nUnsignedChar%4 == 0) PackInit_IntegerType<UnsignedChar,4,0>(link);
     else if (nUnsignedChar == 2) PackInit_IntegerType<UnsignedChar,2,1>(link); else if (nUnsignedChar%2 == 0) PackInit_IntegerType<UnsignedChar,2,0>(link);
-    else if (nUnsignedChar == 1) PackInit_IntegerType<UnsignedChar,1,1>(link); else if (nUnsignedChar%1 == 0) PackInit_IntegerType<UnsignedChar,1,0>(link);
+    else if (nUnsignedChar == 1) PackInit_IntegerType<UnsignedChar,1,1>(link); else if (nUnsignedChar%1 == 0)
+   #endif
+    PackInit_IntegerType<UnsignedChar,1,0>(link);
 #if defined(PETSC_HAVE_COMPLEX)
   } else if (nPetscComplex) {
+   #if !defined(PETSC_HAVE_DEVICE)
     if      (nPetscComplex == 8) PackInit_ComplexType<PetscComplex,8,1>(link); else if (nPetscComplex%8 == 0) PackInit_ComplexType<PetscComplex,8,0>(link);
     else if (nPetscComplex == 4) PackInit_ComplexType<PetscComplex,4,1>(link); else if (nPetscComplex%4 == 0) PackInit_ComplexType<PetscComplex,4,0>(link);
     else if (nPetscComplex == 2) PackInit_ComplexType<PetscComplex,2,1>(link); else if (nPetscComplex%2 == 0) PackInit_ComplexType<PetscComplex,2,0>(link);
-    else if (nPetscComplex == 1) PackInit_ComplexType<PetscComplex,1,1>(link); else if (nPetscComplex%1 == 0) PackInit_ComplexType<PetscComplex,1,0>(link);
+    else if (nPetscComplex == 1) PackInit_ComplexType<PetscComplex,1,1>(link); else if (nPetscComplex%1 == 0)
+   #endif
+    PackInit_ComplexType<PetscComplex,1,0>(link);
 #endif
   } else {
     MPI_Aint lb,nbyte;
     ierr = MPI_Type_get_extent(unit,&lb,&nbyte);CHKERRMPI(ierr);
-    if (lb != 0) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"Datatype with nonzero lower bound %ld\n",(long)lb);
+    PetscCheckFalse(lb != 0,PETSC_COMM_SELF,PETSC_ERR_SUP,"Datatype with nonzero lower bound %ld",(long)lb);
     if (nbyte % sizeof(int)) { /* If the type size is not multiple of int */
+     #if !defined(PETSC_HAVE_DEVICE)
       if      (nbyte == 4) PackInit_DumbType<char,4,1>(link); else if (nbyte%4 == 0) PackInit_DumbType<char,4,0>(link);
       else if (nbyte == 2) PackInit_DumbType<char,2,1>(link); else if (nbyte%2 == 0) PackInit_DumbType<char,2,0>(link);
-      else if (nbyte == 1) PackInit_DumbType<char,1,1>(link); else if (nbyte%1 == 0) PackInit_DumbType<char,1,0>(link);
+      else if (nbyte == 1) PackInit_DumbType<char,1,1>(link); else if (nbyte%1 == 0)
+     #endif
+      PackInit_DumbType<char,1,0>(link);
     } else {
       nInt = nbyte / sizeof(int);
+     #if !defined(PETSC_HAVE_DEVICE)
       if      (nInt == 8) PackInit_DumbType<int,8,1>(link); else if (nInt%8 == 0) PackInit_DumbType<int,8,0>(link);
       else if (nInt == 4) PackInit_DumbType<int,4,1>(link); else if (nInt%4 == 0) PackInit_DumbType<int,4,0>(link);
       else if (nInt == 2) PackInit_DumbType<int,2,1>(link); else if (nInt%2 == 0) PackInit_DumbType<int,2,0>(link);
-      else if (nInt == 1) PackInit_DumbType<int,1,1>(link); else if (nInt%1 == 0) PackInit_DumbType<int,1,0>(link);
+      else if (nInt == 1) PackInit_DumbType<int,1,1>(link); else if (nInt%1 == 0)
+     #endif
+      PackInit_DumbType<int,1,0>(link);
     }
   }
 

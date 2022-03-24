@@ -90,7 +90,7 @@ static PetscErrorCode  MatMFFDSetType_MFFD(Mat mat,MatMFFDType ftype)
   }
 
   ierr =  PetscFunctionListFind(MatMFFDList,ftype,&r);CHKERRQ(ierr);
-  if (!r) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_UNKNOWN_TYPE,"Unknown MatMFFD type %s given",ftype);
+  PetscCheckFalse(!r,PETSC_COMM_SELF,PETSC_ERR_ARG_UNKNOWN_TYPE,"Unknown MatMFFD type %s given",ftype);
   ierr = (*r)(ctx);CHKERRQ(ierr);
   ierr = PetscObjectChangeTypeName((PetscObject)ctx,ftype);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -330,7 +330,7 @@ static PetscErrorCode MatMult_MFFD(Mat mat,Vec a,Vec y)
 
   PetscFunctionBegin;
   ierr = MatShellGetContext(mat,&ctx);CHKERRQ(ierr);
-  if (!ctx->current_u) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_WRONGSTATE,"MatMFFDSetBase() has not been called, this is often caused by forgetting to call \n\t\tMatAssemblyBegin/End on the first Mat in the SNES compute function");
+  PetscCheckFalse(!ctx->current_u,PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_WRONGSTATE,"MatMFFDSetBase() has not been called, this is often caused by forgetting to call \n\t\tMatAssemblyBegin/End on the first Mat in the SNES compute function");
   /* We log matrix-free matrix-vector products separately, so that we can
      separate the performance monitoring from the cases that use conventional
      storage.  We may eventually modify event logging to associate events
@@ -353,7 +353,7 @@ static PetscErrorCode MatMult_MFFD(Mat mat,Vec a,Vec y)
     PetscFunctionReturn(0);
   }
 
-  if (mat->erroriffailure && PetscIsInfOrNanScalar(h)) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Computed Nan differencing parameter h");
+  PetscCheckFalse(mat->erroriffailure && PetscIsInfOrNanScalar(h),PETSC_COMM_SELF,PETSC_ERR_PLIB,"Computed Nan differencing parameter h");
   if (ctx->checkh) {
     ierr = (*ctx->checkh)(ctx->checkhctx,U,a,&h);CHKERRQ(ierr);
   }
@@ -361,9 +361,9 @@ static PetscErrorCode MatMult_MFFD(Mat mat,Vec a,Vec y)
   /* keep a record of the current differencing parameter h */
   ctx->currenth = h;
 #if defined(PETSC_USE_COMPLEX)
-  ierr = PetscInfo2(mat,"Current differencing parameter: %g + %g i\n",(double)PetscRealPart(h),(double)PetscImaginaryPart(h));CHKERRQ(ierr);
+  ierr = PetscInfo(mat,"Current differencing parameter: %g + %g i\n",(double)PetscRealPart(h),(double)PetscImaginaryPart(h));CHKERRQ(ierr);
 #else
-  ierr = PetscInfo1(mat,"Current differencing parameter: %15.12e\n",h);CHKERRQ(ierr);
+  ierr = PetscInfo(mat,"Current differencing parameter: %15.12e\n",(double)PetscRealPart(h));CHKERRQ(ierr);
 #endif
   if (ctx->historyh && ctx->ncurrenth < ctx->maxcurrenth) {
     ctx->historyh[ctx->ncurrenth] = h;
@@ -419,8 +419,8 @@ PetscErrorCode MatGetDiagonal_MFFD(Mat mat,Vec a)
 
   PetscFunctionBegin;
   ierr = MatShellGetContext(mat,&ctx);CHKERRQ(ierr);
-  if (!ctx->func) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Requires calling MatMFFDSetFunction() first");
-  if (!ctx->funci) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Requires calling MatMFFDSetFunctioni() first");
+  PetscCheckFalse(!ctx->func,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Requires calling MatMFFDSetFunction() first");
+  PetscCheckFalse(!ctx->funci,PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Requires calling MatMFFDSetFunctioni() first");
   w    = ctx->w;
   U    = ctx->current_u;
   ierr = (*ctx->func)(ctx->funcctx,U,a);CHKERRQ(ierr);
@@ -473,7 +473,6 @@ PETSC_EXTERN PetscErrorCode MatMFFDSetBase_MFFD(Mat J,Vec U,Vec F)
     ctx->current_f_allocated = PETSC_FALSE;
   } else if (!ctx->current_f_allocated) {
     ierr = MatCreateVecs(J,NULL,&ctx->current_f);CHKERRQ(ierr);
-
     ctx->current_f_allocated = PETSC_TRUE;
   }
   if (!ctx->w) {
@@ -503,7 +502,7 @@ static PetscErrorCode  MatMFFDSetCheckh_MFFD(Mat J,FCN3 fun,void *ectx)
 
    Collective on Mat
 
-   Input Parameter:
+   Input Parameters:
 +  A - the Mat context
 -  prefix - the prefix to prepend to all option names
 
@@ -537,9 +536,9 @@ static PetscErrorCode  MatSetFromOptions_MFFD(PetscOptionItems *PetscOptionsObje
   char           ftype[256];
 
   PetscFunctionBegin;
-  PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
+  PetscValidHeaderSpecific(mat,MAT_CLASSID,2);
   ierr = MatShellGetContext(mat,&mfctx);CHKERRQ(ierr);
-  PetscValidHeaderSpecific(mfctx,MATMFFD_CLASSID,1);
+  PetscValidHeaderSpecific(mfctx,MATMFFD_CLASSID,2);
   ierr = PetscObjectOptionsBegin((PetscObject)mfctx);CHKERRQ(ierr);
   ierr = PetscOptionsFList("-mat_mffd_type","Matrix free type","MatMFFDSetType",MatMFFDList,((PetscObject)mfctx)->type_name,ftype,256,&flg);CHKERRQ(ierr);
   if (flg) {
@@ -698,7 +697,6 @@ PETSC_EXTERN PetscErrorCode MatCreate_MFFD(Mat A)
 .  M - number of global rows (or PETSC_DETERMINE to have calculated if m is given)
 -  N - number of global columns (or PETSC_DETERMINE to have calculated if n is given)
 
-
    Output Parameter:
 .  J - the matrix-free matrix
 
@@ -709,7 +707,6 @@ PETSC_EXTERN PetscErrorCode MatCreate_MFFD(Mat A)
 .  -mat_mffd_check_positivity - possibly decrease h until U + h*a has only positive values
 -  -mat_mffd_complex - use the Lyness trick with complex numbers to compute the matrix-vector product instead of differencing
                        (requires real valued functions but that PETSc be configured for complex numbers)
-
 
    Level: advanced
 
@@ -741,7 +738,7 @@ PETSC_EXTERN PetscErrorCode MatCreate_MFFD(Mat A)
    Options Database Keys:
 +  -mat_mffd_err <error_rel> - Sets error_rel
 .  -mat_mffd_unim <umin> - Sets umin (for default PETSc routine that computes h only)
--  -mat_mffd_check_positivity
+-  -mat_mffd_check_positivity - check positivity
 
 .seealso: MatDestroy(), MatMFFDSetFunctionError(), MatMFFDDSSetUmin(), MatMFFDSetFunction()
           MatMFFDSetHHistory(), MatMFFDResetHHistory(), MatCreateSNESMF(),
@@ -871,7 +868,6 @@ PetscErrorCode  MatMFFDSetFunctioni(Mat mat,PetscErrorCode (*funci)(void*,PetscI
     matrix inside your compute Jacobian routine.
     This function is necessary to compute the diagonal of the matrix.
 
-
 .seealso: MatCreateSNESMF(),MatMFFDGetH(), MatCreateMFFD(), MATMFFD
           MatMFFDSetHHistory(), MatMFFDResetHHistory(), SNESetFunction(), MatGetDiagonal()
 @*/
@@ -895,10 +891,9 @@ PetscErrorCode  MatMFFDSetFunctioniBase(Mat mat,PetscErrorCode (*func)(void*,Vec
 -  period - 1 for everytime, 2 for every second etc
 
    Options Database Keys:
-.  -mat_mffd_period <period>
+.  -mat_mffd_period <period> - Sets how often h is recomputed
 
    Level: advanced
-
 
 .seealso: MatCreateSNESMF(),MatMFFDGetH(),
           MatMFFDSetHHistory(), MatMFFDResetHHistory()
@@ -960,7 +955,7 @@ PetscErrorCode  MatMFFDSetFunctionError(Mat mat,PetscReal error)
 
    Input Parameters:
 +  J - the matrix-free matrix context
-.  histroy - space to hold the history
+.  history - space to hold the history
 -  nhistory - number of entries in history, if more entries are generated than
               nhistory, then the later ones are discarded
 
@@ -1058,7 +1053,7 @@ PetscErrorCode  MatMFFDSetBase(Mat J,Vec U,Vec F)
 -   ctx - any context needed by the function
 
     Options Database Keys:
-.   -mat_mffd_check_positivity
+.   -mat_mffd_check_positivity <bool> - Insure that U + h*a is non-negative
 
     Level: advanced
 
@@ -1094,7 +1089,7 @@ PetscErrorCode  MatMFFDSetCheckh(Mat J,PetscErrorCode (*fun)(void*,Vec,Vec,Petsc
 -   dummy - context variable (unused)
 
     Options Database Keys:
-.   -mat_mffd_check_positivity
+.   -mat_mffd_check_positivity <bool> - Insure that U + h*a is nonnegative
 
     Level: advanced
 
@@ -1131,7 +1126,7 @@ PetscErrorCode  MatMFFDCheckPositivity(void *dummy,Vec U,Vec a,PetscScalar *h)
   ierr = VecRestoreArray(a,&a_vec);CHKERRQ(ierr);
   ierr = MPIU_Allreduce(&minval,&val,1,MPIU_REAL,MPIU_MIN,comm);CHKERRMPI(ierr);
   if (val <= PetscAbsScalar(*h)) {
-    ierr = PetscInfo2(U,"Scaling back h from %g to %g\n",(double)PetscRealPart(*h),(double)(.99*val));CHKERRQ(ierr);
+    ierr = PetscInfo(U,"Scaling back h from %g to %g\n",(double)PetscRealPart(*h),(double)(.99*val));CHKERRQ(ierr);
     if (PetscRealPart(*h) > 0.0) *h =  0.99*val;
     else                         *h = -0.99*val;
   }

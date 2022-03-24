@@ -61,7 +61,8 @@ PetscErrorCode PetscConvEstSetFromOptions(PetscConvEst ce)
   ierr = PetscOptionsInt("-convest_num_refine", "The number of refinements for the convergence check", "PetscConvEst", ce->Nr, &ce->Nr, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsReal("-convest_refine_factor", "The increase in resolution in each dimension", "PetscConvEst", ce->r, &ce->r, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-convest_monitor", "Monitor the error for each convergence check", "PetscConvEst", ce->monitor, &ce->monitor, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsBool("-convest_no_refine", "Debugging flag to run on the same mesh each time", "PetscConvEst", ce->noRefine, &ce->noRefine, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -180,7 +181,7 @@ PetscErrorCode PetscConvEstSetUp(PetscConvEst ce)
     if (fieldIS) {ierr = ISRestoreIndices(fieldIS, &fields);CHKERRQ(ierr);}
   }
   for (f = 0; f < Nf; ++f) {
-    if (!ce->exactSol[f]) SETERRQ1(PetscObjectComm((PetscObject) ce), PETSC_ERR_ARG_WRONG, "DS must contain exact solution functions in order to estimate convergence, missing for field %D", f);
+    PetscCheckFalse(!ce->exactSol[f],PetscObjectComm((PetscObject) ce), PETSC_ERR_ARG_WRONG, "DS must contain exact solution functions in order to estimate convergence, missing for field %D", f);
   }
   PetscFunctionReturn(0);
 }
@@ -215,7 +216,7 @@ PetscErrorCode PetscConvEstComputeError(PetscConvEst ce, PetscInt r, DM dm, Vec 
 
   Collective on PetscConvEst
 
-  Input Parameter:
+  Input Parameters:
 + ce - The PetscConvEst object
 - r  - The refinement level
 
@@ -266,7 +267,7 @@ static PetscErrorCode PetscConvEstSetSNES_Private(PetscConvEst ce, PetscObject s
 
   PetscFunctionBegin;
   ierr = PetscObjectGetClassId(ce->solver, &id);CHKERRQ(ierr);
-  if (id != SNES_CLASSID) SETERRQ(PetscObjectComm((PetscObject) ce), PETSC_ERR_ARG_WRONG, "Solver was not a SNES");
+  PetscCheckFalse(id != SNES_CLASSID,PetscObjectComm((PetscObject) ce), PETSC_ERR_ARG_WRONG, "Solver was not a SNES");
   ierr = SNESGetDM((SNES) ce->solver, &ce->idm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -327,7 +328,7 @@ static PetscErrorCode PetscConvEstGetConvRateSNES_Private(PetscConvEst ce, Petsc
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (ce->r != 2.0) SETERRQ1(PetscObjectComm((PetscObject) ce), PETSC_ERR_SUP, "Only refinement factor 2 is currently supported (not %g)", (double) ce->r);
+  PetscCheckFalse(ce->r != 2.0,PetscObjectComm((PetscObject) ce), PETSC_ERR_SUP, "Only refinement factor 2 is currently supported (not %g)", (double) ce->r);
   ierr = DMGetDimension(ce->idm, &dim);CHKERRQ(ierr);
   ierr = DMGetApplicationContext(ce->idm, &ctx);CHKERRQ(ierr);
   ierr = DMPlexSetRefinementUniform(ce->idm, PETSC_TRUE);CHKERRQ(ierr);
@@ -344,11 +345,24 @@ static PetscErrorCode PetscConvEstGetConvRateSNES_Private(PetscConvEst ce, Petsc
     const char   *dmname, *uname;
 
     ierr = PetscSNPrintf(stageName, PETSC_MAX_PATH_LEN-1, "ConvEst Refinement Level %D", r);CHKERRQ(ierr);
-    ierr = PetscLogStageRegister(stageName, &stage);CHKERRQ(ierr);
+#if defined(PETSC_USE_LOG)
+    ierr = PetscLogStageGetId(stageName, &stage);CHKERRQ(ierr);
+    if (stage < 0) {ierr = PetscLogStageRegister(stageName, &stage);CHKERRQ(ierr);}
+#endif
     ierr = PetscLogStagePush(stage);CHKERRQ(ierr);
     if (r > 0) {
-      ierr = DMRefine(dm[r-1], MPI_COMM_NULL, &dm[r]);CHKERRQ(ierr);
-      ierr = DMSetCoarseDM(dm[r], dm[r-1]);CHKERRQ(ierr);
+      if (!ce->noRefine) {
+        ierr = DMRefine(dm[r-1], MPI_COMM_NULL, &dm[r]);CHKERRQ(ierr);
+        ierr = DMSetCoarseDM(dm[r], dm[r-1]);CHKERRQ(ierr);
+      } else {
+        DM cdm, rcdm;
+
+        ierr = DMClone(dm[r-1], &dm[r]);CHKERRQ(ierr);
+        ierr = DMCopyDisc(dm[r-1], dm[r]);CHKERRQ(ierr);
+        ierr = DMGetCoordinateDM(dm[r-1], &cdm);CHKERRQ(ierr);
+        ierr = DMGetCoordinateDM(dm[r],   &rcdm);CHKERRQ(ierr);
+        ierr = DMCopyDisc(cdm, rcdm);CHKERRQ(ierr);
+      }
       ierr = DMCopyTransform(ce->idm, dm[r]);CHKERRQ(ierr);
       ierr = PetscObjectGetName((PetscObject) dm[r-1], &dmname);CHKERRQ(ierr);
       ierr = PetscObjectSetName((PetscObject) dm[r], dmname);CHKERRQ(ierr);
@@ -460,8 +474,8 @@ We solve a series of problems using increasing resolution (refined meshes or dec
 based upon the exact solution in the DS, and then fit the result to our model above using linear regression.
 
   Options database keys:
-+ -snes_convergence_estimate : Execute convergence estimation inside SNESSolve() and print out the rate
-- -ts_convergence_estimate : Execute convergence estimation inside TSSolve() and print out the rate
++ -snes_convergence_estimate - Execute convergence estimation inside SNESSolve() and print out the rate
+- -ts_convergence_estimate - Execute convergence estimation inside TSSolve() and print out the rate
 
   Level: intermediate
 

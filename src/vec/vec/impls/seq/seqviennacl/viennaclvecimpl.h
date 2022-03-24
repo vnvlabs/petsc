@@ -3,6 +3,7 @@
 
 #include <petscviennacl.h>
 #include <petsc/private/vecimpl.h>
+#include <petsc/private/deviceimpl.h>
 
 #include <algorithm>
 #include <vector>
@@ -59,7 +60,5 @@ struct Vec_ViennaCL {
   viennacl::vector<PetscScalar> *GPUarray;           // this always holds the GPU data
   viennacl::vector<PetscScalar> *GPUarray_allocated; // if the array was allocated by PETSc this is its pointer
 };
-
-
 
 #endif

@@ -1,6 +1,8 @@
-============================================
-Downloading, Configuring, and Building PETSc
-============================================
+.. _doc_install:
+
+=============================================
+Installation: Configuring, and Building PETSc
+=============================================
 
 Information and tutorials on setting up a PETSc installation.
 
@@ -8,7 +10,6 @@ Information and tutorials on setting up a PETSc installation.
    :maxdepth: 2
 
    install_tutorial
-   download
    install
    windows
    multibuild

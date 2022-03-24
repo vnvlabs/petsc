@@ -2,36 +2,50 @@ static char help[] = "Tests MATHTOOL\n\n";
 
 #include <petscmat.h>
 
-static PetscScalar GenEntry(PetscInt sdim,PetscInt i,PetscInt j,void *ctx)
+static PetscErrorCode GenEntries(PetscInt sdim,PetscInt M,PetscInt N,const PetscInt *J,const PetscInt *K,PetscScalar *ptr,void *ctx)
 {
-  PetscInt  d;
+  PetscInt  d,j,k;
   PetscReal diff = 0.0,*coords = (PetscReal*)(ctx);
 
   PetscFunctionBeginUser;
-  for (d = 0; d < sdim; d++) { diff += (coords[i*sdim+d] - coords[j*sdim+d]) * (coords[i*sdim+d] - coords[j*sdim+d]); }
-  PetscFunctionReturn(1.0/(1.0e-2 + PetscSqrtReal(diff)));
+  for (j = 0; j < M; j++) {
+    for (k = 0; k < N; k++) {
+      diff = 0.0;
+      for (d = 0; d < sdim; d++) diff += (coords[J[j]*sdim+d] - coords[K[k]*sdim+d]) * (coords[J[j]*sdim+d] - coords[K[k]*sdim+d]);
+      ptr[j+M*k] = 1.0/(1.0e-2 + PetscSqrtReal(diff));
+    }
+  }
+  PetscFunctionReturn(0);
 }
 
-static PetscScalar GenEntryRectangular(PetscInt sdim,PetscInt i,PetscInt j,void *ctx)
+static PetscErrorCode GenEntriesRectangular(PetscInt sdim,PetscInt M,PetscInt N,const PetscInt *J,const PetscInt *K,PetscScalar *ptr,void *ctx)
 {
-  PetscInt  d;
+  PetscInt  d,j,k;
   PetscReal diff = 0.0,**coords = (PetscReal**)(ctx);
 
   PetscFunctionBeginUser;
-  for (d = 0; d < sdim; d++) { diff += (coords[0][i*sdim+d] - coords[1][j*sdim+d]) * (coords[0][i*sdim+d] - coords[1][j*sdim+d]); }
-  PetscFunctionReturn(1.0/(1.0e-2 + PetscSqrtReal(diff)));
+  for (j = 0; j < M; j++) {
+    for (k = 0; k < N; k++) {
+      diff = 0.0;
+      for (d = 0; d < sdim; d++) diff += (coords[0][J[j]*sdim+d] - coords[1][K[k]*sdim+d]) * (coords[0][J[j]*sdim+d] - coords[1][K[k]*sdim+d]);
+      ptr[j+M*k] = 1.0/(1.0e-2 + PetscSqrtReal(diff));
+    }
+  }
+  PetscFunctionReturn(0);
 }
 
 int main(int argc,char **argv)
 {
   Mat            A,AT,D,B,P,R,RT;
-  PetscInt       m = 100,dim = 3,M,K = 10,begin,n = 0,N;
+  PetscInt       m = 100,dim = 3,M,K = 10,begin,n = 0,N,bs;
   PetscMPIInt    size;
   PetscScalar    *ptr;
   PetscReal      *coords,*gcoords,*scoords,*gscoords,*(ctx[2]),norm,epsilon;
-  MatHtoolKernel kernel = GenEntry;
+  MatHtoolKernel kernel = GenEntries;
   PetscBool      flg,sym = PETSC_FALSE;
   PetscRandom    rdm;
+  IS             iss,ist,is[2];
+  Vec            right,left,perm;
   PetscErrorCode ierr;
 
   ierr = PetscInitialize(&argc,&argv,(char*)NULL,help);if (ierr) return ierr;
@@ -61,6 +75,38 @@ int main(int argc,char **argv)
   ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatViewFromOptions(A,NULL,"-A_view");CHKERRQ(ierr);
+  ierr = MatGetOwnershipIS(A,is,NULL);CHKERRQ(ierr);
+  ierr = ISDuplicate(is[0],is+1);CHKERRQ(ierr);
+  ierr = MatIncreaseOverlap(A,1,is,2);CHKERRQ(ierr);
+  ierr = MatSetBlockSize(A,2);CHKERRQ(ierr);
+  ierr = MatIncreaseOverlap(A,1,is+1,1);CHKERRQ(ierr);
+  ierr = ISGetBlockSize(is[1],&bs);CHKERRQ(ierr);
+  PetscCheckFalse(bs != 2,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Incorrect block size %" PetscInt_FMT " != 2",bs);
+  ierr = MatSetBlockSize(A,1);CHKERRQ(ierr);
+  ierr = ISEqual(is[0],is[1],&flg);CHKERRQ(ierr);
+  PetscCheckFalse(!flg,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Unequal index sets");
+  ierr = ISDestroy(is);CHKERRQ(ierr);
+  ierr = ISDestroy(is+1);CHKERRQ(ierr);
+  ierr = MatCreateVecs(A,&right,&left);CHKERRQ(ierr);
+  ierr = VecSetRandom(right,rdm);CHKERRQ(ierr);
+  ierr = MatMult(A,right,left);CHKERRQ(ierr);
+  ierr = MatHtoolGetPermutationSource(A,&iss);CHKERRQ(ierr);
+  ierr = MatHtoolGetPermutationTarget(A,&ist);CHKERRQ(ierr);
+  ierr = VecDuplicate(left,&perm);CHKERRQ(ierr);
+  ierr = VecCopy(left,perm);CHKERRQ(ierr);
+  ierr = VecPermute(perm,ist,PETSC_FALSE);CHKERRQ(ierr);
+  ierr = VecPermute(right,iss,PETSC_FALSE);CHKERRQ(ierr);
+  ierr = MatHtoolUsePermutation(A,PETSC_FALSE);CHKERRQ(ierr);
+  ierr = MatMult(A,right,left);CHKERRQ(ierr);
+  ierr = VecAXPY(left,-1.0,perm);CHKERRQ(ierr);
+  ierr = VecNorm(left,NORM_INFINITY,&norm);CHKERRQ(ierr);
+  PetscCheckFalse(PetscAbsReal(norm) > PETSC_SMALL,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"||y(with permutation)-y(without permutation)|| = %g (> %g)",(double)PetscAbsReal(norm),(double)PETSC_SMALL);
+  ierr = MatHtoolUsePermutation(A,PETSC_TRUE);CHKERRQ(ierr);
+  ierr = VecDestroy(&perm);CHKERRQ(ierr);
+  ierr = VecDestroy(&left);CHKERRQ(ierr);
+  ierr = VecDestroy(&right);CHKERRQ(ierr);
+  ierr = ISDestroy(&ist);CHKERRQ(ierr);
+  ierr = ISDestroy(&iss);CHKERRQ(ierr);
   if (PetscAbsReal(epsilon) >= PETSC_SMALL) { /* when there is compression, it is more difficult to check against MATDENSE, so just compare symmetric and nonsymmetric assemblies */
     PetscReal relative;
     ierr = MatDestroy(&B);CHKERRQ(ierr);
@@ -75,7 +121,7 @@ int main(int argc,char **argv)
     ierr = MatConvert(B,MATDENSE,MAT_INITIAL_MATRIX,&R);CHKERRQ(ierr);
     ierr = MatAXPY(R,-1.0,P,SAME_NONZERO_PATTERN);CHKERRQ(ierr);
     ierr = MatNorm(R,NORM_INFINITY,&norm);CHKERRQ(ierr);
-    if (PetscAbsReal(norm/relative) > epsilon) SETERRQ2(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"||A(!symmetric)-A(symmetric)|| = %g (> %g)",(double)PetscAbsReal(norm/relative),(double)epsilon);
+    PetscCheckFalse(PetscAbsReal(norm/relative) > epsilon,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"||A(!symmetric)-A(symmetric)|| = %g (> %g)",(double)PetscAbsReal(norm/relative),(double)epsilon);
     ierr = MatDestroy(&B);CHKERRQ(ierr);
     ierr = MatDestroy(&R);CHKERRQ(ierr);
     ierr = MatDestroy(&P);CHKERRQ(ierr);
@@ -83,33 +129,37 @@ int main(int argc,char **argv)
     ierr = MatConvert(A,MATDENSE,MAT_INITIAL_MATRIX,&D);CHKERRQ(ierr);
     ierr = MatViewFromOptions(D,NULL,"-D_view");CHKERRQ(ierr);
     ierr = MatMultEqual(A,D,10,&flg);CHKERRQ(ierr);
-    if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"Ax != Dx");
+    PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"Ax != Dx");
+    ierr = MatMultTransposeEqual(A,D,10,&flg);CHKERRQ(ierr);
+    PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"A^Tx != D^Tx");
     ierr = MatMultAddEqual(A,D,10,&flg);CHKERRQ(ierr);
-    if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"y+Ax != y+Dx");
+    PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"y+Ax != y+Dx");
     ierr = MatGetOwnershipRange(B,&begin,NULL);CHKERRQ(ierr);
     ierr = MatDenseGetArrayWrite(D,&ptr);CHKERRQ(ierr);
-    for (PetscInt i = 0; i < m; ++i)
-        for (PetscInt j = 0; j < M; ++j) ptr[i + j*m] = GenEntry(dim,begin+i,j,gcoords);
+    for (PetscInt i = begin; i < m+begin; ++i)
+      for (PetscInt j = 0; j < M; ++j) GenEntries(dim,1,1,&i,&j,ptr+i-begin+j*m,gcoords);
     ierr = MatDenseRestoreArrayWrite(D,&ptr);CHKERRQ(ierr);
     ierr = MatMultEqual(A,D,10,&flg);CHKERRQ(ierr);
-    if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"Ax != Dx");
+    PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"Ax != Dx");
     ierr = MatTranspose(D,MAT_INPLACE_MATRIX,&D);CHKERRQ(ierr);
     ierr = MatTranspose(A,MAT_INITIAL_MATRIX,&AT);CHKERRQ(ierr);
     ierr = MatMultEqual(AT,D,10,&flg);CHKERRQ(ierr);
-    if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"A^Tx != D^Tx");
+    PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"A^Tx != D^Tx");
     ierr = MatTranspose(A,MAT_REUSE_MATRIX,&AT);CHKERRQ(ierr);
     ierr = MatMultEqual(AT,D,10,&flg);CHKERRQ(ierr);
-    if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"A^Tx != D^Tx");
+    PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"A^Tx != D^Tx");
     ierr = MatAXPY(D,-1.0,AT,SAME_NONZERO_PATTERN);CHKERRQ(ierr);
     ierr = MatNorm(D,NORM_INFINITY,&norm);CHKERRQ(ierr);
-    if (PetscAbsReal(norm) > PETSC_SMALL) SETERRQ2(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"||A-D|| = %g (> %g)",(double)norm,(double)PETSC_SMALL);
+    PetscCheckFalse(PetscAbsReal(norm) > PETSC_SMALL,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"||A-D|| = %g (> %g)",(double)norm,(double)PETSC_SMALL);
     ierr = MatDestroy(&AT);CHKERRQ(ierr);
     ierr = MatDestroy(&D);CHKERRQ(ierr);
     ierr = MatMatMult(A,B,MAT_INITIAL_MATRIX,PETSC_DEFAULT,&P);CHKERRQ(ierr);
     ierr = MatAssemblyBegin(P,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
     ierr = MatAssemblyEnd(P,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
     ierr = MatMatMultEqual(A,B,P,10,&flg);CHKERRQ(ierr);
-    if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"ABx != Px");
+    PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"ABx != Px");
+    ierr = MatTransposeMatMultEqual(A,B,P,10,&flg);CHKERRQ(ierr);
+    PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"A^TBx != P^Tx");
     ierr = MatDestroy(&B);CHKERRQ(ierr);
     ierr = MatDestroy(&P);CHKERRQ(ierr);
     if (n) {
@@ -121,7 +171,7 @@ int main(int argc,char **argv)
       ierr = MPI_Exscan(&n,&begin,1,MPIU_INT,MPI_SUM,PETSC_COMM_WORLD);CHKERRMPI(ierr);
       ierr = PetscArraycpy(gscoords+begin*dim,scoords,n*dim);CHKERRQ(ierr);
       ierr = MPIU_Allreduce(MPI_IN_PLACE,gscoords,N*dim,MPIU_REAL,MPI_SUM,PETSC_COMM_WORLD);CHKERRMPI(ierr);
-      kernel = GenEntryRectangular;
+      kernel = GenEntriesRectangular;
       ctx[0] = gcoords;
       ctx[1] = gscoords;
       ierr = MatCreateHtoolFromKernel(PETSC_COMM_WORLD,m,n,M,N,dim,coords,scoords,kernel,ctx,&R);CHKERRQ(ierr);
@@ -132,14 +182,14 @@ int main(int argc,char **argv)
       ierr = MatConvert(R,MATDENSE,MAT_INITIAL_MATRIX,&D);CHKERRQ(ierr);
       ierr = MatViewFromOptions(D,NULL,"-D_view");CHKERRQ(ierr);
       ierr = MatMultEqual(R,D,10,&flg);CHKERRQ(ierr);
-      if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"Rx != Dx");
+      PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"Rx != Dx");
       ierr = MatTranspose(D,MAT_INPLACE_MATRIX,&D);CHKERRQ(ierr);
       ierr = MatTranspose(R,MAT_INITIAL_MATRIX,&RT);CHKERRQ(ierr);
       ierr = MatMultEqual(RT,D,10,&flg);CHKERRQ(ierr);
-      if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"R^Tx != D^Tx");
+      PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"R^Tx != D^Tx");
       ierr = MatTranspose(R,MAT_REUSE_MATRIX,&RT);CHKERRQ(ierr);
       ierr = MatMultEqual(RT,D,10,&flg);CHKERRQ(ierr);
-      if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"R^Tx != D^Tx");
+      PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"R^Tx != D^Tx");
       ierr = MatDestroy(&RT);CHKERRQ(ierr);
       ierr = MatDestroy(&D);CHKERRQ(ierr);
       ierr = MatCreateDense(PETSC_COMM_WORLD,n,PETSC_DECIDE,PETSC_DETERMINE,K,NULL,&B);CHKERRQ(ierr);
@@ -150,9 +200,29 @@ int main(int argc,char **argv)
       ierr = MatAssemblyBegin(P,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
       ierr = MatAssemblyEnd(P,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
       ierr = MatMatMultEqual(R,B,P,10,&flg);CHKERRQ(ierr);
-      if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"RBx != Px");
+      PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"RBx != Px");
       ierr = MatDestroy(&B);CHKERRQ(ierr);
       ierr = MatDestroy(&P);CHKERRQ(ierr);
+      ierr = MatCreateVecs(R,&right,&left);CHKERRQ(ierr);
+      ierr = VecSetRandom(right,rdm);CHKERRQ(ierr);
+      ierr = MatMult(R,right,left);CHKERRQ(ierr);
+      ierr = MatHtoolGetPermutationSource(R,&iss);CHKERRQ(ierr);
+      ierr = MatHtoolGetPermutationTarget(R,&ist);CHKERRQ(ierr);
+      ierr = VecDuplicate(left,&perm);CHKERRQ(ierr);
+      ierr = VecCopy(left,perm);CHKERRQ(ierr);
+      ierr = VecPermute(perm,ist,PETSC_FALSE);CHKERRQ(ierr);
+      ierr = VecPermute(right,iss,PETSC_FALSE);CHKERRQ(ierr);
+      ierr = MatHtoolUsePermutation(R,PETSC_FALSE);CHKERRQ(ierr);
+      ierr = MatMult(R,right,left);CHKERRQ(ierr);
+      ierr = VecAXPY(left,-1.0,perm);CHKERRQ(ierr);
+      ierr = VecNorm(left,NORM_INFINITY,&norm);CHKERRQ(ierr);
+      PetscCheckFalse(PetscAbsReal(norm) > PETSC_SMALL,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"||y(with permutation)-y(without permutation)|| = %g (> %g)",(double)PetscAbsReal(norm),(double)PETSC_SMALL);
+      ierr = MatHtoolUsePermutation(R,PETSC_TRUE);CHKERRQ(ierr);
+      ierr = VecDestroy(&perm);CHKERRQ(ierr);
+      ierr = VecDestroy(&left);CHKERRQ(ierr);
+      ierr = VecDestroy(&right);CHKERRQ(ierr);
+      ierr = ISDestroy(&ist);CHKERRQ(ierr);
+      ierr = ISDestroy(&iss);CHKERRQ(ierr);
       ierr = MatDestroy(&R);CHKERRQ(ierr);
       ierr = PetscFree(gscoords);CHKERRQ(ierr);
       ierr = PetscFree(scoords);CHKERRQ(ierr);
@@ -182,7 +252,7 @@ int main(int argc,char **argv)
       requires: htool
       suffix: 2
       nsize: 4
-      args: -m_local 120 -mat_htool_epsilon 1.0e-2 -mat_htool_compressor {{sympartialACA fullACA SVD}shared output}
+      args: -m_local 120 -mat_htool_epsilon 1.0e-2 -mat_htool_compressor {{sympartialACA fullACA SVD}shared output} -mat_htool_clustering {{PCARegular PCAGeometric BoundingBox1Regular BoundingBox1Geometric}shared output}
       output_file: output/ex101.out
 
 TEST*/

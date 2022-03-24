@@ -133,7 +133,7 @@ PetscErrorCode StubFunction(SNES snes ,Vec x,Vec r,void *ctx)
   ierr = VecAXPY(rk,-1.0,r);CHKERRQ(ierr);
   ierr = VecNorm(rk,NORM_2,&norm);CHKERRQ(ierr);
   ierr = DMRestoreGlobalVector(da,&rk);CHKERRQ(ierr);
-  if (norm > 1e-6) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"KokkosFunction() different from CpuFunction() with a diff norm = %g\n",norm);
+  PetscCheckFalse(norm > 1e-6,PETSC_COMM_SELF,PETSC_ERR_PLIB,"KokkosFunction() different from CpuFunction() with a diff norm = %g",norm);
   PetscFunctionReturn(0);
 }
 /* ------------------------------------------------------------------- */
@@ -227,7 +227,6 @@ int main(int argc,char **argv)
   PetscInt                    its,N = 5,maxit,maxf;
   PetscReal                   abstol,rtol,stol,norm;
   PetscBool                   viewinitial = PETSC_FALSE;
-  PetscScalarKokkosOffsetView FF,UU;
 
   ierr  = PetscInitialize(&argc,&argv,(char*)0,help);if (ierr) return ierr;
   ierr  = PetscOptionsGetInt(NULL,NULL,"-n",&N,NULL);CHKERRQ(ierr);
@@ -266,7 +265,7 @@ int main(int argc,char **argv)
         context that provides application-specific data for the
         function evaluation routine.
 
-     At the begining, one can use a stub function that checks the Kokkos version
+     At the beginning, one can use a stub function that checks the Kokkos version
      against the CPU version to quickly expose errors.
      ierr = SNESSetFunction(snes,r,StubFunction,&ctx);CHKERRQ(ierr);
   */
@@ -294,15 +293,18 @@ int main(int argc,char **argv)
      Initialize application:
      Store forcing function of PDE and exact solution
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-  ierr = DMDAVecGetKokkosOffsetViewWrite(ctx.da,F,&FF);CHKERRQ(ierr);
-  ierr = DMDAVecGetKokkosOffsetViewWrite(ctx.da,U,&UU);CHKERRQ(ierr);
-  Kokkos:: parallel_for (Kokkos::RangePolicy<>(FF.begin(0),FF.end(0)),KOKKOS_LAMBDA (int i) {
-    PetscReal xp = i*ctx.h;
-    FF(i) = 6.0*xp + pow(xp+1.e-12,6.0); /* +1.e-12 is to prevent 0^6 */
-    UU(i) = xp*xp*xp;
-  });
-  ierr = DMDAVecRestoreKokkosOffsetViewWrite(ctx.da,F,&FF);CHKERRQ(ierr);
-  ierr = DMDAVecRestoreKokkosOffsetViewWrite(ctx.da,U,&UU);CHKERRQ(ierr);
+  {
+    PetscScalarKokkosOffsetView FF,UU;
+    ierr = DMDAVecGetKokkosOffsetViewWrite(ctx.da,F,&FF);CHKERRQ(ierr);
+    ierr = DMDAVecGetKokkosOffsetViewWrite(ctx.da,U,&UU);CHKERRQ(ierr);
+    Kokkos:: parallel_for (Kokkos::RangePolicy<>(FF.begin(0),FF.end(0)),KOKKOS_LAMBDA (int i) {
+      PetscReal xp = i*ctx.h;
+      FF(i) = 6.0*xp + pow(xp+1.e-12,6.0); /* +1.e-12 is to prevent 0^6 */
+      UU(i) = xp*xp*xp;
+    });
+    ierr = DMDAVecRestoreKokkosOffsetViewWrite(ctx.da,F,&FF);CHKERRQ(ierr);
+    ierr = DMDAVecRestoreKokkosOffsetViewWrite(ctx.da,U,&UU);CHKERRQ(ierr);
+  }
 
   if (viewinitial) {
     ierr = VecView(U,NULL);CHKERRQ(ierr);
@@ -355,7 +357,7 @@ int main(int argc,char **argv)
      requires: kokkos_kernels
 
    test:
-     requires: kokkos_kernels !complex !single cuda
+     requires: kokkos_kernels !complex !single
      nsize: 2
      args: -dm_vec_type kokkos -dm_mat_type aijkokkos -view_initial -snes_monitor
      output_file: output/ex3k_1.out

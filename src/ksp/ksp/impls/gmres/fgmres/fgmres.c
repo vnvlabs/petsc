@@ -86,11 +86,9 @@ static PetscErrorCode KSPFGMRESResidual(KSP ksp)
 .        itcount - number of iterations used.  If null, ignored.
 .        converged - 0 if not converged
 
-
     Notes:
     On entry, the value in vector VEC_VV(0) should be
     the initial residual.
-
 
  */
 PetscErrorCode KSPFGMRESCycle(PetscInt *itcount,KSP ksp)
@@ -160,7 +158,6 @@ PetscErrorCode KSPFGMRESCycle(PetscInt *itcount,KSP ksp)
        change the PC or its attributes before its applied */
     (*fgmres->modifypc)(ksp,ksp->its,loc_it,res_norm,fgmres->modifyctx);
 
-
     /* apply PRECONDITIONER to direction vector and store with
        preconditioned vectors in prevec */
     ierr = KSP_PCApply(ksp,VEC_VV(loc_it),PREVEC(loc_it));CHKERRQ(ierr);
@@ -169,13 +166,13 @@ PetscErrorCode KSPFGMRESCycle(PetscInt *itcount,KSP ksp)
     /* Multiply preconditioned vector by operator - put in VEC_VV(loc_it+1) */
     ierr = KSP_MatMult(ksp,Amat,PREVEC(loc_it),VEC_VV(1+loc_it));CHKERRQ(ierr);
 
-
     /* update hessenberg matrix and do Gram-Schmidt - new direction is in
        VEC_VV(1+loc_it)*/
     ierr = (*fgmres->orthog)(ksp,loc_it);CHKERRQ(ierr);
 
     /* new entry in hessenburg is the 2-norm of our new direction */
     ierr = VecNorm(VEC_VV(loc_it+1),NORM_2,&tt);CHKERRQ(ierr);
+    KSPCheckNorm(ksp,tt);
 
     *HH(loc_it+1,loc_it)  = tt;
     *HES(loc_it+1,loc_it) = tt;
@@ -200,7 +197,6 @@ PetscErrorCode KSPFGMRESCycle(PetscInt *itcount,KSP ksp)
        nonsingular (in GMRES, the nonsingularity of A implies the nonsingularity
        of HES). So we should really add a check to verify that HES is nonsingular.*/
 
-
     /* Now apply rotations to new col of hessenberg (and right side of system),
        calculate new rotation, and get new residual norm at the same time*/
     ierr = KSPFGMRESUpdateHessenberg(ksp,loc_it,hapend,&res_norm);CHKERRQ(ierr);
@@ -219,7 +215,7 @@ PetscErrorCode KSPFGMRESCycle(PetscInt *itcount,KSP ksp)
     /* Catch error in happy breakdown and signal convergence and break from loop */
     if (hapend) {
       if (!ksp->reason) {
-        if (ksp->errorifnotconverged) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"You reached the happy break down, but convergence was not indicated. Residual norm = %g",(double)res_norm);
+        PetscCheckFalse(ksp->errorifnotconverged,PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"You reached the happy break down, but convergence was not indicated. Residual norm = %g",(double)res_norm);
         else {
           ksp->reason = KSP_DIVERGED_BREAKDOWN;
           break;
@@ -255,7 +251,6 @@ PetscErrorCode KSPFGMRESCycle(PetscInt *itcount,KSP ksp)
 /*
     KSPSolve_FGMRES - This routine applies the FGMRES method.
 
-
    Input Parameter:
 .     ksp - the Krylov space object that was set to use fgmres
 
@@ -273,7 +268,7 @@ PetscErrorCode KSPSolve_FGMRES(KSP ksp)
 
   PetscFunctionBegin;
   ierr = PCGetDiagonalScale(ksp->pc,&diagonalscale);CHKERRQ(ierr);
-  if (diagonalscale) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(diagonalscale,PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
 
   ierr     = PetscObjectSAWsTakeAccess((PetscObject)ksp);CHKERRQ(ierr);
   ksp->its = 0;
@@ -285,6 +280,11 @@ PetscErrorCode KSPSolve_FGMRES(KSP ksp)
   } else { /* guess is 0 so residual is F (which is in ksp->vec_rhs) */
     ierr = VecCopy(ksp->vec_rhs,VEC_VV(0));CHKERRQ(ierr);
   }
+  /* This may be true only on a subset of MPI ranks; setting it here so it will be detected by the first norm computaion in the Krylov method */
+  if (ksp->reason == KSP_DIVERGED_PC_FAILED) {
+    ierr = VecSetInf(VEC_VV(0));CHKERRQ(ierr);
+  }
+
   /* now the residual is in VEC_VV(0) - which is what
      KSPFGMRESCycle expects... */
 
@@ -447,7 +447,7 @@ static PetscErrorCode KSPFGMRESUpdateHessenberg(KSP ksp,PetscInt it,PetscBool ha
     /* residual is the last element (it+1) of right-hand side! */
     *res = PetscAbsScalar(*RS(it+1));
 
-  } else { /* happy breakdown: HH(it+1, it) = 0, therfore we don't need to apply
+  } else { /* happy breakdown: HH(it+1, it) = 0, therefore we don't need to apply
             another rotation matrix (so RH doesn't change).  The new residual is
             always the new sine term times the residual from last time (RS(it)),
             but now the new sine rotation would be zero...so the residual should
@@ -576,7 +576,6 @@ static PetscErrorCode  KSPFGMRESSetModifyPC_FGMRES(KSP ksp,FCN1 fcn,void *ctx,FC
   PetscFunctionReturn(0);
 }
 
-
 PetscErrorCode KSPReset_FGMRES(KSP ksp)
 {
   KSP_FGMRES     *fgmres = (KSP_FGMRES*)ksp->data;
@@ -585,7 +584,7 @@ PetscErrorCode KSPReset_FGMRES(KSP ksp)
 
   PetscFunctionBegin;
   ierr = PetscFree (fgmres->prevecs);CHKERRQ(ierr);
-  if (fgmres->nwork_alloc>0){
+  if (fgmres->nwork_alloc>0) {
     i=0;
     /* In the first allocation we allocated VEC_OFFSET fewer vectors in prevecs */
     ierr = VecDestroyVecs(fgmres->mwork_alloc[i]-VEC_OFFSET,&fgmres->prevecs_user_work[i]);CHKERRQ(ierr);
@@ -607,7 +606,7 @@ PetscErrorCode  KSPGMRESSetRestart_FGMRES(KSP ksp,PetscInt max_k)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (max_k < 1) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Restart must be positive");
+  PetscCheckFalse(max_k < 1,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Restart must be positive");
   if (!ksp->setupstage) {
     gmres->max_k = max_k;
   } else if (gmres->max_k != max_k) {
@@ -631,7 +630,6 @@ PetscErrorCode  KSPGMRESGetRestart_FGMRES(KSP ksp,PetscInt *max_k)
 /*MC
      KSPFGMRES - Implements the Flexible Generalized Minimal Residual method.
                 developed by Saad with restart
-
 
    Options Database Keys:
 +   -ksp_gmres_restart <restart> - the number of Krylov directions to orthogonalize against
@@ -697,7 +695,6 @@ PETSC_EXTERN PetscErrorCode KSPCreate_FGMRES(KSP ksp)
   ierr = PetscObjectComposeFunction((PetscObject)ksp,"KSPFGMRESSetModifyPC_C",KSPFGMRESSetModifyPC_FGMRES);CHKERRQ(ierr);
   ierr = PetscObjectComposeFunction((PetscObject)ksp,"KSPGMRESSetCGSRefinementType_C",KSPGMRESSetCGSRefinementType_GMRES);CHKERRQ(ierr);
   ierr = PetscObjectComposeFunction((PetscObject)ksp,"KSPGMRESGetCGSRefinementType_C",KSPGMRESGetCGSRefinementType_GMRES);CHKERRQ(ierr);
-
 
   fgmres->haptol         = 1.0e-30;
   fgmres->q_preallocate  = 0;

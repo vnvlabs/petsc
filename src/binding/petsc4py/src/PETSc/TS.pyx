@@ -34,6 +34,7 @@ class TSType(object):
 class TSRKType(object):
     RK1FE = S_(TSRK1FE)
     RK2A  = S_(TSRK2A)
+    RK2B  = S_(TSRK2B)
     RK4   = S_(TSRK4)
     RK3BS = S_(TSRK3BS)
     RK3   = S_(TSRK3)
@@ -157,6 +158,10 @@ cdef class TS(Object):
         ts_type = str2bytes(ts_type, &cval)
         CHKERR( TSARKIMEXSetType(self.ts, cval) )
 
+    def setARKIMEXFullyImplicit(self, flag):
+        cdef PetscBool bval = asBool(flag)
+        CHKERR( TSARKIMEXSetFullyImplicit(self.ts, bval) )
+
     def getType(self):
         cdef PetscTSType cval = NULL
         CHKERR( TSGetType(self.ts, &cval) )
@@ -197,6 +202,11 @@ cdef class TS(Object):
         cdef const char *cval = NULL
         CHKERR( TSGetOptionsPrefix(self.ts, &cval) )
         return bytes2str(cval)
+
+    def appendOptionsPrefix(self, prefix):
+        cdef const char *cval = NULL
+        prefix = str2bytes(prefix, &cval)
+        CHKERR( TSAppendOptionsPrefix(self.ts, cval) )
 
     def setFromOptions(self):
         CHKERR( TSSetFromOptions(self.ts) )
@@ -623,9 +633,11 @@ cdef class TS(Object):
     def getMonitor(self):
         return self.get_attr('__monitor__')
 
-    def cancelMonitor(self):
+    def monitorCancel(self):
         self.set_attr('__monitor__', None)
         CHKERR( TSMonitorCancel(self.ts) )
+
+    cancelMonitor = monitorCancel
 
     def monitor(self, step, time, Vec u=None):
         cdef PetscInt  ival = asInt(step)
@@ -732,10 +744,28 @@ cdef class TS(Object):
         cdef PetscReal rval = asReal(t)
         CHKERR( TSInterpolate(self.ts, rval, u.vec) )
 
+    def setStepLimits(self, hmin, hmax):
+        cdef PetscTSAdapt tsadapt = NULL
+        cdef PetscReal hminr = toReal(hmin)
+        cdef PetscReal hmaxr = toReal(hmax)
+        TSGetAdapt(self.ts, &tsadapt)
+        CHKERR( TSAdaptSetStepLimits(tsadapt, hminr, hmaxr) )
+
+    def getStepLimits(self):
+        cdef PetscTSAdapt tsadapt = NULL
+        cdef PetscReal hminr = 0.
+        cdef PetscReal hmaxr = 0.
+        TSGetAdapt(self.ts, &tsadapt)
+        CHKERR( TSAdaptGetStepLimits(tsadapt, &hminr, &hmaxr) )
+        return (asReal(hminr), asReal(hmaxr))
+
     # --- Adjoint methods ---
 
     def setSaveTrajectory(self):
         CHKERR(TSSetSaveTrajectory(self.ts))
+
+    def removeTrajectory(self):
+        CHKERR(TSRemoveTrajectory(self.ts))
 
     def getCostIntegral(self):
         cdef Vec cost = Vec()
@@ -834,6 +864,8 @@ cdef class TS(Object):
     def adjointStep(self):
         CHKERR(TSAdjointStep(self.ts))
 
+    def adjointReset(self):
+        CHKERR(TSAdjointReset(self.ts))
 
     # --- Python ---
 

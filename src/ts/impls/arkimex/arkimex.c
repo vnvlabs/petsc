@@ -63,10 +63,10 @@ typedef struct {
      This method has one explicit stage and one implicit stage.
 
      Options Database:
-.      -ts_arkimex_type ars122
+.      -ts_arkimex_type ars122 - set arkimex type to ars122
 
      References:
-.   1. -  U. Ascher, S. Ruuth, R. J. Spiteri, Implicit explicit Runge Kutta methods for time dependent Partial Differential Equations. Appl. Numer. Math. 25, (1997).
+.    * -  U. Ascher, S. Ruuth, R. J. Spiteri, Implicit explicit Runge Kutta methods for time dependent Partial Differential Equations. Appl. Numer. Math. 25, (1997).
 
      Level: advanced
 
@@ -78,7 +78,7 @@ M*/
      This method has an explicit stage and one implicit stage, and has an A-stable implicit scheme. This method was provided by Emil Constantinescu.
 
      Options Database:
-.      -ts_arkimex_type a2
+.      -ts_arkimex_type a2 - set arkimex type to a2
 
      Level: advanced
 
@@ -90,10 +90,10 @@ M*/
      This method has two implicit stages, and L-stable implicit scheme.
 
      Options Database:
-.      -ts_arkimex_type l2
+.      -ts_arkimex_type l2 - set arkimex type to l2
 
     References:
-.   1. -  L. Pareschi, G. Russo, Implicit Explicit Runge Kutta schemes and applications to hyperbolic systems with relaxations. Journal of Scientific Computing Volume: 25, Issue: 1, October, 2005.
+.   * -  L. Pareschi, G. Russo, Implicit Explicit Runge Kutta schemes and applications to hyperbolic systems with relaxations. Journal of Scientific Computing Volume: 25, Issue: 1, October, 2005.
 
      Level: advanced
 
@@ -105,7 +105,7 @@ M*/
      This method is aimed at starting the integration of implicit DAEs when explicit first-stage ARK methods are used.
 
      Options Database:
-.      -ts_arkimex_type 1bee
+.      -ts_arkimex_type 1bee - set arkimex type to 1bee
 
      Level: advanced
 
@@ -117,7 +117,7 @@ M*/
      This method has one explicit stage and two implicit stages. The implicit part is the same as in TSARKIMEX2D and TSARKIMEX2E, but the explicit part has a larger stability region on the negative real axis. This method was provided by Emil Constantinescu.
 
      Options Database:
-.      -ts_arkimex_type 2c
+.      -ts_arkimex_type 2c - set arkimex type to 2c
 
      Level: advanced
 
@@ -129,7 +129,7 @@ M*/
      This method has one explicit stage and two implicit stages. The stability function is independent of the explicit part in the infinity limit of the implict component. This method was provided by Emil Constantinescu.
 
      Options Database:
-.      -ts_arkimex_type 2d
+.      -ts_arkimex_type 2d - set arkimex type to 2d
 
      Level: advanced
 
@@ -141,7 +141,7 @@ M*/
      This method has one explicit stage and two implicit stages. It is is an optimal method developed by Emil Constantinescu.
 
      Options Database:
-.      -ts_arkimex_type 2e
+.      -ts_arkimex_type 2e - set arkimex type to 2e
 
     Level: advanced
 
@@ -153,12 +153,12 @@ M*/
      This method has three implicit stages.
 
      References:
-.   1. -  L. Pareschi, G. Russo, Implicit Explicit Runge Kutta schemes and applications to hyperbolic systems with relaxations. Journal of Scientific Computing Volume: 25, Issue: 1, October, 2005.
+.    * -  L. Pareschi, G. Russo, Implicit Explicit Runge Kutta schemes and applications to hyperbolic systems with relaxations. Journal of Scientific Computing Volume: 25, Issue: 1, October, 2005.
 
      This method is referred to as SSP2-(3,3,2) in https://arxiv.org/abs/1110.4375
 
      Options Database:
-.      -ts_arkimex_type prssp2
+.      -ts_arkimex_type prssp2 - set arkimex type to prssp2
 
      Level: advanced
 
@@ -170,10 +170,10 @@ M*/
      This method has one explicit stage and three implicit stages.
 
      Options Database:
-.      -ts_arkimex_type 3
+.      -ts_arkimex_type 3 - set arkimex type to 3
 
      References:
-.   1. -  Kennedy and Carpenter 2003.
+.    * -  Kennedy and Carpenter 2003.
 
      Level: advanced
 
@@ -185,11 +185,11 @@ M*/
      This method has one explicit stage and four implicit stages.
 
      Options Database:
-.      -ts_arkimex_type ars443
+.      -ts_arkimex_type ars443 - set arkimex type to ars443
 
      References:
-+   1. -  U. Ascher, S. Ruuth, R. J. Spiteri, Implicit explicit Runge Kutta methods for time dependent Partial Differential Equations. Appl. Numer. Math. 25, (1997).
--   2. -  This method is referred to as ARS(4,4,3) in https://arxiv.org/abs/1110.4375
++    * -  U. Ascher, S. Ruuth, R. J. Spiteri, Implicit explicit Runge Kutta methods for time dependent Partial Differential Equations. Appl. Numer. Math. 25, (1997).
+-    * -  This method is referred to as ARS(4,4,3) in https://arxiv.org/abs/1110.4375
 
      Level: advanced
 
@@ -201,10 +201,10 @@ M*/
      This method has one explicit stage and four implicit stages.
 
      Options Database:
-.      -ts_arkimex_type bpr3
+.      -ts_arkimex_type bpr3 - set arkimex type to bpr3
 
      References:
- .    This method is referred to as ARK3 in https://arxiv.org/abs/1110.4375
+.    * - This method is referred to as ARK3 in https://arxiv.org/abs/1110.4375
 
      Level: advanced
 
@@ -216,10 +216,10 @@ M*/
      This method has one explicit stage and four implicit stages.
 
      Options Database:
-.      -ts_arkimex_type 4
+.      -ts_arkimex_type 4 - set arkimex type to4
 
      References:
-.     Kennedy and Carpenter 2003.
+.    * - Kennedy and Carpenter 2003.
 
      Level: advanced
 
@@ -231,10 +231,10 @@ M*/
      This method has one explicit stage and five implicit stages.
 
      Options Database:
-.      -ts_arkimex_type 5
+.      -ts_arkimex_type 5 - set arkimex type to 5
 
      References:
-.     Kennedy and Carpenter 2003.
+.    * - Kennedy and Carpenter 2003.
 
      Level: advanced
 
@@ -676,7 +676,7 @@ static PetscErrorCode TSEvaluateStep_ARKIMEX(TS ts,PetscInt order,Vec X,PetscBoo
   }
 unavailable:
   if (done) *done = PETSC_FALSE;
-  else SETERRQ3(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"ARKIMEX '%s' of order %D cannot evaluate step at order %D. Consider using -ts_adapt_type none or a different method that has an embedded estimate.",tab->name,tab->order,order);
+  else SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"ARKIMEX '%s' of order %D cannot evaluate step at order %D. Consider using -ts_adapt_type none or a different method that has an embedded estimate.",tab->name,tab->order,order);
   PetscFunctionReturn(0);
 }
 
@@ -701,7 +701,7 @@ static PetscErrorCode TSARKIMEXTestMassIdentity(TS ts,PetscBool *id)
     *id = PETSC_TRUE;
   } else {
     *id = PETSC_FALSE;
-    ierr = PetscInfo1((PetscObject)ts,"IFunction(Udot = random) - IFunction(Udot = 0) is not near Udot, %g, suspect mass matrix implied in IFunction() is not the identity as required\n",(double)norm);CHKERRQ(ierr);
+    ierr = PetscInfo((PetscObject)ts,"IFunction(Udot = random) - IFunction(Udot = 0) is not near Udot, %g, suspect mass matrix implied in IFunction() is not the identity as required\n",(double)norm);CHKERRQ(ierr);
   }
   ierr = VecDestroy(&Udot);CHKERRQ(ierr);
   ierr = VecDestroy(&Y1);CHKERRQ(ierr);
@@ -779,7 +779,7 @@ static PetscErrorCode TSStep_ARKIMEX(TS ts)
     if (PetscDefined(USE_DEBUG)) {
       PetscBool id = PETSC_FALSE;
       ierr = TSARKIMEXTestMassIdentity(ts,&id);CHKERRQ(ierr);
-      if (!id) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_INCOMP,"This scheme requires an identity mass matrix, however the TSIFunction you provide does not utilize an identity mass matrix");
+      PetscCheck(id,PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_INCOMP,"This scheme requires an identity mass matrix, however the TSIFunction you provide does not utilize an identity mass matrix");
     }
     ierr = TSClone(ts,&ts_start);CHKERRQ(ierr);
     ierr = TSSetSolution(ts_start,ts->vec_sol);CHKERRQ(ierr);
@@ -820,7 +820,7 @@ static PetscErrorCode TSStep_ARKIMEX(TS ts)
       ark->stage_time = t + h*ct[i];
       ierr = TSPreStage(ts,ark->stage_time);CHKERRQ(ierr);
       if (At[i*s+i] == 0) { /* This stage is explicit */
-        if (i!=0 && ts->equation_type >= TS_EQ_IMPLICIT) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Explicit stages other than the first one are not supported for implicit problems");
+        PetscCheck(i == 0 || ts->equation_type < TS_EQ_IMPLICIT,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Explicit stages other than the first one are not supported for implicit problems");
         ierr = VecCopy(ts->vec_sol,Y[i]);CHKERRQ(ierr);
         for (j=0; j<i; j++) w[j] = h*At[i*s+j];
         ierr = VecMAXPY(Y[i],i,w,YdotI);CHKERRQ(ierr);
@@ -857,7 +857,7 @@ static PetscErrorCode TSStep_ARKIMEX(TS ts)
       }
       if (ts->equation_type >= TS_EQ_IMPLICIT) {
         if (i==0 && tab->explicit_first_stage) {
-          if (!tab->stiffly_accurate) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSARKIMEX %s is not stiffly accurate and therefore explicit-first stage methods cannot be used if the equation is implicit because the slope cannot be evaluated",ark->tableau->name);
+          PetscCheck(tab->stiffly_accurate,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSARKIMEX %s is not stiffly accurate and therefore explicit-first stage methods cannot be used if the equation is implicit because the slope cannot be evaluated",ark->tableau->name);
           ierr = VecCopy(Ydot0,YdotI[0]);CHKERRQ(ierr);                                      /* YdotI = YdotI(tn-1) */
         } else {
           ierr = VecAXPBYPCZ(YdotI[i],-ark->scoeff/h,ark->scoeff/h,0,Z,Y[i]);CHKERRQ(ierr);  /* YdotI = shift*(X-Z) */
@@ -901,7 +901,7 @@ static PetscErrorCode TSStep_ARKIMEX(TS ts)
     ts->reject++; accept = PETSC_FALSE;
     if (!ts->reason && ++rejections > ts->max_reject && ts->max_reject >= 0) {
       ts->reason = TS_DIVERGED_STEP_REJECTED;
-      ierr = PetscInfo2(ts,"Step=%D, step rejections %D greater than current TS allowed, stopping solve\n",ts->steps,rejections);CHKERRQ(ierr);
+      ierr = PetscInfo(ts,"Step=%D, step rejections %D greater than current TS allowed, stopping solve\n",ts->steps,rejections);CHKERRQ(ierr);
     }
   }
   PetscFunctionReturn(0);
@@ -918,7 +918,7 @@ static PetscErrorCode TSInterpolate_ARKIMEX(TS ts,PetscReal itime,Vec X)
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
-  if (!Bt || !B) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSARKIMEX %s does not have an interpolation formula",ark->tableau->name);
+  PetscCheck(Bt && B,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSARKIMEX %s does not have an interpolation formula",ark->tableau->name);
   switch (ark->status) {
   case TS_STEP_INCOMPLETE:
   case TS_STEP_PENDING:
@@ -956,7 +956,7 @@ static PetscErrorCode TSExtrapolate_ARKIMEX(TS ts,PetscReal c,Vec X)
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
-  if (!Bt || !B) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSARKIMEX %s does not have an interpolation formula",ark->tableau->name);
+  PetscCheck(Bt && B,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"TSARKIMEX %s does not have an interpolation formula",ark->tableau->name);
   ierr = PetscCalloc2(s,&bt,s,&b);CHKERRQ(ierr);
   h = ts->time_step;
   h_prev = ts->ptime - ts->ptime_prev;
@@ -967,7 +967,7 @@ static PetscErrorCode TSExtrapolate_ARKIMEX(TS ts,PetscReal c,Vec X)
       b[i]  += h * B[i*pinterp+j] * tt;
     }
   }
-  if (!ark->Y_prev) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Stages from previous step have not been stored");
+  PetscCheck(ark->Y_prev,PetscObjectComm((PetscObject)ts),PETSC_ERR_SUP,"Stages from previous step have not been stored");
   ierr = VecCopy(ark->Y_prev[0],X);CHKERRQ(ierr);
   ierr = VecMAXPY(X,s,bt,ark->YdotI_prev);CHKERRQ(ierr);
   ierr = VecMAXPY(X,s,b,ark->YdotRHS_prev);CHKERRQ(ierr);
@@ -1026,7 +1026,6 @@ static PetscErrorCode TSARKIMEXGetVecs(TS ts,DM dm,Vec *Z,Vec *Ydot)
   }
   PetscFunctionReturn(0);
 }
-
 
 static PetscErrorCode TSARKIMEXRestoreVecs(TS ts,DM dm,Vec *Z,Vec *Ydot)
 {
@@ -1115,7 +1114,6 @@ static PetscErrorCode DMRestrictHook_TSARKIMEX(DM fine,Mat restrct,Vec rscale,Ma
   ierr = TSARKIMEXRestoreVecs(ts,coarse,&Z_c,NULL);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 static PetscErrorCode DMSubDomainHook_TSARKIMEX(DM dm,DM subdm,void *ctx)
 {
@@ -1259,12 +1257,12 @@ static PetscErrorCode TSLoad_ARKIMEX(TS ts,PetscViewer viewer)
 
   Logically collective
 
-  Input Parameter:
+  Input Parameters:
 +  ts - timestepping context
 -  arktype - type of ARK-IMEX scheme
 
   Options Database:
-.  -ts_arkimex_type <1bee,a2,l2,ars122,2c,2d,2e,prssp2,3,bpr3,ars443,4,5>
+.  -ts_arkimex_type <1bee,a2,l2,ars122,2c,2d,2e,prssp2,3,bpr3,ars443,4,5> - set ARK IMEX scheme type
 
   Level: intermediate
 
@@ -1312,7 +1310,7 @@ PetscErrorCode TSARKIMEXGetType(TS ts,TSARKIMEXType *arktype)
 
   Logically collective
 
-  Input Parameter:
+  Input Parameters:
 +  ts - timestepping context
 -  flg - PETSC_TRUE for fully implicit
 
@@ -1387,7 +1385,7 @@ static PetscErrorCode  TSARKIMEXSetType_ARKIMEX(TS ts,TSARKIMEXType arktype)
       PetscFunctionReturn(0);
     }
   }
-  SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_UNKNOWN_TYPE,"Could not find '%s'",arktype);
+  SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_UNKNOWN_TYPE,"Could not find '%s'",arktype);
 }
 
 static PetscErrorCode  TSARKIMEXSetFullyImplicit_ARKIMEX(TS ts,PetscBool flg)

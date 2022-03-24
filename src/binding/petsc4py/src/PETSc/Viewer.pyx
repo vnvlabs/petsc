@@ -227,6 +227,16 @@ cdef class Viewer(Object):
     def popFormat(self):
         CHKERR( PetscViewerPopFormat(self.vwr) )
 
+    def getSubViewer(self, comm = None):
+        cdef MPI_Comm ccomm = def_Comm(comm, PETSC_COMM_SELF)
+        cdef Viewer sub = Viewer()
+        CHKERR( PetscViewerGetSubViewer(self.vwr, ccomm, &sub.vwr) )
+        return sub
+
+    def restoreSubViewer(self, Viewer sub):
+        cdef MPI_Comm ccomm = def_Comm(sub.getComm(), PETSC_COMM_SELF)
+        CHKERR( PetscViewerRestoreSubViewer(self.vwr, ccomm, &sub.vwr) )
+
     @classmethod
     def STDOUT(cls, comm=None):
         cdef MPI_Comm ccomm = def_Comm(comm, PETSC_COMM_DEFAULT)
@@ -306,12 +316,12 @@ cdef class Viewer(Object):
     def printfASCII(self, msg):
         cdef const char *cmsg = NULL
         msg = str2bytes(msg, &cmsg)
-        CHKERR( PetscViewerASCIIPrintf(self.vwr, cmsg) )
+        CHKERR( PetscViewerASCIIPrintf(self.vwr, '%s', cmsg) )
 
     def printfASCIISynchronized(self, msg):
         cdef const char *cmsg = NULL
         msg = str2bytes(msg, &cmsg)
-        CHKERR( PetscViewerASCIISynchronizedPrintf(self.vwr, cmsg) )
+        CHKERR( PetscViewerASCIISynchronizedPrintf(self.vwr, '%s', cmsg) )
 
     # --- methods specific to file viewers ---
 
@@ -375,6 +385,12 @@ cdef class ViewerHDF5(Viewer):
         CHKERR( PetscViewerFileSetMode(self.vwr, cmode) )
         CHKERR( PetscViewerFileSetName(self.vwr, cname) )
         return self
+
+    def pushTimestepping(self):
+        CHKERR( PetscViewerHDF5PushTimestepping(self.vwr) )
+
+    def popTimestepping(self):
+        CHKERR( PetscViewerHDF5PopTimestepping(self.vwr) )
 
     def getTimestep(self):
         cdef PetscInt ctimestep = 0

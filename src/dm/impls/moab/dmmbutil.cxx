@@ -25,7 +25,6 @@ typedef struct {
 
 } DMMoabMeshGeneratorCtx;
 
-
 PetscInt DMMoab_SetTensorElementConnectivity_Private(DMMoabMeshGeneratorCtx& genCtx, PetscInt offset, PetscInt corner, std::vector<PetscInt>& subent_conn, moab::EntityHandle *connectivity)
 {
   switch (genCtx.dim) {
@@ -59,7 +58,6 @@ PetscInt DMMoab_SetTensorElementConnectivity_Private(DMMoabMeshGeneratorCtx& gen
   }
   return subent_conn.size();
 }
-
 
 PetscInt DMMoab_SetSimplexElementConnectivity_Private(DMMoabMeshGeneratorCtx& genCtx, PetscInt subelem, PetscInt offset, PetscInt corner, std::vector<PetscInt>& subent_conn, moab::EntityHandle *connectivity)
 {
@@ -182,7 +180,6 @@ PetscInt DMMoab_SetSimplexElementConnectivity_Private(DMMoabMeshGeneratorCtx& ge
   return subent_conn.size();
 }
 
-
 std::pair<PetscInt, PetscInt> DMMoab_SetElementConnectivity_Private(DMMoabMeshGeneratorCtx& genCtx, PetscInt offset, PetscInt corner, moab::EntityHandle *connectivity)
 {
   PetscInt vcount = 0;
@@ -203,7 +200,6 @@ std::pair<PetscInt, PetscInt> DMMoab_SetElementConnectivity_Private(DMMoabMeshGe
   }
   return std::pair<PetscInt, PetscInt>(vcount * subelem, subelem);
 }
-
 
 PetscErrorCode DMMoab_GenerateVertices_Private(moab::Interface *mbImpl, moab::ReadUtilIface *iface, DMMoabMeshGeneratorCtx& genCtx, PetscInt m, PetscInt n, PetscInt k,
     PetscInt a, PetscInt b, PetscInt c, moab::Tag& global_id_tag, moab::EntityHandle& startv, moab::Range& uverts)
@@ -233,7 +229,7 @@ PetscErrorCode DMMoab_GenerateVertices_Private(moab::Interface *mbImpl, moab::Re
   x = ( m * genCtx.A + a) * genCtx.q;
   y = ( n * genCtx.B + b) * genCtx.q;
   z = ( k * genCtx.C + c) * genCtx.q;
-  PetscInfo3(NULL, "Starting offset for coordinates := %d, %d, %d\n", x, y, z);
+  PetscInfo(NULL, "Starting offset for coordinates := %d, %d, %d\n", x, y, z);
   ix = 0;
   moab::Range verts(startv, startv + nnodes - 1);
   for (kk = 0; kk < (genCtx.dim > 2 ? genCtx.blockSizeVertexXYZ[2] : 1); kk++) {
@@ -243,7 +239,7 @@ PetscErrorCode DMMoab_GenerateVertices_Private(moab::Interface *mbImpl, moab::Re
         arrays[0][ix] = (x + ii) * genCtx.dx + genCtx.xyzbounds[0];
         arrays[1][ix] = (y + jj) * genCtx.dy + genCtx.xyzbounds[2];
         arrays[2][ix] = (z + kk) * genCtx.dz + genCtx.xyzbounds[4];
-        PetscInfo3(NULL, "Creating vertex with coordinates := %f, %f, %f\n", arrays[0][ix], arrays[1][ix], arrays[2][ix]);
+        PetscInfo(NULL, "Creating vertex with coordinates := %f, %f, %f\n", arrays[0][ix], arrays[1][ix], arrays[2][ix]);
 
         /* If we want to set some tags on the vertices -> use the following entity handle definition:
            moab::EntityHandle v = startv + ix;
@@ -365,7 +361,7 @@ PetscErrorCode DMMBUtil_InitializeOptions(DMMoabMeshGeneratorCtx& genCtx, PetscI
     if (rank < genCtx.remainder)    /* This process gets "fraction+1" elements */
       genCtx.fraction++;
 
-    PetscInfo3(NULL, "Fraction = %D, Remainder = %D, Cumulative fraction = %D\n", genCtx.fraction, genCtx.remainder, genCtx.cumfraction);
+    PetscInfo(NULL, "Fraction = %D, Remainder = %D, Cumulative fraction = %D\n", genCtx.fraction, genCtx.remainder, genCtx.cumfraction);
     switch (genCtx.dim) {
     case 1:
       genCtx.blockSizeElementXYZ[0] = genCtx.fraction;
@@ -470,20 +466,20 @@ PetscErrorCode DMMBUtil_InitializeOptions(DMMoabMeshGeneratorCtx& genCtx, PetscI
   }
 
   /* Lets check for some valid input */
-  if (genCtx.dim < 1 || genCtx.dim > 3) SETERRQ1(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid topological dimension specified: %d.\n", genCtx.dim);
-  if (genCtx.M * genCtx.N * genCtx.K != nprocs) SETERRQ4(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid [m, n, k] data: %d, %d, %d. Product must be equal to global size = %d.\n", genCtx.M, genCtx.N, genCtx.K, nprocs);
+  PetscCheckFalse(genCtx.dim < 1 || genCtx.dim > 3,PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid topological dimension specified: %d.", genCtx.dim);
+  PetscCheckFalse(genCtx.M * genCtx.N * genCtx.K != nprocs,PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid [m, n, k] data: %d, %d, %d. Product must be equal to global size = %d.", genCtx.M, genCtx.N, genCtx.K, nprocs);
   /* validate the bounds data */
-  if (genCtx.xyzbounds[0] >= genCtx.xyzbounds[1]) SETERRQ2(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "X-dim: Left boundary cannot be greater than right. [%G >= %G]\n", genCtx.xyzbounds[0], genCtx.xyzbounds[1]);
-  if (genCtx.dim > 1 && (genCtx.xyzbounds[2] >= genCtx.xyzbounds[3])) SETERRQ2(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Y-dim: Left boundary cannot be greater than right. [%G >= %G]\n", genCtx.xyzbounds[2], genCtx.xyzbounds[3]);
-  if (genCtx.dim > 2 && (genCtx.xyzbounds[4] >= genCtx.xyzbounds[5])) SETERRQ2(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Z-dim: Left boundary cannot be greater than right. [%G >= %G]\n", genCtx.xyzbounds[4], genCtx.xyzbounds[5]);
+  PetscCheckFalse(genCtx.xyzbounds[0] >= genCtx.xyzbounds[1],PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "X-dim: Left boundary cannot be greater than right. [%G >= %G]", genCtx.xyzbounds[0], genCtx.xyzbounds[1]);
+  PetscCheckFalse(genCtx.dim > 1 && (genCtx.xyzbounds[2] >= genCtx.xyzbounds[3]),PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Y-dim: Left boundary cannot be greater than right. [%G >= %G]", genCtx.xyzbounds[2], genCtx.xyzbounds[3]);
+  PetscCheckFalse(genCtx.dim > 2 && (genCtx.xyzbounds[4] >= genCtx.xyzbounds[5]),PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Z-dim: Left boundary cannot be greater than right. [%G >= %G]", genCtx.xyzbounds[4], genCtx.xyzbounds[5]);
 
-  PetscInfo3(NULL, "Local elements:= %d, %d, %d\n", genCtx.blockSizeElementXYZ[0], genCtx.blockSizeElementXYZ[1], genCtx.blockSizeElementXYZ[2]);
-  PetscInfo3(NULL, "Local vertices:= %d, %d, %d\n", genCtx.blockSizeVertexXYZ[0], genCtx.blockSizeVertexXYZ[1], genCtx.blockSizeVertexXYZ[2]);
-  PetscInfo3(NULL, "Local blocks/processors := %d, %d, %d\n", genCtx.A, genCtx.B, genCtx.C);
-  PetscInfo3(NULL, "Local processors := %d, %d, %d\n", genCtx.M, genCtx.N, genCtx.K);
-  PetscInfo3(NULL, "Local nexyz:= %d, %d, %d\n", genCtx.nex, genCtx.ney, genCtx.nez);
-  PetscInfo3(NULL, "Local delxyz:= %g, %g, %g\n", genCtx.dx, genCtx.dy, genCtx.dz);
-  PetscInfo3(NULL, "Local strides:= %d, %d, %d\n", genCtx.xstride, genCtx.ystride, genCtx.zstride);
+  PetscInfo(NULL, "Local elements:= %d, %d, %d\n", genCtx.blockSizeElementXYZ[0], genCtx.blockSizeElementXYZ[1], genCtx.blockSizeElementXYZ[2]);
+  PetscInfo(NULL, "Local vertices:= %d, %d, %d\n", genCtx.blockSizeVertexXYZ[0], genCtx.blockSizeVertexXYZ[1], genCtx.blockSizeVertexXYZ[2]);
+  PetscInfo(NULL, "Local blocks/processors := %d, %d, %d\n", genCtx.A, genCtx.B, genCtx.C);
+  PetscInfo(NULL, "Local processors := %d, %d, %d\n", genCtx.M, genCtx.N, genCtx.K);
+  PetscInfo(NULL, "Local nexyz:= %d, %d, %d\n", genCtx.nex, genCtx.ney, genCtx.nez);
+  PetscInfo(NULL, "Local delxyz:= %g, %g, %g\n", genCtx.dx, genCtx.dy, genCtx.dz);
+  PetscInfo(NULL, "Local strides:= %d, %d, %d\n", genCtx.xstride, genCtx.ystride, genCtx.zstride);
   PetscFunctionReturn(0);
 }
 
@@ -527,7 +523,7 @@ PetscErrorCode DMMoabCreateBoxMesh(MPI_Comm comm, PetscInt dim, PetscBool useSim
   PetscInt               ml = 0, nl = 0, kl = 0;
 
   PetscFunctionBegin;
-  if (dim < 1 || dim > 3) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid dimension argument for mesh: dim=[1,3].\n");
+  PetscCheckFalse(dim < 1 || dim > 3,PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Invalid dimension argument for mesh: dim=[1,3].");
 
   ierr = PetscLogEventRegister("GenerateMesh", DM_CLASSID,   &genCtx.generateMesh);CHKERRQ(ierr);
   ierr = PetscLogEventRegister("AddVertices", DM_CLASSID,   &genCtx.generateVertices);CHKERRQ(ierr);
@@ -539,9 +535,9 @@ PetscErrorCode DMMoabCreateBoxMesh(MPI_Comm comm, PetscInt dim, PetscBool useSim
   n = pow(npts, dim);
 
   /* do some error checking */
-  if (n < 2) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Number of points must be >= 2.\n");
-  if (global_size > n) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Number of processors must be less than or equal to number of elements.\n");
-  if (nghost < 0) SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Number of ghost layers cannot be negative.\n");
+  PetscCheckFalse(n < 2,PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Number of points must be >= 2.");
+  PetscCheckFalse(global_size > n,PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Number of processors must be less than or equal to number of elements.");
+  PetscCheckFalse(nghost < 0,PETSC_COMM_WORLD, PETSC_ERR_ARG_OUTOFRANGE, "Number of ghost layers cannot be negative.");
 
   /* Create the basic DMMoab object and keep the default parameters created by DM impls */
   ierr = DMMoabCreateMoab(comm, NULL, NULL, NULL, dm);CHKERRQ(ierr);
@@ -585,14 +581,14 @@ PetscErrorCode DMMoabCreateBoxMesh(MPI_Comm comm, PetscInt dim, PetscBool useSim
   if (dim > 2) {ierr = PetscOptionsInt("-dmb_processors_z", "Number of processors in z direction", "DMMoabSetNumProcs", genCtx.K, &genCtx.K, &genCtx.usrprocgrid);CHKERRQ(ierr);}
 
   /* Handle DMMoab block refinement */
-  ierr = PetscOptionsInt("-dmb_refine_x", "Number of refinement blocks in x direction", "DMMoabSetRefinement", genCtx.A, &genCtx.A, &genCtx.usrrefgrid);
+  ierr = PetscOptionsInt("-dmb_refine_x", "Number of refinement blocks in x direction", "DMMoabSetRefinement", genCtx.A, &genCtx.A, &genCtx.usrrefgrid);CHKERRQ(ierr);
   if (dim > 1) {ierr = PetscOptionsInt("-dmb_refine_y", "Number of refinement blocks in y direction", "DMMoabSetRefinement", genCtx.B, &genCtx.B, &genCtx.usrrefgrid);CHKERRQ(ierr);}
   if (dim > 2) {ierr = PetscOptionsInt("-dmb_refine_z", "Number of refinement blocks in z direction", "DMMoabSetRefinement", genCtx.C, &genCtx.C, &genCtx.usrrefgrid);CHKERRQ(ierr);}
   PetscOptionsEnd();
 
   ierr = DMMBUtil_InitializeOptions(genCtx, dim, useSimplex, global_rank, global_size, bounds, nele);CHKERRQ(ierr);
 
-  //if (nele<nprocs) SETERRQ2(PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"The dimensional discretization size should be greater or equal to number of processors: %D < %D",nele,nprocs);
+  //PetscCheckFalse(nele<nprocs,PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"The dimensional discretization size should be greater or equal to number of processors: %D < %D",nele,nprocs);
 
   if (genCtx.adjEnts) genCtx.keep_skins = true; /* do not delete anything - consumes more memory */
 
@@ -761,7 +757,6 @@ PetscErrorCode DMMoabCreateBoxMesh(MPI_Comm comm, PetscInt dim, PetscBool useSim
   PetscFunctionReturn(0);
 }
 
-
 PetscErrorCode DMMoab_GetReadOptions_Private(PetscBool by_rank, PetscInt numproc, PetscInt dim, PetscInt nghost, MoabReadMode mode, PetscInt dbglevel, const char* dm_opts, const char* extra_opts, const char** read_opts)
 {
   char           *ropts;
@@ -797,7 +792,6 @@ PetscErrorCode DMMoab_GetReadOptions_Private(PetscBool by_rank, PetscInt numproc
   *read_opts = ropts;
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabLoadFromFile - Creates a DM object by loading the mesh from a user specified file.
@@ -859,7 +853,7 @@ PetscErrorCode DMMoabLoadFromFile(MPI_Comm comm, PetscInt dim, PetscInt nghost, 
   ierr = DMMoab_GetReadOptions_Private(dmmoab->partition_by_rank, nprocs, dim, nghost, dmmoab->read_mode,
                                        dmmoab->rw_dbglevel, dmmoab->extra_read_options, usrreadopts, &readopts);CHKERRQ(ierr);
 
-  PetscInfo2(*dm, "Reading file %s with options: %s\n", filename, readopts);
+  PetscInfo(*dm, "Reading file %s with options: %s\n", filename, readopts);
 
   /* Load the mesh from a file. */
   if (dmmoab->fileset) {
@@ -887,11 +881,10 @@ PetscErrorCode DMMoabLoadFromFile(MPI_Comm comm, PetscInt dim, PetscInt nghost, 
   merr = pcomm->collective_sync_partition();MBERR("Collective sync failed", merr);
 #endif
 
-  PetscInfo3(*dm, "MOAB file '%s' was successfully loaded. Found %D vertices and %D elements.\n", filename, verts.size(), elems.size());
+  PetscInfo(*dm, "MOAB file '%s' was successfully loaded. Found %D vertices and %D elements.\n", filename, verts.size(), elems.size());
   ierr = PetscFree(readopts);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*@C
   DMMoabRenumberMeshEntities - Order and number all entities (vertices->elements) to be contiguously ordered

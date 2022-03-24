@@ -23,7 +23,6 @@ PetscBool         ISRegisterAllCalled = PETSC_FALSE;
 
    Level: beginner
 
-
 .seealso: ISCreateGeneral(), ISCreateStride(), ISCreateBlock(), ISAllGather()
 @*/
 PetscErrorCode  ISCreate(MPI_Comm comm,IS *is)
@@ -58,7 +57,6 @@ PetscErrorCode  ISCreate(MPI_Comm comm,IS *is)
 
   Level: intermediate
 
-
 .seealso: ISGetType(), ISCreate()
 @*/
 PetscErrorCode  ISSetType(IS is, ISType method)
@@ -74,7 +72,7 @@ PetscErrorCode  ISSetType(IS is, ISType method)
 
   ierr = ISRegisterAll();CHKERRQ(ierr);
   ierr = PetscFunctionListFind(ISList,method,&r);CHKERRQ(ierr);
-  if (!r) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_UNKNOWN_TYPE, "Unknown IS type: %s", method);
+  PetscCheckFalse(!r,PETSC_COMM_SELF,PETSC_ERR_ARG_UNKNOWN_TYPE, "Unknown IS type: %s", method);
   if (is->ops->destroy) {
     ierr = (*is->ops->destroy)(is);CHKERRQ(ierr);
     is->ops->destroy = NULL;
@@ -112,7 +110,6 @@ PetscErrorCode  ISGetType(IS is, ISType *type)
   *type = ((PetscObject)is)->type_name;
   PetscFunctionReturn(0);
 }
-
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
@@ -161,5 +158,4 @@ PetscErrorCode  ISRegister(const char sname[], PetscErrorCode (*function)(IS))
   ierr = PetscFunctionListAdd(&ISList,sname,function);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 

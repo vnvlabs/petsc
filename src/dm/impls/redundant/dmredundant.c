@@ -111,22 +111,14 @@ static PetscErrorCode DMLocalToGlobalBegin_Redundant(DM dm,Vec l,InsertMode imod
     PetscScalar *buffer;
     PetscInt    i;
     if (rank == red->rank) {
-#if defined(PETSC_HAVE_MPI_IN_PLACE)
       buffer = gv;
       source = MPI_IN_PLACE;
-#else
-      ierr   = PetscMalloc1(red->N,&buffer);CHKERRQ(ierr);
-      source = buffer;
-#endif
       if (imode == ADD_VALUES) for (i=0; i<red->N; i++) buffer[i] = gv[i] + lv[i];
 #if !defined(PETSC_USE_COMPLEX)
       if (imode == MAX_VALUES) for (i=0; i<red->N; i++) buffer[i] = PetscMax(gv[i],lv[i]);
 #endif
     } else source = (void*)lv;
     ierr = MPI_Reduce(source,gv,red->N,MPIU_SCALAR,(imode == ADD_VALUES) ? MPIU_SUM : MPIU_MAX,red->rank,PetscObjectComm((PetscObject)dm));CHKERRMPI(ierr);
-#if !defined(PETSC_HAVE_MPI_IN_PLACE)
-    if (rank == red->rank) {ierr = PetscFree(buffer);CHKERRQ(ierr);}
-#endif
   } break;
   case INSERT_VALUES:
     ierr = PetscArraycpy(gv,lv,red->n);CHKERRQ(ierr);
@@ -207,7 +199,7 @@ static PetscErrorCode DMCreateColoring_Redundant(DM dm,ISColoringType ctype,ISCo
   case IS_COLORING_LOCAL:
     nloc = red->N;
     break;
-  default: SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONG,"Unknown ISColoringType %d",(int)ctype);
+  default: SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONG,"Unknown ISColoringType %d",(int)ctype);
   }
   ierr = PetscMalloc1(nloc,&colors);CHKERRQ(ierr);
   for (i=0; i<nloc; i++) colors[i] = i;
@@ -227,7 +219,7 @@ static PetscErrorCode DMRefine_Redundant(DM dmc,MPI_Comm comm,DM *dmf)
     ierr = PetscObjectGetComm((PetscObject)dmc,&comm);CHKERRQ(ierr);
   }
   ierr = MPI_Comm_compare(PetscObjectComm((PetscObject)dmc),comm,&flag);CHKERRMPI(ierr);
-  if (flag != MPI_CONGRUENT && flag != MPI_IDENT) SETERRQ(PetscObjectComm((PetscObject)dmc),PETSC_ERR_SUP,"cannot change communicators");
+  PetscCheckFalse(flag != MPI_CONGRUENT && flag != MPI_IDENT,PetscObjectComm((PetscObject)dmc),PETSC_ERR_SUP,"cannot change communicators");
   ierr = DMRedundantCreate(comm,redc->rank,redc->N,dmf);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -243,7 +235,7 @@ static PetscErrorCode DMCoarsen_Redundant(DM dmf,MPI_Comm comm,DM *dmc)
     ierr = PetscObjectGetComm((PetscObject)dmf,&comm);CHKERRQ(ierr);
   }
   ierr = MPI_Comm_compare(PetscObjectComm((PetscObject)dmf),comm,&flag);CHKERRMPI(ierr);
-  if (flag != MPI_CONGRUENT && flag != MPI_IDENT) SETERRQ(PetscObjectComm((PetscObject)dmf),PETSC_ERR_SUP,"cannot change communicators");
+  PetscCheckFalse(flag != MPI_CONGRUENT && flag != MPI_IDENT,PetscObjectComm((PetscObject)dmf),PETSC_ERR_SUP,"cannot change communicators");
   ierr = DMRedundantCreate(comm,redf->rank,redf->N,dmc);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -258,9 +250,9 @@ static PetscErrorCode DMCreateInterpolation_Redundant(DM dmc,DM dmf,Mat *P,Vec *
 
   PetscFunctionBegin;
   ierr = MPI_Comm_compare(PetscObjectComm((PetscObject)dmc),PetscObjectComm((PetscObject)dmf),&flag);CHKERRMPI(ierr);
-  if (flag != MPI_CONGRUENT && flag != MPI_IDENT) SETERRQ(PetscObjectComm((PetscObject)dmf),PETSC_ERR_SUP,"cannot change communicators");
-  if (redc->rank != redf->rank) SETERRQ(PetscObjectComm((PetscObject)dmf),PETSC_ERR_ARG_INCOMP,"Owning rank does not match");
-  if (redc->N != redf->N) SETERRQ(PetscObjectComm((PetscObject)dmf),PETSC_ERR_ARG_INCOMP,"Global size does not match");
+  PetscCheckFalse(flag != MPI_CONGRUENT && flag != MPI_IDENT,PetscObjectComm((PetscObject)dmf),PETSC_ERR_SUP,"cannot change communicators");
+  PetscCheckFalse(redc->rank != redf->rank,PetscObjectComm((PetscObject)dmf),PETSC_ERR_ARG_INCOMP,"Owning rank does not match");
+  PetscCheckFalse(redc->N != redf->N,PetscObjectComm((PetscObject)dmf),PETSC_ERR_ARG_INCOMP,"Global size does not match");
   ierr = MatCreate(PetscObjectComm((PetscObject)dmc),P);CHKERRQ(ierr);
   ierr = MatSetSizes(*P,redc->n,redc->n,redc->N,redc->N);CHKERRQ(ierr);
   ierr = MatSetType(*P,MATAIJ);CHKERRQ(ierr);
@@ -279,7 +271,7 @@ static PetscErrorCode DMCreateInterpolation_Redundant(DM dmc,DM dmf,Mat *P,Vec *
 
     Collective on dm
 
-    Input Parameter:
+    Input Parameters:
 +   dm - redundant DM
 .   rank - rank of process to own redundant degrees of freedom
 -   N - total number of redundant degrees of freedom
@@ -373,7 +365,6 @@ static PetscErrorCode DMSetUpGLVisViewer_Redundant(PetscObject odm, PetscViewer 
 
          This DM is generally used inside a DMCOMPOSITE object. For example, it may be used to store continuation parameters for a bifurcation problem.
 
-
   Level: intermediate
 
 .seealso: DMType, DMCOMPOSITE,  DMCreate(), DMRedundantSetSize(), DMRedundantGetSize()
@@ -414,7 +405,7 @@ PETSC_EXTERN PetscErrorCode DMCreate_Redundant(DM dm)
 
     Collective
 
-    Input Parameter:
+    Input Parameters:
 +   comm - the processors that will share the global vector
 .   rank - rank to own the redundant values
 -   N - total number of degrees of freedom
@@ -432,7 +423,7 @@ PetscErrorCode DMRedundantCreate(MPI_Comm comm,PetscMPIInt rank,PetscInt N,DM *d
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  PetscValidPointer(dm,2);
+  PetscValidPointer(dm,4);
   ierr = DMCreate(comm,dm);CHKERRQ(ierr);
   ierr = DMSetType(*dm,DMREDUNDANT);CHKERRQ(ierr);
   ierr = DMRedundantSetSize(*dm,rank,N);CHKERRQ(ierr);

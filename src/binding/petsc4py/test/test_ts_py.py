@@ -34,6 +34,7 @@ class MyODE:
 class MyTS:
     def __init__(self):
         self.log = {}
+
     def _log(self, method, *args):
         self.log.setdefault(method, 0)
         self.log[method] += 1
@@ -167,6 +168,12 @@ class TestTSPython(unittest.TestCase):
         self.ts.setStepNumber(0)
         self.testSolve()
         self.ts.reset()
+
+    def testSetAdaptLimits(self):
+        self.ts.setStepLimits(1.0, 2.0)
+        hmin, hmax = self.ts.getStepLimits()
+        self.assertEqual(1.0, hmin)
+        self.assertEqual(2.0, hmax)
 
 # --------------------------------------------------------------------
 

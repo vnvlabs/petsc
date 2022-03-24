@@ -10,7 +10,8 @@ class Configure(config.base.Configure):
     config.base.Configure.__init__(self, framework)
     self.headerPrefix = 'PETSC'
     self.substPrefix  = 'PETSC'
-    self.installed = 0 # 1 indicates that Configure itself has already compiled and installed PETSc
+    self.installed    = 0 # 1 indicates that Configure itself has already compiled and installed PETSc
+    self.found        = 1
     return
 
   def __str2__(self):
@@ -35,10 +36,8 @@ class Configure(config.base.Configure):
     help.addArgument('PETSc','-with-single-library=<bool>',                  nargs.ArgBool(None, 1,'Put all PETSc code into the single -lpetsc library'))
     help.addArgument('PETSc','-with-fortran-bindings=<bool>',                nargs.ArgBool(None, 1,'Build PETSc fortran bindings in the library and corresponding module files'))
     help.addArgument('PETSc', '-with-ios=<bool>',                            nargs.ArgBool(None, 0, 'Build an iPhone/iPad version of PETSc library'))
-    help.addArgument('PETSc', '-with-xsdk-defaults',                         nargs.ArgBool(None, 0, 'Set the following as defaults for the xSDK standard: --enable-debug=1, --enable-shared=1, --with-precision=double, --with-index-size=32, locate blas/lapack automatically'))
     help.addArgument('PETSc', '-with-display=<x11display>',                  nargs.Arg(None, '', 'Specifiy DISPLAY env variable for use with matlab test)'))
     help.addArgument('PETSc', '-with-package-scripts=<pyscripts>',           nargs.ArgFileList(None,None,'Specify configure package scripts for user provided packages'))
-    help.addArgument('PETSc', '-with-dmnetwork_maximum_components_per_point',nargs.ArgInt(None, 3, 'Number of components allowed at each DMNetwork edge or vertex'))
     return
 
   def registerPythonFile(self,filename,directory):
@@ -105,13 +104,14 @@ class Configure(config.base.Configure):
     framework.require('PETSc.options.scalarTypes', self.blaslapack)
     framework.require('PETSc.options.scalarTypes', self.opencl)
 
-    self.programs.headerPrefix   = self.headerPrefix
-    self.compilers.headerPrefix  = self.headerPrefix
-    self.fortran.headerPrefix    = self.headerPrefix
-    self.types.headerPrefix      = self.headerPrefix
-    self.headers.headerPrefix    = self.headerPrefix
-    self.functions.headerPrefix  = self.headerPrefix
-    self.libraries.headerPrefix  = self.headerPrefix
+    self.programs.headerPrefix     = self.headerPrefix
+    self.setCompilers.headerPrefix = self.headerPrefix
+    self.compilers.headerPrefix    = self.headerPrefix
+    self.fortran.headerPrefix      = self.headerPrefix
+    self.types.headerPrefix        = self.headerPrefix
+    self.headers.headerPrefix      = self.headerPrefix
+    self.functions.headerPrefix    = self.headerPrefix
+    self.libraries.headerPrefix    = self.headerPrefix
 
     # Register user provided package scripts
     if 'with-package-scripts' in self.framework.argDB:
@@ -214,7 +214,7 @@ class Configure(config.base.Configure):
 
 proc ModulesHelp { } {
     puts stderr "This module sets the path and environment variables for petsc-%s"
-    puts stderr "     see https://www.mcs.anl.gov/petsc/ for more information      "
+    puts stderr "     see https://petsc.org/ for more information      "
     puts stderr ""
 }
 module-whatis "PETSc - Portable, Extensible Toolkit for Scientific Computation"
@@ -254,7 +254,7 @@ prepend-path PATH "%s"
       try:
         output   = self.executeShellCommand(compiler + ' -show', log = self.log)[0]
         compiler = output.split(' ')[0]
-        self.addDefine('MPICC_SHOW','"'+output.strip().replace('\n','\\\\n')+'"')
+        self.addDefine('MPICC_SHOW','"'+output.strip().replace('\n','\\\\n').replace('"','')+'"')
       except:
         self.addDefine('MPICC_SHOW','"Unavailable"')
     else:
@@ -285,12 +285,6 @@ prepend-path PATH "%s"
     self.setCompilers.pushLanguage(self.languages.clanguage)
     self.addMakeMacro('PCC',self.setCompilers.getCompiler())
     self.addMakeMacro('PCC_FLAGS',self.setCompilers.getCompilerFlags())
-    self.addMakeMacro('PCPP_FLAGS',getattr(self.setCompilers,self.languages.clanguage.upper()+'PPFLAGS'))
-    self.addMakeMacro('PFLAGS','${'+self.languages.clanguage.upper()+'FLAGS}')
-    self.addMakeMacro('PPPFLAGS','${'+self.languages.clanguage.upper()+'PPFLAGS}')
-    # ugly work-around for python3 distutils parse_makefile() issue with the above 2 lines
-    self.addMakeMacro('PY_'+self.languages.clanguage.upper()+'FLAGS','')
-    self.addMakeMacro('PY_'+self.languages.clanguage.upper()+'PPFLAGS','')
     self.setCompilers.popLanguage()
     # .o or .obj
     self.addMakeMacro('CC_SUFFIX','o')
@@ -341,16 +335,19 @@ prepend-path PATH "%s"
     if hasattr(self.compilers, 'CUDAC'):
       self.setCompilers.pushLanguage('CUDA')
       self.addMakeMacro('CUDAC_FLAGS',self.setCompilers.getCompilerFlags())
+      self.addMakeMacro('CUDAPP_FLAGS',self.setCompilers.CUDAPPFLAGS)
       self.setCompilers.popLanguage()
 
     if hasattr(self.compilers, 'HIPC'):
       self.setCompilers.pushLanguage('HIP')
       self.addMakeMacro('HIPC_FLAGS',self.setCompilers.getCompilerFlags())
+      self.addMakeMacro('HIPPP_FLAGS',self.setCompilers.HIPPPFLAGS)
       self.setCompilers.popLanguage()
 
-    if hasattr(self.compilers, 'SYCLCXX'):
+    if hasattr(self.compilers, 'SYCLC'):
       self.setCompilers.pushLanguage('SYCL')
-      self.addMakeMacro('SYCLCXX_FLAGS',self.setCompilers.getCompilerFlags())
+      self.addMakeMacro('SYCLC_FLAGS',self.setCompilers.getCompilerFlags())
+      self.addMakeMacro('SYCLPP_FLAGS',self.setCompilers.SYCLPPFLAGS)
       self.setCompilers.popLanguage()
 
     # shared library linker values
@@ -395,6 +392,8 @@ prepend-path PATH "%s"
     self.packagelibs = []
     for i in self.framework.packages:
       if not i.required:
+        if i.devicePackage:
+          self.addDefine('HAVE_DEVICE',1)
         self.addDefine('HAVE_'+i.PACKAGE.replace('-','_'), 1)  # ONLY list package if it is used directly by PETSc (and not only by another package)
       if not isinstance(i.lib, list):
         i.lib = [i.lib]
@@ -725,6 +724,15 @@ char assert_aligned[(sizeof(struct mystruct)==16)*2-1];
         self.compilers.LIBS += ' '+flag+'/usr/ucblib'
     return
 
+  def configureDarwin(self):
+    '''Log brew configuration for Apple systems'''
+    try:
+      self.executeShellCommand(['brew', 'config'], log = self.log)
+      self.executeShellCommand(['brew', 'info', 'gcc'], log = self.log)
+    except:
+      pass
+    return
+
   def configureLinux(self):
     '''Linux specific stuff'''
     # TODO: Test for this by mallocing an odd number of floats and checking the address
@@ -806,8 +814,6 @@ char assert_aligned[(sizeof(struct mystruct)==16)*2-1];
       if self.dataFilesPath.datafilespath:
         self.addMakeMacro('DATAFILESPATH',self.dataFilesPath.datafilespath)
     self.addDefine('ARCH','"'+self.installdir.petscArch+'"')
-
-    self.addDefine('DMNETWORK_MAXIMUM_COMPONENTS_PER_POINT', self.argDB['with-dmnetwork_maximum_components_per_point'])
     return
 
 #-----------------------------------------------------------------------------------------------------
@@ -945,6 +951,7 @@ char assert_aligned[(sizeof(struct mystruct)==16)*2-1];
       raise RuntimeError('Incorrect option --prefix='+self.framework.argDB['prefix']+' specified. It cannot be same as PETSC_DIR/PETSC_ARCH!')
     self.framework.header          = os.path.join(self.arch.arch,'include','petscconf.h')
     self.framework.cHeader         = os.path.join(self.arch.arch,'include','petscfix.h')
+    self.framework.poisonheader    = os.path.join(self.arch.arch,'include','petscconf_poison.h')
     self.framework.pkgheader       = os.path.join(self.arch.arch,'include','petscpkg_version.h')
     self.framework.makeMacroHeader = os.path.join(self.arch.arch,'lib','petsc','conf','petscvariables')
     self.framework.makeRuleHeader  = os.path.join(self.arch.arch,'lib','petsc','conf','petscrules')
@@ -963,6 +970,7 @@ char assert_aligned[(sizeof(struct mystruct)==16)*2-1];
     self.executeTest(self.configureIntptrt)
     self.executeTest(self.configureSolaris)
     self.executeTest(self.configureLinux)
+    self.executeTest(self.configureDarwin)    
     self.executeTest(self.configureWin32)
     self.executeTest(self.configureCygwinBrokenPipe)
     self.executeTest(self.configureDefaultArch)

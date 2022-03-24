@@ -2,8 +2,7 @@
 #include <petsc/private/drawimpl.h>                          /*I  "petscdraw.h" I*/
 
 #if defined(PETSC_USE_DEBUG)
-#define PetscDrawValidColor(color) \
-do { if (PetscUnlikely((color)<0||(color)>=256)) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Color value %D out of range [0..255]",(PetscInt)(color)); } while (0)
+#define PetscDrawValidColor(color) PetscCheck((color)>=0&&(color)<256,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Color value %" PetscInt_FMT " out of range [0..255]",(PetscInt)(color))
 #else
 #define PetscDrawValidColor(color) do {} while (0)
 #endif
@@ -13,7 +12,6 @@ do { if (PetscUnlikely((color)<0||(color)>=256)) SETERRQ1(PETSC_COMM_SELF,PETSC_
 
 #define ITRANS(draw,img,i)  ((draw)->coor_xl + (((PetscReal)(i))*((draw)->coor_xr - (draw)->coor_xl)/((img)->w-1) - (draw)->port_xl)/((draw)->port_xr - (draw)->port_xl))
 #define JTRANS(draw,img,j)  ((draw)->coor_yl + (((PetscReal)(j))/((img)->h-1) + (draw)->port_yl - 1)*((draw)->coor_yr - (draw)->coor_yl)/((draw)->port_yl - (draw)->port_yr))
-
 
 static PetscErrorCode PetscDrawSetViewport_Image(PetscDraw draw,PetscReal xl,PetscReal yl,PetscReal xr,PetscReal yr)
 {
@@ -448,7 +446,7 @@ static PetscErrorCode PetscDrawGetImage_Image(PetscDraw draw,unsigned char palet
   if (h) *h = (unsigned int)img->h;
   if (pixels) *pixels = NULL;
   ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)draw),&rank);CHKERRMPI(ierr);
-  if (!rank) {
+  if (rank == 0) {
     ierr = PetscMemcpy(palette,img->palette,sizeof(img->palette));CHKERRQ(ierr);
     ierr = PetscMalloc1((size_t)(img->w*img->h),&buffer);CHKERRQ(ierr);
     if (pixels) *pixels = buffer;
@@ -536,7 +534,6 @@ static const unsigned char BasicColors[PETSC_DRAW_BASIC_COLORS][3] = {
   { 255, 240, 245 }, /* lavenderblush */
   { 221, 160, 221 }, /* plum */
 };
-
 
 /*MC
    PETSC_DRAW_IMAGE - PETSc graphics device that uses a raster buffer

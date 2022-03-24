@@ -1,18 +1,11 @@
-#if !defined(PETSCSFIMPL_H)
-#define PETSCSFIMPL_H
+#if !defined(SFIMPL_H)
+#define SFIMPL_H
 
 #include <petscvec.h>
 #include <petscsf.h>
+#include <petsc/private/deviceimpl.h>
+#include <petsc/private/mpiutils.h>
 #include <petsc/private/petscimpl.h>
-#include <petscviewer.h>
-
-#if defined(PETSC_HAVE_CUDA)
-  #include <cuda_runtime.h>
-#endif
-
-#if defined(PETSC_HAVE_HIP)
-  #include <hip/hip_runtime.h>
-#endif
 
 PETSC_EXTERN PetscLogEvent PETSCSF_SetGraph;
 PETSC_EXTERN PetscLogEvent PETSCSF_SetUp;
@@ -68,7 +61,6 @@ struct _p_PetscSF {
   struct { /* Fields needed to implement VecScatter behavior */
     PetscInt          from_n,to_n;   /* Recorded local sizes of the input from/to vectors in VecScatterCreate(). Used subsequently for error checking. */
     PetscBool         beginandendtogether;  /* Indicates that the scatter begin and end  function are called together, VecScatterEnd() is then treated as a nop */
-    PetscBool         packongpu;     /* For GPU vectors, pack needed entries on GPU instead of pulling the whole vector down to CPU and then packing on CPU */
     const PetscScalar *xdata;        /* Vector data to read from */
     PetscScalar       *ydata;        /* Vector data to write to. The two pointers are recorded in VecScatterBegin. Memory is not managed by SF. */
     PetscSF           lsf;           /* The local part of the scatter, used in SCATTER_LOCAL. Built on demand. */
@@ -118,6 +110,7 @@ struct _p_PetscSF {
   PetscBool       use_gpu_aware_mpi;   /* If true, SF assumes it can pass GPU pointers to MPI */
   PetscBool       use_stream_aware_mpi;/* If true, SF assumes the underlying MPI is cuda-stream aware and we won't sync streams for send/recv buffers passed to MPI */
   PetscInt        maxResidentThreadsPerGPU;
+  PetscBool       allow_multi_leaves;
   PetscSFBackend  backend;         /* The device backend (if any) SF will use */
   void *data;                      /* Pointer to implementation */
 
@@ -186,12 +179,10 @@ PETSC_EXTERN PetscErrorCode PetscSFFree_CUDA(PetscMemType,void*);
 PETSC_EXTERN PetscErrorCode PetscSFMalloc_HIP(PetscMemType,size_t,void**);
 PETSC_EXTERN PetscErrorCode PetscSFFree_HIP(PetscMemType,void*);
 #endif
-
 #if defined(PETSC_HAVE_KOKKOS)
 PETSC_EXTERN PetscErrorCode PetscSFMalloc_Kokkos(PetscMemType,size_t,void**);
 PETSC_EXTERN PetscErrorCode PetscSFFree_Kokkos(PetscMemType,void*);
 #endif
-
 
 /* SF only supports CUDA and Kokkos devices. Even VIENNACL is a device, its device pointers are invisible to SF.
    Through VecGetArray(), we copy data of VECVIENNACL from device to host and pass host pointers to SF.

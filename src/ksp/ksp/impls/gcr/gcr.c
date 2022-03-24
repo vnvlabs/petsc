@@ -116,7 +116,7 @@ static PetscErrorCode KSPSolve_GCR(KSP ksp)
   do {
     ierr = KSPSolve_GCR_cycle(ksp);CHKERRQ(ierr);
     if (ksp->reason) PetscFunctionReturn(0); /* catch case when convergence occurs inside the cycle */
-  } while (ksp->its < ksp->max_it);CHKERRQ(ierr);
+  } while (ksp->its < ksp->max_it);
 
   if (ksp->its >= ksp->max_it) ksp->reason = KSP_DIVERGED_ITS;
   PetscFunctionReturn(0);
@@ -137,7 +137,6 @@ static PetscErrorCode KSPView_GCR(KSP ksp, PetscViewer viewer)
   PetscFunctionReturn(0);
 }
 
-
 static PetscErrorCode KSPSetUp_GCR(KSP ksp)
 {
   KSP_GCR        *ctx = (KSP_GCR*)ksp->data;
@@ -147,7 +146,7 @@ static PetscErrorCode KSPSetUp_GCR(KSP ksp)
 
   PetscFunctionBegin;
   ierr = PCGetDiagonalScale(ksp->pc,&diagonalscale);CHKERRQ(ierr);
-  if (diagonalscale) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(diagonalscale,PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
 
   ierr = KSPGetOperators(ksp, &A, NULL);CHKERRQ(ierr);
   ierr = MatCreateVecs(A, &ctx->R, NULL);CHKERRQ(ierr);
@@ -226,7 +225,7 @@ static PetscErrorCode  KSPGCRSetModifyPC_GCR(KSP ksp,KSPGCRModifyPCFunction func
  Input Parameters:
  +  ksp      - iterative context obtained from KSPCreate()
  .  function - user defined function to modify the preconditioner
- .  ctx      - user provided contex for the modify preconditioner function
+ .  ctx      - user provided context for the modify preconditioner function
  -  destroy  - the function to use to destroy the user provided application context.
 
  Calling Sequence of function:
@@ -279,7 +278,7 @@ static PetscErrorCode KSPGCRGetRestart_GCR(KSP ksp,PetscInt *restart)
 
    Not Collective
 
-   Input Parameter:
+   Input Parameters:
 +  ksp - the Krylov space context
 -  restart - integer restart value
 
@@ -387,9 +386,8 @@ static PetscErrorCode  KSPBuildResidual_GCR(KSP ksp, Vec t, Vec v, Vec *V)
     Contributed by Dave May
 
     References:
-.          1. - S. C. Eisenstat, H. C. Elman, and H. C. Schultz. Variational iterative methods for
+.   * - S. C. Eisenstat, H. C. Elman, and H. C. Schultz. Variational iterative methods for
            nonsymmetric systems of linear equations. SIAM J. Numer. Anal., 20, 1983
-
 
 .seealso:  KSPCreate(), KSPSetType(), KSPType (for list of available types), KSP,
            KSPGCRSetRestart(), KSPGCRSetModifyPC(), KSPGMRES, KSPFGMRES

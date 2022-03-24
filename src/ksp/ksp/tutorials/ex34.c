@@ -4,8 +4,6 @@
    Processors: n
 T*/
 
-
-
 /*
 Laplacian in 3D. Modeled by the partial differential equation
 
@@ -97,6 +95,10 @@ int main(int argc,char **argv)
   ierr = PetscPrintf(PETSC_COMM_WORLD,"Error norm %g\n",(double)(norm/((PetscReal)(mx)*(PetscReal)(my)*(PetscReal)(mz))));CHKERRQ(ierr);
   ierr = VecNorm(x,NORM_2,&norm);CHKERRQ(ierr);
   ierr = PetscPrintf(PETSC_COMM_WORLD,"Error norm %g\n",(double)(norm/((PetscReal)(mx)*(PetscReal)(my)*(PetscReal)(mz))));CHKERRQ(ierr);
+  ierr = VecSum(x,&norm);CHKERRQ(ierr);
+  if (norm > 10000*PETSC_MACHINE_EPSILON) {
+    ierr = PetscPrintf(PETSC_COMM_WORLD,"Vector sum %g\n",(double)norm);CHKERRQ(ierr);
+  }
 
   ierr = VecDestroy(&r);CHKERRQ(ierr);
   ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
@@ -121,7 +123,7 @@ PetscErrorCode ComputeRHS(KSP ksp,Vec b,void *ctx)
   Hy   = 1.0 / (PetscReal)(my);
   Hz   = 1.0 / (PetscReal)(mz);
   ierr = DMDAGetCorners(da,&xs,&ys,&zs,&xm,&ym,&zm);CHKERRQ(ierr);
-  ierr = DMDAVecGetArrayDOF(da, b, &array);CHKERRQ(ierr);
+  ierr = DMDAVecGetArrayDOFWrite(da, b, &array);CHKERRQ(ierr);
   for (k=zs; k<zs+zm; k++) {
     for (j=ys; j<ys+ym; j++) {
       for (i=xs; i<xs+xm; i++) {
@@ -135,7 +137,7 @@ PetscErrorCode ComputeRHS(KSP ksp,Vec b,void *ctx)
       }
     }
   }
-  ierr = DMDAVecRestoreArrayDOF(da, b, &array);CHKERRQ(ierr);
+  ierr = DMDAVecRestoreArrayDOFWrite(da, b, &array);CHKERRQ(ierr);
   ierr = VecAssemblyBegin(b);CHKERRQ(ierr);
   ierr = VecAssemblyEnd(b);CHKERRQ(ierr);
 
@@ -147,7 +149,6 @@ PetscErrorCode ComputeRHS(KSP ksp,Vec b,void *ctx)
   ierr = MatNullSpaceDestroy(&nullspace);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 PetscErrorCode ComputeMatrix(KSP ksp, Mat J,Mat jac, void *ctx)
 {
@@ -281,8 +282,6 @@ PetscErrorCode ComputeMatrix(KSP ksp, Mat J,Mat jac, void *ctx)
   PetscFunctionReturn(0);
 }
 
-
-
 /*TEST
 
    build:
@@ -299,7 +298,7 @@ PetscErrorCode ComputeMatrix(KSP ksp, Mat J,Mat jac, void *ctx)
    test:
       suffix: hyprestruct
       nsize: 3
-      requires: hypre
+      requires: hypre !defined(PETSC_HAVE_HYPRE_DEVICE)
       args: -ksp_type gmres -pc_type pfmg -dm_mat_type hyprestruct -ksp_monitor -da_refine 3
 
 TEST*/

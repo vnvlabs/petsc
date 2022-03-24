@@ -5,6 +5,7 @@ class PCType(object):
     JACOBI             = S_(PCJACOBI)
     SOR                = S_(PCSOR)
     LU                 = S_(PCLU)
+    QR                 = S_(PCQR)
     SHELL              = S_(PCSHELL)
     BJACOBI            = S_(PCBJACOBI)
     VPBJACOBI          = S_(PCVPBJACOBI)
@@ -49,7 +50,7 @@ class PCType(object):
     HMG                = S_(PCHMG)
     DEFLATION          = S_(PCDEFLATION)
     HPDDM              = S_(PCHPDDM)
-    HARA               = S_(PCHARA)
+    H2OPUS             = S_(PCH2OPUS)
 
 class PCSide(object):
     # native
@@ -115,6 +116,11 @@ class PCPatchConstructType(object):
     USER                     = PC_PATCH_USER
     PYTHON                   = PC_PATCH_PYTHON
 
+class PCHPDDMCoarseCorrectionType(object):
+    DEFLATED                 = PC_HPDDM_COARSE_CORRECTION_DEFLATED
+    ADDITIVE                 = PC_HPDDM_COARSE_CORRECTION_ADDITIVE
+    BALANCED                 = PC_HPDDM_COARSE_CORRECTION_BALANCED
+
 # --------------------------------------------------------------------
 
 cdef class PC(Object):
@@ -122,15 +128,16 @@ cdef class PC(Object):
     Type = PCType
     Side = PCSide
 
-    ASMType            = PCASMType
-    GASMType           = PCGASMType
-    MGType             = PCMGType
-    MGCycleType        = PCMGCycleType
-    GAMGType           = PCGAMGType
-    CompositeType      = PCCompositeType
-    SchurFactType      = PCFieldSplitSchurFactType
-    SchurPreType       = PCFieldSplitSchurPreType
-    PatchConstructType = PCPatchConstructType
+    ASMType                   = PCASMType
+    GASMType                  = PCGASMType
+    MGType                    = PCMGType
+    MGCycleType               = PCMGCycleType
+    GAMGType                  = PCGAMGType
+    CompositeType             = PCCompositeType
+    SchurFactType             = PCFieldSplitSchurFactType
+    SchurPreType              = PCFieldSplitSchurPreType
+    PatchConstructType        = PCPatchConstructType
+    HPDDMCoarseCorrectionType = PCHPDDMCoarseCorrectionType
 
     # --- xxx ---
 
@@ -183,6 +190,11 @@ cdef class PC(Object):
         CHKERR( PCGetOptionsPrefix(self.pc, &cval) )
         return bytes2str(cval)
 
+    def appendOptionsPrefix(self, prefix):
+        cdef const char *cval = NULL
+        prefix = str2bytes(prefix, &cval)
+        CHKERR( PCAppendOptionsPrefix(self.pc, cval) )
+
     def setFromOptions(self):
         CHKERR( PCSetFromOptions(self.pc) )
 
@@ -206,6 +218,11 @@ cdef class PC(Object):
             cflag = PETSC_TRUE
         CHKERR( PCSetUseAmat(self.pc, cflag) )
 
+    def getUseAmat(self):
+        cdef PetscBool cflag = PETSC_FALSE
+        CHKERR( PCGetUseAmat(self.pc, &cflag) )
+        return toBool(cflag)
+
     def setReusePreconditioner(self, flag):
         cdef PetscBool cflag = PETSC_FALSE
         if flag:
@@ -223,6 +240,9 @@ cdef class PC(Object):
 
     def apply(self, Vec x, Vec y):
         CHKERR( PCApply(self.pc, x.vec, y.vec) )
+
+    def matApply(self, Mat x, Mat y):
+        CHKERR( PCMatApply(self.pc, x.mat, y.mat) )
 
     def applyTranspose(self, Vec x, Vec y):
         CHKERR( PCApplyTranspose(self.pc, x.vec, y.vec) )
@@ -336,6 +356,10 @@ cdef class PC(Object):
         CHKERR( PCASMGetSubKSP(self.pc, &n, NULL, &p) )
         return [ref_KSP(p[i]) for i from 0 <= i <n]
 
+    def setASMSortIndices(self, dosort):
+        cdef PetscBool cdosort = asBool(dosort)
+        CHKERR( PCASMSetSortIndices(self.pc, cdosort) )
+
     # --- GASM ---
 
     def setGASMType(self, gasmtype):
@@ -386,6 +410,32 @@ cdef class PC(Object):
         cdef PetscMat pmat = NULL
         if mat is not None: pmat = mat.mat
         CHKERR( PCHYPRESetBetaPoissonMatrix(self.pc, pmat) )
+    
+    def setHYPRESetInterpolations(self, dim, Mat RT_Pi_Full=None, RT_Pi=None,
+                                  Mat ND_Pi_Full=None, ND_Pi=None):
+        cdef PetscMat RT_full_mat = NULL
+        if RT_Pi_Full is not None: RT_full_mat = RT_Pi_Full.mat
+        cdef PetscMat ND_full_mat = NULL
+        if ND_Pi_Full is not None: ND_full_mat = ND_Pi_Full.mat
+        cdef PetscInt idim = asInt(dim)
+        cdef PetscMat *RT_Pi_mat = NULL
+        if RT_Pi is not None:
+            PetscMalloc(<size_t>dim*sizeof(PetscMat), &RT_Pi_mat)
+            assert len(RT_Pi) == dim
+            for i in range(dim):
+                RT_Pi_mat[i] = (<Mat?>RT_Pi[i]).mat
+        cdef PetscMat *ND_Pi_mat = NULL
+        if ND_Pi is not None:
+            PetscMalloc(<size_t>dim*sizeof(PetscMat), &ND_Pi_mat)
+            assert len(ND_Pi) == dim
+            for i in range(dim):
+                ND_Pi_mat[dim] = (<Mat?>ND_Pi[i]).mat
+        CHKERR (PCHYPRESetInterpolations(self.pc, idim, RT_full_mat, RT_Pi_mat,
+                                         ND_full_mat, ND_Pi_mat))
+        CHKERR (PetscFree(RT_Pi_mat))
+        CHKERR (PetscFree(ND_Pi_mat))
+       
+       
 
     def setHYPRESetEdgeConstantVectors(self, Vec ozz, Vec zoz, Vec zzo=None):
         cdef PetscVec zzo_vec = NULL
@@ -787,6 +837,32 @@ cdef class PC(Object):
         self.set_attr("__patch_construction_operator__", context)
         CHKERR( PCPatchSetConstructType(self.pc, typ, PCPatch_UserConstructOperator, <void*>context) )
 
+    # --- HPDDM ---
+
+    def setHPDDMAuxiliaryMat(self, IS uis, Mat uaux):
+        CHKERR( PCHPDDMSetAuxiliaryMat(self.pc, uis.iset, uaux.mat, NULL, <void*>NULL) )
+
+    def setHPDDMRHSMat(self, Mat B):
+        CHKERR( PCHPDDMSetRHSMat(self.pc, B.mat) )
+
+    def setHPDDMHasNeumannMat(self, has):
+        cdef PetscBool phas = has
+        CHKERR( PCHPDDMHasNeumannMat(self.pc, phas) )
+
+    def setHPDDMCoarseCorrectionType(self, correction_type):
+        cdef PetscPCHPDDMCoarseCorrectionType ctype = correction_type
+        CHKERR( PCHPDDMSetCoarseCorrectionType(self.pc, ctype) )
+
+    def getHPDDMCoarseCorrectionType(self):
+        cdef PetscPCHPDDMCoarseCorrectionType cval = PC_HPDDM_COARSE_CORRECTION_DEFLATED
+        CHKERR( PCHPDDMGetCoarseCorrectionType(self.pc, &cval) )
+        return cval
+
+    def getHPDDMSTShareSubKSP(self):
+        cdef PetscBool cval = PETSC_FALSE
+        CHKERR( PCHPDDMGetSTShareSubKSP(self.pc, &cval) )
+        return toBool(cval)
+
 # --------------------------------------------------------------------
 
 del PCType
@@ -800,5 +876,6 @@ del PCCompositeType
 del PCFieldSplitSchurPreType
 del PCFieldSplitSchurFactType
 del PCPatchConstructType
+del PCHPDDMCoarseCorrectionType
 
 # --------------------------------------------------------------------

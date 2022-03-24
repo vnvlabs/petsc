@@ -54,9 +54,9 @@ static PetscErrorCode CreateMesh(MPI_Comm comm, DM *dm, AppCtx *user)
   PetscErrorCode ierr;
 
   PetscFunctionBeginUser;
-  ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_FALSE, NULL, NULL, NULL, NULL, PETSC_TRUE, dm);CHKERRQ(ierr);
+  ierr = DMCreate(comm, dm);CHKERRQ(ierr);
+  ierr = DMSetType(*dm, DMPLEX);CHKERRQ(ierr);
   ierr = DMSetFromOptions(*dm);CHKERRQ(ierr);
-  ierr = PetscObjectSetName((PetscObject) *dm, "Mesh");CHKERRQ(ierr);
   ierr = DMViewFromOptions(*dm, NULL, "-dm_view");CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -80,7 +80,7 @@ static PetscErrorCode SetInitialCoordinates(DM sw)
   ierr = PetscRandomCreate(PetscObjectComm((PetscObject) sw), &rndv);CHKERRQ(ierr);
   ierr = PetscRandomSetInterval(rndv, -1., 1.);CHKERRQ(ierr);
   ierr = PetscRandomSetFromOptions(rndv);CHKERRQ(ierr);
-  ierr = DMGetApplicationContext(sw, (void **) &user);CHKERRQ(ierr);
+  ierr = DMGetApplicationContext(sw, &user);CHKERRQ(ierr);
   Np   = user->N;
   ierr = DMGetDimension(sw, &dim);CHKERRQ(ierr);
   ierr = DMSwarmGetCellDM(sw, &dm);CHKERRQ(ierr);
@@ -95,7 +95,7 @@ static PetscErrorCode SetInitialCoordinates(DM sw)
   for (c = cStart; c < cEnd; ++c) {
     if (Np == 1) {
       ierr = DMPlexComputeCellGeometryFVM(dm, c, NULL, centroid, NULL);CHKERRQ(ierr);
-      for (d = 0; d < dim; ++d){
+      for (d = 0; d < dim; ++d) {
         coords[c*dim+d] = centroid[d];
       }
       vals[c] = 1.0;
@@ -121,7 +121,7 @@ static PetscErrorCode SetInitialCoordinates(DM sw)
       for (d = 0; d < dim; ++d) {
         PetscReal v_val;
 
-        ierr = PetscRandomGetValueReal(rndv, &v_val);
+        ierr = PetscRandomGetValueReal(rndv, &v_val);CHKERRQ(ierr);
         velocity[p*dim+d] = v_val;
       }
     }
@@ -147,7 +147,7 @@ static PetscErrorCode SetInitialConditions(DM dmSw, Vec u)
 
   PetscFunctionBeginUser;
   ierr = VecGetLocalSize(u, &n);CHKERRQ(ierr);
-  ierr = DMGetApplicationContext(dmSw, (void **) &user);CHKERRQ(ierr);
+  ierr = DMGetApplicationContext(dmSw, &user);CHKERRQ(ierr);
   Np   = user->N;
   ierr = DMSwarmGetCellDM(dmSw, &dm);CHKERRQ(ierr);
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
@@ -350,12 +350,12 @@ static PetscErrorCode RHSFunctionParticles(TS ts, PetscReal t, Vec U, Vec R, voi
   PetscFunctionBeginUser;
   ierr = VecZeroEntries(R);CHKERRQ(ierr);
   ierr = TSGetDM(ts, &sw);CHKERRQ(ierr);CHKERRQ(ierr);
-  ierr = DMGetDimension(sw, &dim);
+  ierr = DMGetDimension(sw, &dim);CHKERRQ(ierr);
   ierr = VecGetLocalSize(U, &Np);CHKERRQ(ierr);
   ierr = TSGetSolution(ts, &sol);CHKERRQ(ierr);
-  ierr = VecGetArray(sol, &velocity);
-  ierr = VecGetArray(R, &r);
-  ierr = VecGetArrayRead(U, &u);
+  ierr = VecGetArray(sol, &velocity);CHKERRQ(ierr);
+  ierr = VecGetArray(R, &r);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(U, &u);CHKERRQ(ierr);
   Np  /= dim;
   if (dbg) {ierr = PetscPrintf(PETSC_COMM_WORLD, "Part  ppr     x        y\n");CHKERRQ(ierr);}
   for (p = 0; p < Np; ++p) {
@@ -372,7 +372,7 @@ static PetscErrorCode RHSFunctionParticles(TS ts, PetscReal t, Vec U, Vec R, voi
       switch (dim) {
         case 2: DMPlex_MultAdd2DReal_Internal(Q, 1, GammaS, &r[p*dim]);break;
         case 3: DMPlex_MultAdd3DReal_Internal(Q, 1, GammaS, &r[p*dim]);break;
-        default: SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Do not support dimension %D", dim);
+        default: SETERRQ(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Do not support dimension %D", dim);
       }
     }
     if (dbg) {ierr = PetscPrintf(PETSC_COMM_WORLD, "Final %4D %10.8lf %10.8lf\n", p, r[p*dim+0], r[p*dim+1]);CHKERRQ(ierr);}
@@ -403,7 +403,7 @@ static PetscErrorCode UpdateSwarm(TS ts)
   ierr = DMSwarmGetField(sw, "velocity", NULL, NULL, (void **) &velocity);CHKERRQ(ierr);
   ierr = TSGetSolution(ts, &sol);CHKERRQ(ierr);
   ierr = VecGetArrayRead(sol, &u);CHKERRQ(ierr);
-  ierr = VecGetLocalSize(sol, &n);
+  ierr = VecGetLocalSize(sol, &n);CHKERRQ(ierr);
   for (idx = 0; idx < n; ++idx) velocity[idx] = u[idx];
   ierr = VecRestoreArrayRead(sol, &u);CHKERRQ(ierr);
   ierr = DMSwarmRestoreField(sw, "velocity", NULL, NULL, (void **) &velocity);CHKERRQ(ierr);
@@ -418,7 +418,7 @@ static PetscErrorCode InitializeSolve(TS ts, Vec u)
 
   PetscFunctionBeginUser;
   ierr = TSGetDM(ts, &dm);CHKERRQ(ierr);
-  ierr = DMGetApplicationContext(dm, (void **) &user);CHKERRQ(ierr);
+  ierr = DMGetApplicationContext(dm, &user);CHKERRQ(ierr);
   ierr = SetInitialCoordinates(dm);CHKERRQ(ierr);
   ierr = SetInitialConditions(dm, u);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -469,6 +469,6 @@ int main(int argc,char **argv)
      requires: triangle !single !complex
    test:
      suffix: midpoint
-     args: -N 3 -dm_plex_box_dim 2 -dm_plex_box_faces 1,1 -dm_plex_box_lower -1,-1 -dm_plex_box_upper 1,1 -dm_view \
+     args: -N 3 -dm_plex_dim 2 -dm_plex_simplex 0 -dm_plex_box_faces 1,1 -dm_plex_box_lower -1,-1 -dm_plex_box_upper 1,1 -dm_view \
            -ts_type theta -ts_theta_theta 0.5 -ts_dmswarm_monitor_moments -ts_monitor_frequency 1 -snes_fd
 TEST*/

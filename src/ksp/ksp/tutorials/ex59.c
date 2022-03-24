@@ -63,7 +63,6 @@ typedef struct {
   Mat elem_mat;
 } GLLData;
 
-
 static PetscErrorCode BuildCSRGraph(DomainData dd, PetscInt **xadj, PetscInt **adjncy)
 {
   PetscErrorCode ierr;
@@ -73,6 +72,7 @@ static PetscErrorCode BuildCSRGraph(DomainData dd, PetscInt **xadj, PetscInt **a
   PetscBool      internal_node;
 
   /* first count dimension of adjncy */
+  PetscFunctionBeginUser;
   count_adj=0;
   for (k=0; k<dd.zm_l; k++) {
     internal_node = PETSC_TRUE;
@@ -485,7 +485,7 @@ static PetscErrorCode GLLStuffs(DomainData dd, GLLData *glldata)
       pm1  = p-1;
       ierr = PetscFPTrapPush(PETSC_FP_TRAP_OFF);CHKERRQ(ierr);
       PetscStackCallBLAS("LAPACKsteqr",LAPACKsteqr_("N",&pm1,&glldata->zGL[1],M,&x,&pm1,M,&lierr));
-      if (lierr) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"Error in STERF Lapack routine %d",(int)lierr);
+      PetscCheckFalse(lierr,PETSC_COMM_SELF,PETSC_ERR_LIB,"Error in STERF Lapack routine %d",(int)lierr);
       ierr = PetscFPTrapPop();CHKERRQ(ierr);
       ierr = PetscFree(M);CHKERRQ(ierr);
     }
@@ -725,7 +725,7 @@ static PetscErrorCode ComputeMatrix(DomainData dd, Mat *A)
   /* Compute global mapping of local dofs */
   ierr = ComputeMapping(dd,&matis_map);CHKERRQ(ierr);
   /* Create MATIS object needed by BDDC */
-  ierr = MatCreateIS(dd.gcomm,1,PETSC_DECIDE,PETSC_DECIDE,dd.xm*dd.ym*dd.zm,dd.xm*dd.ym*dd.zm,matis_map,NULL,&temp_A);CHKERRQ(ierr);
+  ierr = MatCreateIS(dd.gcomm,1,PETSC_DECIDE,PETSC_DECIDE,dd.xm*dd.ym*dd.zm,dd.xm*dd.ym*dd.zm,matis_map,matis_map,&temp_A);CHKERRQ(ierr);
   /* Set local subdomain matrices into MATIS object */
   ierr = MatScale(local_mat,dd.scalingfactor);CHKERRQ(ierr);
   ierr = MatISSetLocalMat(temp_A,local_mat);CHKERRQ(ierr);
@@ -810,7 +810,6 @@ static PetscErrorCode ComputeKSPFETIDP(DomainData dd, KSP ksp_bddc, KSP *ksp_fet
   *ksp_fetidp = temp_ksp;
   PetscFunctionReturn(0);
 }
-
 
 static PetscErrorCode ComputeKSPBDDC(DomainData dd,Mat A,KSP *ksp)
 {
@@ -940,7 +939,7 @@ static PetscErrorCode InitializeDomainData(DomainData *dd)
   dd->gcomm = PETSC_COMM_WORLD;
   ierr      = MPI_Comm_size(dd->gcomm,&sizes);CHKERRMPI(ierr);
   ierr      = MPI_Comm_rank(dd->gcomm,&rank);CHKERRMPI(ierr);
-  /* Get informations from command line */
+  /* Get information from command line */
   /* Processors/subdomains per dimension */
   /* Default is 1d problem */
   dd->npx = sizes;
@@ -985,14 +984,14 @@ static PetscErrorCode InitializeDomainData(DomainData *dd)
   dd->scalingfactor = PetscPowScalar(10.0,(PetscScalar)factor*PetscPowScalar(-1.0,(PetscScalar)rank));
   /* test data passed in */
   if (dd->dim==1) {
-    if (sizes!=dd->npx) SETERRQ(dd->gcomm,PETSC_ERR_USER,"Number of mpi procs in 1D must be equal to npx");
-    if (dd->nex<dd->npx) SETERRQ(dd->gcomm,PETSC_ERR_USER,"Number of elements per dim must be greater/equal than number of procs per dim");
+    PetscCheckFalse(sizes!=dd->npx,dd->gcomm,PETSC_ERR_USER,"Number of mpi procs in 1D must be equal to npx");
+    PetscCheckFalse(dd->nex<dd->npx,dd->gcomm,PETSC_ERR_USER,"Number of elements per dim must be greater/equal than number of procs per dim");
   } else if (dd->dim==2) {
-    if (sizes!=dd->npx*dd->npy) SETERRQ(dd->gcomm,PETSC_ERR_USER,"Number of mpi procs in 2D must be equal to npx*npy");
-    if (dd->nex<dd->npx || dd->ney<dd->npy) SETERRQ(dd->gcomm,PETSC_ERR_USER,"Number of elements per dim must be greater/equal than number of procs per dim");
+    PetscCheckFalse(sizes!=dd->npx*dd->npy,dd->gcomm,PETSC_ERR_USER,"Number of mpi procs in 2D must be equal to npx*npy");
+    PetscCheckFalse(dd->nex<dd->npx || dd->ney<dd->npy,dd->gcomm,PETSC_ERR_USER,"Number of elements per dim must be greater/equal than number of procs per dim");
   } else {
-    if (sizes!=dd->npx*dd->npy*dd->npz) SETERRQ(dd->gcomm,PETSC_ERR_USER,"Number of mpi procs in 3D must be equal to npx*npy*npz");
-    if (dd->nex<dd->npx || dd->ney<dd->npy || dd->nez<dd->npz) SETERRQ(dd->gcomm,PETSC_ERR_USER,"Number of elements per dim must be greater/equal than number of procs per dim");
+    PetscCheckFalse(sizes!=dd->npx*dd->npy*dd->npz,dd->gcomm,PETSC_ERR_USER,"Number of mpi procs in 3D must be equal to npx*npy*npz");
+    PetscCheckFalse(dd->nex<dd->npx || dd->ney<dd->npy || dd->nez<dd->npz,dd->gcomm,PETSC_ERR_USER,"Number of elements per dim must be greater/equal than number of procs per dim");
   }
   PetscFunctionReturn(0);
 }
@@ -1078,7 +1077,7 @@ int main(int argc,char **args)
   if (0.95 <= mineig && mineig <= 1.05) mineig = 1.0;
   ierr = PetscPrintf(dd.gcomm,"Eigenvalues preconditioned operator        : %1.1e %1.1e\n",(double)PetscFloorReal(100.*mineig)/100.,(double)PetscCeilReal(100.*maxeig)/100.);CHKERRQ(ierr);
   if (norm > 1.e-1 || reason < 0) {
-    ierr = PetscPrintf(dd.gcomm,"Error betweeen exact and computed solution : %1.2e\n",(double)norm);CHKERRQ(ierr);
+    ierr = PetscPrintf(dd.gcomm,"Error between exact and computed solution : %1.2e\n",(double)norm);CHKERRQ(ierr);
   }
   ierr = PetscPrintf(dd.gcomm,"--------------------------------------------------------------\n");CHKERRQ(ierr);
   if (testfetidp) {
@@ -1122,7 +1121,7 @@ int main(int argc,char **args)
     if (0.95 <= mineig && mineig <= 1.05) mineig = 1.0;
     ierr = PetscPrintf(dd.gcomm,"Eigenvalues preconditioned operator        : %1.1e %1.1e\n",(double)PetscFloorReal(100.*mineig)/100.,(double)PetscCeilReal(100.*maxeig)/100.);CHKERRQ(ierr);
     if (norm > 1.e-1 || reason < 0) {
-      ierr = PetscPrintf(dd.gcomm,"Error betweeen exact and computed solution : %1.2e\n",(double)norm);CHKERRQ(ierr);
+      ierr = PetscPrintf(dd.gcomm,"Error between exact and computed solution : %1.2e\n",(double)norm);CHKERRQ(ierr);
     }
     ierr = PetscPrintf(dd.gcomm,"--------------------------------------------------------------\n");CHKERRQ(ierr);
     ierr = VecDestroy(&fetidp_solution);CHKERRQ(ierr);
@@ -1173,7 +1172,7 @@ int main(int argc,char **args)
  testset:
    nsize: 8
    suffix: bddc_fetidp_approximate
-   args: -npx 2 -npy 2 -npz 2 -p 2 -nex 8 -ney 7 -nez 9 -physical_ksp_max_it 20 -subdomain_mat_type aij -physical_pc_bddc_switch_static -physical_pc_bddc_dirichlet_approximate -physical_pc_bddc_neumann_approximate -physical_pc_bddc_dirichlet_pc_type gamg -physical_pc_bddc_dirichlet_mg_levels_ksp_max_it 3 -physical_pc_bddc_neumann_pc_type sor -physical_pc_bddc_neumann_approximate_scale -testfetidp 0
+   args: -npx 2 -npy 2 -npz 2 -p 2 -nex 8 -ney 7 -nez 9 -physical_ksp_max_it 20 -subdomain_mat_type aij -physical_pc_bddc_switch_static -physical_pc_bddc_dirichlet_approximate -physical_pc_bddc_neumann_approximate -physical_pc_bddc_dirichlet_pc_type gamg -physical_pc_bddc_dirichlet_pc_gamg_esteig_ksp_type cg -physical_pc_bddc_dirichlet_pc_gamg_esteig_ksp_max_it 10 -physical_pc_bddc_dirichlet_mg_levels_ksp_max_it 3 -physical_pc_bddc_neumann_pc_type sor -physical_pc_bddc_neumann_approximate_scale -testfetidp 0
 
  testset:
    nsize: 4
@@ -1200,6 +1199,5 @@ int main(int argc,char **args)
    test:
      suffix: bddc_fetidp_ml_eqlimit_2
      args: -physical_pc_bddc_coarse_eqs_limit 46
-
 
 TEST*/

@@ -73,7 +73,7 @@ static PetscErrorCode PetscSpaceEvaluate_Point(PetscSpace sp, PetscInt npoints, 
   PetscErrorCode    ierr;
 
   PetscFunctionBegin;
-  if (npoints != pt->quad->numPoints) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_SUP, "Cannot evaluate Point space on %d points != %d size", npoints, pt->quad->numPoints);
+  PetscCheckFalse(npoints != pt->quad->numPoints,PETSC_COMM_SELF, PETSC_ERR_SUP, "Cannot evaluate Point space on %d points != %d size", npoints, pt->quad->numPoints);
   ierr = PetscArrayzero(B, npoints*pdim);CHKERRQ(ierr);
   for (p = 0; p < npoints; ++p) {
     for (i = 0; i < pdim; ++i) {
@@ -155,7 +155,7 @@ PetscErrorCode PetscSpacePointSetPoints(PetscSpace sp, PetscQuadrature q)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sp, PETSCSPACE_CLASSID, 1);
-  PetscValidHeaderSpecific(q, PETSC_OBJECT_CLASSID, 2);
+  PetscValidHeaderSpecific(q, PETSCQUADRATURE_CLASSID, 2);
   ierr = PetscQuadratureDestroy(&pt->quad);CHKERRQ(ierr);
   ierr = PetscQuadratureDuplicate(q, &pt->quad);CHKERRQ(ierr);
   PetscFunctionReturn(0);

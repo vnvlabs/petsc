@@ -1,5 +1,6 @@
 
 #include <petsc/private/isimpl.h>    /*I "petscis.h"  I*/
+#include <petscviewer.h>
 
 /*@
    ISEqual  - Compares if two index sets have the same set of indices.
@@ -17,8 +18,8 @@
    Level: intermediate
 
    Note:
-   This routine sorts the contents of the index sets before
-   the comparision is made, so the order of the indices on a processor is immaterial.
+   Unlike ISEqualUnsorted(), this routine sorts the contents of the index sets before
+   the comparison is made, so the order of the indices on a processor is immaterial.
 
    Each processor has to have the same indices in the two sets, for example,
 $           Processor
@@ -26,7 +27,6 @@ $             0      1
 $    is1 = {0, 1} {2, 3}
 $    is2 = {2, 3} {0, 1}
    will return false.
-
 
 .seealso: ISEqualUnsorted()
 @*/
@@ -90,7 +90,7 @@ PetscErrorCode  ISEqual(IS is1,IS is2,PetscBool  *flg)
 }
 
 /*@
-   ISEqualUnsorted  - Compares if two index sets have the same set of indices.
+   ISEqualUnsorted  - Compares if two index sets have the same indices.
 
    Collective on IS
 
@@ -105,9 +105,8 @@ PetscErrorCode  ISEqual(IS is1,IS is2,PetscBool  *flg)
    Level: intermediate
 
    Note:
-   This routine does NOT sort the contents of the index sets before
-   the comparision is made.
-
+   Unlike ISEqual(), this routine does NOT sort the contents of the index sets before
+   the comparison is made, i.e., the order of indices is important.
 
 .seealso: ISEqual()
 @*/
@@ -158,5 +157,4 @@ PetscErrorCode  ISEqualUnsorted(IS is1,IS is2,PetscBool  *flg)
   }
   PetscFunctionReturn(0);
 }
-
 

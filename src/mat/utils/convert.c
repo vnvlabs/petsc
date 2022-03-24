@@ -2,12 +2,10 @@
 #include <petsc/private/matimpl.h>
 
 /*
-  MatConvert_Basic - Converts from any input format to another format. For
-  parallel formats, the new matrix distribution is determined by PETSc.
-
+  MatConvert_Basic - Converts from any input format to another format.
   Does not do preallocation so in general will be slow
  */
-PETSC_INTERN PetscErrorCode MatConvert_Basic(Mat mat, MatType newtype,MatReuse reuse,Mat *newmat)
+PETSC_INTERN PetscErrorCode MatConvert_Basic(Mat mat,MatType newtype,MatReuse reuse,Mat *newmat)
 {
   Mat               M;
   const PetscScalar *vwork;
@@ -17,11 +15,15 @@ PETSC_INTERN PetscErrorCode MatConvert_Basic(Mat mat, MatType newtype,MatReuse r
   PetscBool         isSBAIJ;
 
   PetscFunctionBegin;
+  if (!mat->ops->getrow) { /* missing get row, use matvecs */
+    ierr = MatConvert_Shell(mat,newtype,reuse,newmat);CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+  }
   ierr = PetscObjectTypeCompare((PetscObject)mat,MATSEQSBAIJ,&isSBAIJ);CHKERRQ(ierr);
   if (!isSBAIJ) {
     ierr = PetscObjectTypeCompare((PetscObject)mat,MATMPISBAIJ,&isSBAIJ);CHKERRQ(ierr);
   }
-  if (isSBAIJ) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Cannot convert from SBAIJ matrix since cannot obtain entire rows of matrix");
+  PetscCheckFalse(isSBAIJ,PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Cannot convert from SBAIJ matrix since cannot obtain entire rows of matrix");
 
   if (reuse == MAT_REUSE_MATRIX) {
     M = *newmat;
@@ -33,8 +35,6 @@ PETSC_INTERN PetscErrorCode MatConvert_Basic(Mat mat, MatType newtype,MatReuse r
     ierr = MatSetSizes(M,lm,ln,m,n);CHKERRQ(ierr);
     ierr = MatSetBlockSizesFromMats(M,mat,mat);CHKERRQ(ierr);
     ierr = MatSetType(M,newtype);CHKERRQ(ierr);
-    ierr = MatSeqDenseSetPreallocation(M,NULL);CHKERRQ(ierr);
-    ierr = MatMPIDenseSetPreallocation(M,NULL);CHKERRQ(ierr);
     ierr = MatSetUp(M);CHKERRQ(ierr);
 
     ierr = MatSetOption(M,MAT_NEW_NONZERO_LOCATION_ERR,PETSC_FALSE);CHKERRQ(ierr);

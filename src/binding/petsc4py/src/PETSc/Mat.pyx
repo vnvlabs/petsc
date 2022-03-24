@@ -35,9 +35,11 @@ class MatType(object):
     MPIBAIJMKL      = S_(MATMPIBAIJMKL)
     SHELL           = S_(MATSHELL)
     DENSE           = S_(MATDENSE)
+    DENSECUDA       = S_(MATDENSECUDA)
     SEQDENSE        = S_(MATSEQDENSE)
     SEQDENSECUDA    = S_(MATSEQDENSECUDA)
     MPIDENSE        = S_(MATMPIDENSE)
+    MPIDENSECUDA    = S_(MATMPIDENSECUDA)
     ELEMENTAL       = S_(MATELEMENTAL)
     BAIJ            = S_(MATBAIJ)
     SEQBAIJ         = S_(MATSEQBAIJ)
@@ -80,7 +82,7 @@ class MatType(object):
     LMVMSYMBADBROYDEN = S_(MATLMVMSYMBADBROYDEN)
     LMVMDIAGBBROYDEN = S_(MATLMVMDIAGBROYDEN)
     CONSTANTDIAGONAL = S_(MATCONSTANTDIAGONAL)
-    HARA             = S_(MATHARA)
+    H2OPUS           = S_(MATH2OPUS)
 
 class MatOption(object):
     OPTION_MIN                  = MAT_OPTION_MIN
@@ -136,6 +138,11 @@ class MatStructure(object):
     DIFFERENT = DIFFERENT_NZ = DIFFERENT_NONZERO_PATTERN
     UNKNOWN   = UNKNOWN_NZ   = UNKNOWN_NONZERO_PATTERN
 
+class MatDuplicateOption(object):
+    DO_NOT_COPY_VALUES    = MAT_DO_NOT_COPY_VALUES
+    COPY_VALUES           = MAT_COPY_VALUES
+    SHARE_NONZERO_PATTERN = MAT_SHARE_NONZERO_PATTERN
+
 class MatOrderingType(object):
     NATURAL     = S_(MATORDERINGNATURAL)
     ND          = S_(MATORDERINGND)
@@ -146,6 +153,7 @@ class MatOrderingType(object):
     WBM         = S_(MATORDERINGWBM)
     SPECTRAL    = S_(MATORDERINGSPECTRAL)
     AMD         = S_(MATORDERINGAMD)
+    METISND     = S_(MATORDERINGMETISND)
 
 class MatSolverType(object):
     SUPERLU         = S_(MATSOLVERSUPERLU)
@@ -168,6 +176,7 @@ class MatSolverType(object):
     BAS             = S_(MATSOLVERBAS)
     CUSPARSE        = S_(MATSOLVERCUSPARSE)
     CUDA            = S_(MATSOLVERCUDA)
+    SPQR            = S_(MATSOLVERSPQR)
 
 class MatFactorShiftType(object):
     # native
@@ -200,6 +209,7 @@ cdef class Mat(Object):
     AssemblyType    = MatAssemblyType
     InfoType        = MatInfoType
     Structure       = MatStructure
+    DuplicateOption = MatDuplicateOption
     OrderingType    = MatOrderingType
     SolverType      = MatSolverType
     FactorShiftType = MatFactorShiftType
@@ -324,6 +334,17 @@ cdef class Mat(Object):
         cdef PetscInt rbs = asInt(row_bsize)
         cdef PetscInt cbs = asInt(col_bsize)
         CHKERR( MatSetBlockSizes(self.mat, rbs, cbs) )
+
+    def setVecType(self, vec_type):
+        cdef PetscVecType cval = NULL
+        vec_type = str2bytes(vec_type, &cval)
+        CHKERR( MatSetVecType(self.mat, cval) )
+
+    def getVecType(self):
+        cdef PetscVecType cval = NULL
+        CHKERR( MatGetVecType(self.mat, &cval) )
+        return bytes2str(cval)
+
     #
 
     def createAIJ(self, size, bsize=None, nnz=None, csr=None, comm=None):
@@ -444,6 +465,16 @@ cdef class Mat(Object):
             self.set_attr('__array__', array)
         return self
 
+    def createDenseCUDA(self, size, bsize=None, array=None, comm=None):
+        # create matrix
+        cdef PetscMat newmat = NULL
+        Mat_Create(MATDENSECUDA, comm, size, bsize, &newmat)
+        PetscCLEAR(self.obj); self.mat = newmat
+        # preallocate matrix
+        if array is not None:
+            raise RuntimeError('passing GPU data not yet supported. Report it if you need this feature')
+        return self
+
     def setPreallocationDense(self, array):
         cdef PetscBool done = PETSC_FALSE
         CHKERR( MatIsPreallocated(self.mat, &done) )
@@ -471,6 +502,18 @@ cdef class Mat(Object):
     def createTranspose(self, Mat mat):
         cdef PetscMat newmat = NULL
         CHKERR( MatCreateTranspose(mat.mat, &newmat) )
+        PetscCLEAR(self.obj); self.mat = newmat
+        return self
+
+    def createNormalHermitian(self, Mat mat):
+        cdef PetscMat newmat = NULL
+        CHKERR( MatCreateNormalHermitian(mat.mat, &newmat) )
+        PetscCLEAR(self.obj); self.mat = newmat
+        return self
+
+    def createHermitianTranspose(self, Mat mat):
+        cdef PetscMat newmat = NULL
+        CHKERR( MatCreateHermitianTranspose(mat.mat, &newmat) )
         PetscCLEAR(self.obj); self.mat = newmat
         return self
 
@@ -532,19 +575,66 @@ cdef class Mat(Object):
         PetscCLEAR(self.obj); self.mat = newmat
         return self
 
-    ##def createIS(self, size, LGMap lgmap, comm=None):
-    ##    # communicator and sizes
-    ##    if comm is None: comm = lgmap.getComm()
-    ##    cdef MPI_Comm ccomm = def_Comm(comm, PETSC_COMM_DEFAULT)
-    ##    cdef PetscInt rbs = 0, cbs = 0, m = 0, n = 0, M = 0, N = 0
-    ##    Mat_Sizes(size, None, &rbs, &cbs, &m, &n, &M, &N)
-    ##    Sys_Layout(ccomm, rbs, &m, &M)
-    ##    Sys_Layout(ccomm, cbs, &n, &N)
-    ##    # create matrix
-    ##    cdef PetscMat newmat = NULL
-    ##    CHKERR( MatCreateIS(ccomm, m, n, M, N, lgmap.lgm, &newmat) )
-    ##    PetscCLEAR(self.obj); self.mat = newmat
-    ##    return self
+    def createH2OpusFromMat(self, Mat A, coordinates=None, dist=None, eta=None, leafsize=None, maxrank=None, bs=None, rtol=None):
+        cdef PetscInt cdim = 1
+        cdef PetscReal *coords = NULL
+        cdef PetscBool cdist = PETSC_FALSE
+        cdef PetscReal peta = PETSC_DECIDE
+        cdef PetscInt lsize = PETSC_DECIDE
+        cdef PetscInt maxr = PETSC_DECIDE
+        cdef PetscInt pbs = PETSC_DECIDE
+        cdef PetscReal tol = PETSC_DECIDE
+        cdef ndarray xyz
+        cdef PetscInt nvtx
+        cdef PetscInt rl = 0, cl = 0
+        if dist is not None: cdist = asBool(dist)
+        if eta is not None: peta = asReal(eta)
+        if leafsize is not None: lsize = asInt(leafsize)
+        if maxrank is not None: maxr = asInt(maxrank)
+        if bs is not None: pbs = asInt(bs)
+        if rtol is not None: tol = asReal(rtol)
+
+        if coordinates is not None:
+            xyz = iarray(coordinates, NPY_PETSC_REAL)
+            if PyArray_ISFORTRAN(xyz): xyz = PyArray_Copy(xyz)
+            if PyArray_NDIM(xyz) != 2: raise ValueError(
+                ("coordinates must have two dimensions: "
+                 "coordinates.ndim=%d") % (PyArray_NDIM(xyz)) )
+            nvtx = <PetscInt> PyArray_DIM(xyz, 0)
+            CHKERR( MatGetLocalSize(A.mat, &rl, &cl) )
+            if cl != rl: raise ValueError("Not for rectangular matrices")
+            if nvtx < rl: raise ValueError(
+                ("coordinates size must be at least %d" % rl ))
+            cdim = <PetscInt> PyArray_DIM(xyz, 1)
+            coords = <PetscReal*> PyArray_DATA(xyz)
+
+        cdef PetscMat newmat = NULL
+        CHKERR( MatCreateH2OpusFromMat(A.mat, cdim, coords, cdist, peta, lsize, maxr, pbs, tol, &newmat) )
+        PetscCLEAR(self.obj); self.mat = newmat
+        return self
+
+    def createIS(self, size, LGMap lgmapr=None, LGMap lgmapc=None, comm=None):
+        # communicator and sizes
+        if comm is None and lgmapr is not None: comm = lgmapr.getComm()
+        if comm is None and lgmapc is not None: comm = lgmapc.getComm()
+        cdef PetscLGMap lgmr = NULL
+        cdef PetscLGMap lgmc = NULL
+        cdef MPI_Comm ccomm = def_Comm(comm, PETSC_COMM_DEFAULT)
+        cdef PetscInt rbs = 0, cbs = 0, m = 0, n = 0, M = 0, N = 0
+        Mat_Sizes(size, None, &rbs, &cbs, &m, &n, &M, &N)
+        Sys_Layout(ccomm, rbs, &m, &M)
+        Sys_Layout(ccomm, cbs, &n, &N)
+        # create matrix
+        cdef PetscMat newmat = NULL
+        cdef PetscInt bs = 1
+        if rbs == cbs: bs = rbs
+        if lgmapr is not None:
+           lgmr = lgmapr.lgm
+        if lgmapc is not None:
+           lgmc = lgmapc.lgm
+        CHKERR( MatCreateIS(ccomm, bs, m, n, M, N, lgmr, lgmc, &newmat) )
+        PetscCLEAR(self.obj); self.mat = newmat
+        return self
 
     def createPython(self, size, context=None, comm=None):
         # communicator and sizes
@@ -588,6 +678,11 @@ cdef class Mat(Object):
         CHKERR( MatGetOptionsPrefix(self.mat, &cval) )
         return bytes2str(cval)
 
+    def appendOptionsPrefix(self, prefix):
+        cdef const char *cval = NULL
+        prefix = str2bytes(prefix, &cval)
+        CHKERR( MatAppendOptionsPrefix(self.mat, cval) )
+
     def setFromOptions(self):
         CHKERR( MatSetFromOptions(self.mat) )
 
@@ -597,6 +692,11 @@ cdef class Mat(Object):
 
     def setOption(self, option, flag):
         CHKERR( MatSetOption(self.mat, option, flag) )
+
+    def getOption(self, option):
+        cdef PetscBool flag = PETSC_FALSE
+        CHKERR( MatGetOption(self.mat, option, &flag) )
+        return toBool(flag)
 
     def getType(self):
         cdef PetscMatType cval = NULL
@@ -723,6 +823,18 @@ cdef class Mat(Object):
         else:
             reuse = MAT_REUSE_MATRIX
         CHKERR( MatTranspose(self.mat, reuse, &out.mat) )
+        return out
+
+    def hermitianTranspose(self, Mat out=None):
+        cdef PetscMatReuse reuse = MAT_INITIAL_MATRIX
+        if out is None: out = self
+        if out.mat == self.mat:
+            reuse = MAT_INPLACE_MATRIX
+        elif out.mat == NULL:
+            reuse = MAT_INITIAL_MATRIX
+        else:
+            reuse = MAT_REUSE_MATRIX
+        CHKERR( MatHermitianTranspose(self.mat, reuse, &out.mat) )
         return out
 
     def realPart(self, Mat out=None):
@@ -1036,7 +1148,7 @@ cdef class Mat(Object):
         cdef PetscInt nrows = asInt(len(rows))
         cdef PetscMatStencil st
         cdef _Mat_Stencil r
-        cdef PetscMatStencil *crows = NULL 
+        cdef PetscMatStencil *crows = NULL
         CHKERR( PetscMalloc(<size_t>(nrows+1)*sizeof(st), &crows) )
         for i in range(nrows):
             r = rows[i]
@@ -1070,7 +1182,11 @@ cdef class Mat(Object):
         cdef PetscBool flag = PETSC_FALSE
         CHKERR( MatAssembled(self.mat, &flag) )
         return toBool(flag)
-    #
+
+    def findZeroRows(self):
+        cdef IS zerorows = IS()
+        CHKERR( MatFindZeroRows(self.mat, &zerorows.iset) )
+        return zerorows
 
     def createVecs(self, side=None):
         cdef Vec vecr, vecl
@@ -1309,6 +1425,11 @@ cdef class Mat(Object):
         cdef PetscReal rval = asReal(tol)
         CHKERR( MatChop(self.mat, rval) )
 
+    def setRandom(self, Random random=None):
+        cdef PetscRandom rnd = NULL
+        if random is not None: rnd = random.rnd
+        CHKERR( MatSetRandom(self.mat, rnd) )
+
     def axpy(self, alpha, Mat X, structure=None):
         cdef PetscScalar sval = asScalar(alpha)
         cdef PetscMatStructure flag = matstructure(structure)
@@ -1354,7 +1475,7 @@ cdef class Mat(Object):
         CHKERR( MatTransposeMatMult(self.mat, mat.mat, reuse, rval, &result.mat) )
         return result
 
-    def PtAP(self, Mat P, Mat result=None, fill=None):
+    def ptap(self, Mat P, Mat result=None, fill=None):
         cdef PetscMatReuse reuse = MAT_INITIAL_MATRIX
         cdef PetscReal cfill = PETSC_DEFAULT
         if result is None:
@@ -1364,6 +1485,46 @@ cdef class Mat(Object):
         if fill is not None: cfill = asReal(fill)
         CHKERR( MatPtAP(self.mat, P.mat, reuse, cfill, &result.mat) )
         return result
+
+    def rart(self, Mat R, Mat result=None, fill=None):
+        cdef PetscMatReuse reuse = MAT_INITIAL_MATRIX
+        cdef PetscReal cfill = PETSC_DEFAULT
+        if result is None:
+            result = Mat()
+        elif result.mat != NULL:
+            reuse = MAT_REUSE_MATRIX
+        if fill is not None: cfill = asReal(fill)
+        CHKERR( MatRARt(self.mat, R.mat, reuse, cfill, &result.mat) )
+        return result
+
+    def matMatMult(self, Mat B, Mat C, Mat result=None, fill=None):
+        cdef PetscMatReuse reuse = MAT_INITIAL_MATRIX
+        cdef PetscReal cfill = PETSC_DEFAULT
+        if result is None:
+            result = Mat()
+        elif result.mat != NULL:
+            reuse = MAT_REUSE_MATRIX
+        if fill is not None: cfill = asReal(fill)
+        CHKERR( MatMatMatMult(self.mat, B.mat, C.mat, reuse, cfill, &result.mat) )
+        return result
+
+    def kron(self, Mat mat, Mat result=None):
+        cdef PetscMatReuse reuse = MAT_INITIAL_MATRIX
+        if result is None:
+            result = Mat()
+        elif result.mat != NULL:
+            reuse = MAT_REUSE_MATRIX
+        CHKERR( MatSeqAIJKron(self.mat, mat.mat, reuse, &result.mat) )
+        return result
+
+    def bindToCPU(self, flg):
+        cdef PetscBool bindFlg = asBool(flg)
+        CHKERR( MatBindToCPU(self.mat, bindFlg) )
+
+    def boundToCPU(self):
+        cdef PetscBool flg = PETSC_TRUE
+        CHKERR( MatBoundToCPU(self.mat, &flg) )
+        return toBool(flg)
 
     # XXX factorization
 
@@ -1463,6 +1624,25 @@ cdef class Mat(Object):
         PetscINCREF(V.obj)
         return (A, U, c, V)
 
+    # H2Opus
+
+    def H2OpusOrthogonalize(self):
+        CHKERR( MatH2OpusOrthogonalize(self.mat) )
+        return self
+
+    def H2OpusCompress(self, tol):
+        cdef PetscReal _tol = asReal(tol)
+        CHKERR( MatH2OpusCompress(self.mat, _tol) )
+        return self
+
+    def H2OpusLowRankUpdate(self, Mat U, Mat V=None, s = 1.0):
+        cdef PetscScalar _s = asScalar(s)
+        cdef PetscMat vmat = NULL
+        if V is not None:
+            vmat = V.mat
+        CHKERR( MatH2OpusLowRankUpdate(self.mat, U.mat, vmat, _s) )
+        return self
+
     # MUMPS
 
     def setMumpsIcntl(self, icntl, ival):
@@ -1536,13 +1716,25 @@ cdef class Mat(Object):
 
     # dense matrices
 
-    def getDenseArray(self):
+    def setDenseLDA(self, lda):
+        cdef PetscInt _ilda = asInt(lda)
+        CHKERR( MatDenseSetLDA(self.mat, _ilda) )
+
+    def getDenseLDA(self):
+        cdef PetscInt lda=0
+        CHKERR( MatDenseGetLDA(self.mat, &lda) )
+        return toInt(lda)
+
+    def getDenseArray(self,readonly=False):
         cdef PetscInt m=0, N=0, lda=0
         cdef PetscScalar *data = NULL
         CHKERR( MatGetLocalSize(self.mat, &m, NULL) )
         CHKERR( MatGetSize(self.mat, NULL, &N) )
-        lda = m # CHKERR( MatDenseGetLDA(self.mat, &ld) )
-        CHKERR( MatDenseGetArray(self.mat, &data) )
+        CHKERR( MatDenseGetLDA(self.mat, &lda) )
+        if readonly:
+            CHKERR( MatDenseGetArrayRead(self.mat, <const PetscScalar**>&data) )
+        else:
+            CHKERR( MatDenseGetArray(self.mat, &data) )
         cdef int typenum = NPY_PETSC_SCALAR
         cdef int itemsize = <int>sizeof(PetscScalar)
         cdef int flags = NPY_ARRAY_FARRAY
@@ -1551,7 +1743,10 @@ cdef class Mat(Object):
         dims[1] = <npy_intp>N; strides[1] = <npy_intp>(lda*sizeof(PetscScalar));
         array = <object>PyArray_New(<PyTypeObject*>ndarray, 2, dims, typenum,
                                     strides, data, itemsize, flags, NULL)
-        CHKERR( MatDenseRestoreArray(self.mat, &data) )
+        if readonly:
+            CHKERR( MatDenseRestoreArrayRead(self.mat, <const PetscScalar**>&data) )
+        else:
+            CHKERR( MatDenseRestoreArray(self.mat, &data) )
         return array
 
     def getDenseLocalMatrix(self):
@@ -1559,6 +1754,30 @@ cdef class Mat(Object):
         CHKERR( MatDenseGetLocalMatrix(self.mat, &mat.mat) )
         PetscINCREF(mat.obj)
         return mat
+
+    def getDenseColumnVec(self, i, mode='rw'):
+        if mode is None: mode = 'rw'
+        if mode not in ['rw', 'r', 'w']:
+            raise ValueError("Invalid mode: expected 'rw', 'r', or 'w'")
+        cdef Vec v = Vec()
+        cdef PetscInt _i = asInt(i)
+        if mode == 'rw':
+            CHKERR( MatDenseGetColumnVec(self.mat, _i, &v.vec) )
+        elif mode == 'r':
+            CHKERR( MatDenseGetColumnVecRead(self.mat, _i, &v.vec) )
+        else:
+            CHKERR( MatDenseGetColumnVecWrite(self.mat, _i, &v.vec) )
+        PetscINCREF(v.obj)
+        return v
+
+    def restoreDenseColumnVec(self, i, mode='rw'):
+        cdef PetscInt _i = asInt(i)
+        if mode == 'rw':
+            CHKERR( MatDenseRestoreColumnVec(self.mat, _i, NULL) )
+        elif mode == 'r':
+            CHKERR( MatDenseRestoreColumnVecRead(self.mat, _i, NULL) )
+        else:
+            CHKERR( MatDenseRestoreColumnVecWrite(self.mat, _i, NULL) )
 
     # Nest
 
@@ -1620,6 +1839,10 @@ cdef class Mat(Object):
     def setDM(self, DM dm):
         CHKERR( MatSetDM(self.mat, dm.dm) )
 
+    # backward compatibility
+
+    PtAP = ptap
+
     #
 
     property sizes:
@@ -1666,6 +1889,83 @@ cdef class Mat(Object):
     property structsymm:
         def __get__(self):
             return self.isStructurallySymmetric()
+
+    # TODO Stream
+    def __dlpack__(self, stream=-1):
+        return self.toDLPack('rw')
+
+    def __dlpack_device__(self):
+        (dltype, devId, _, _, _) = mat_get_dlpack_ctx(self)
+        return (dltype, devId)
+
+    def toDLPack(self, mode='rw'):
+        if mode is None: mode = 'rw'
+        if mode not in ['rw', 'r', 'w']:
+            raise ValueError("Invalid mode: expected 'rw', 'r', or 'w'")
+
+        cdef int64_t ndim = 0
+        (device_type, device_id, ndim, shape, strides) = mat_get_dlpack_ctx(self)
+        hostmem = (device_type == kDLCPU)
+
+        cdef DLManagedTensor* dlm_tensor = <DLManagedTensor*>malloc(sizeof(DLManagedTensor))
+        cdef DLTensor* dl_tensor = &dlm_tensor.dl_tensor
+        cdef PetscScalar *a = NULL
+        cdef int64_t* shape_strides = NULL
+        dl_tensor.byte_offset = 0
+
+        # DLPack does not currently play well with our get/restore model
+        # Call restore right-away and hope that the consumer will do the right thing
+        # and not modify memory requested with read access
+        # By restoring now, we guarantee the sanity of the ObjectState
+        if mode == 'w':
+            if hostmem:
+                CHKERR( MatDenseGetArrayWrite(self.mat, <PetscScalar**>&a) )
+                CHKERR( MatDenseRestoreArrayWrite(self.mat, NULL) )
+            else:
+                CHKERR( MatDenseCUDAGetArrayWrite(self.mat, <PetscScalar**>&a) )
+                CHKERR( MatDenseCUDARestoreArrayWrite(self.mat, NULL) )
+        elif mode == 'r':
+            if hostmem:
+                CHKERR( MatDenseGetArrayRead(self.mat, <const PetscScalar**>&a) )
+                CHKERR( MatDenseRestoreArrayRead(self.mat, NULL) )
+            else:
+                CHKERR( MatDenseCUDAGetArrayRead(self.mat, <const PetscScalar**>&a) )
+                CHKERR( MatDenseCUDARestoreArrayRead(self.mat, NULL) )
+        else:
+            if hostmem:
+                CHKERR( MatDenseGetArray(self.mat, <PetscScalar**>&a) )
+                CHKERR( MatDenseRestoreArray(self.mat, NULL) )
+            else:
+                CHKERR( MatDenseCUDAGetArray(self.mat, <PetscScalar**>&a) )
+                CHKERR( MatDenseCUDARestoreArray(self.mat, NULL) )
+        dl_tensor.data = <void *>a
+
+        cdef DLContext* ctx = &dl_tensor.ctx
+        ctx.device_type = device_type
+        ctx.device_id = device_id
+        shape_strides = <int64_t*>malloc(sizeof(int64_t)*2*ndim)
+        for i in range(ndim):
+            shape_strides[i] = shape[i]
+        for i in range(ndim):
+            shape_strides[i+ndim] = strides[i]
+        dl_tensor.ndim = ndim
+        dl_tensor.shape = shape_strides
+        dl_tensor.strides = shape_strides + ndim
+
+        cdef DLDataType* dtype = &dl_tensor.dtype
+        dtype.code = <uint8_t>DLDataTypeCode.kDLFloat
+        if sizeof(PetscScalar) == 8:
+            dtype.bits = <uint8_t>64
+        elif sizeof(PetscScalar) == 4:
+            dtype.bits = <uint8_t>32
+        else:
+            raise ValueError('Unsupported PetscScalar type')
+        dtype.lanes = <uint16_t>1
+        dlm_tensor.manager_ctx = <void *>self.mat
+        CHKERR( PetscObjectReference(<PetscObject>self.mat) )
+        dlm_tensor.manager_deleter = manager_deleter
+        dlm_tensor.del_obj = <dlpack_manager_del_obj>PetscDEALLOC
+        return PyCapsule_New(dlm_tensor, 'dltensor', pycapsule_deleter)
 
 # --------------------------------------------------------------------
 
@@ -1761,6 +2061,7 @@ del MatOption
 del MatAssemblyType
 del MatInfoType
 del MatStructure
+del MatDuplicateOption
 del MatOrderingType
 del MatSolverType
 del MatFactorShiftType

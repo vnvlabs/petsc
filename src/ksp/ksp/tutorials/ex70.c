@@ -41,7 +41,6 @@ static PetscErrorCode DMDAApplyBoundaryConditions(DM,Mat,Vec);
 #define P_DOFS         1 /* degrees of freedom per pressure node */
 #define GAUSS_POINTS   4
 
-
 static void EvaluateBasis_Q1(PetscScalar _xi[],PetscScalar N[])
 {
   PetscScalar xi  = _xi[0];
@@ -495,7 +494,7 @@ static PetscErrorCode AssembleStokes_RHS(Vec F,DM stokes_da,DM quadrature)
   /* setup for coefficients */
   ierr = DMSwarmGetField(quadrature,"rho_q",NULL,NULL,(void**)&q_rhs);CHKERRQ(ierr);
 
-  /* get acces to the vector */
+  /* get access to the vector */
   ierr = DMGetLocalVector(stokes_da,&local_F);CHKERRQ(ierr);
   ierr = VecZeroEntries(local_F);CHKERRQ(ierr);
   ierr = VecGetArray(local_F,&LA_F);CHKERRQ(ierr);
@@ -636,7 +635,7 @@ PetscErrorCode DMSwarmPICInsertPointsCellwise(DM dm,DM dmc,PetscInt e,PetscInt n
           min_sep = sep;
         }
       }
-      if (nearest_neighour == -1) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_USER,"Cell %D is empty - cannot initalize using nearest neighbours",e);
+      PetscCheckFalse(nearest_neighour == -1,PETSC_COMM_SELF,PETSC_ERR_USER,"Cell %D is empty - cannot initialize using nearest neighbours",e);
       nnlist[q] = nearest_neighour;
     }
     ierr = DMSwarmRestoreField(dm,DMSwarmPICField_cellid,NULL,NULL,(void**)&swarm_cellid);CHKERRQ(ierr);
@@ -773,10 +772,10 @@ PetscErrorCode MaterialPoint_AdvectRK1(DM dm_vp,Vec vp,PetscReal dt,DM dm_mpoint
 
     xi_p[0] = 2.0 * (coor_p[0] - x0[0])/dx[0] - 1.0;
     xi_p[1] = 2.0 * (coor_p[1] - x0[1])/dx[1] - 1.0;
-    if (PetscRealPart(xi_p[0]) < -1.0) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_SUP,"value (xi) too small %1.4e [e=%D]\n",(double)PetscRealPart(xi_p[0]),e);
-    if (PetscRealPart(xi_p[0]) >  1.0) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_SUP,"value (xi) too large %1.4e [e=%D]\n",(double)PetscRealPart(xi_p[0]),e);
-    if (PetscRealPart(xi_p[1]) < -1.0) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_SUP,"value (eta) too small %1.4e [e=%D]\n",(double)PetscRealPart(xi_p[1]),e);
-    if (PetscRealPart(xi_p[1]) >  1.0) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_SUP,"value (eta) too large %1.4e [e=%D]\n",(double)PetscRealPart(xi_p[1]),e);
+    PetscCheckFalse(PetscRealPart(xi_p[0]) < -1.0-PETSC_SMALL,PETSC_COMM_SELF,PETSC_ERR_SUP,"value (xi) too small %1.4e [e=%" PetscInt_FMT "]",(double)PetscRealPart(xi_p[0]),e);
+    PetscCheckFalse(PetscRealPart(xi_p[0]) >  1.0+PETSC_SMALL,PETSC_COMM_SELF,PETSC_ERR_SUP,"value (xi) too large %1.4e [e=%" PetscInt_FMT "]",(double)PetscRealPart(xi_p[0]),e);
+    PetscCheckFalse(PetscRealPart(xi_p[1]) < -1.0-PETSC_SMALL,PETSC_COMM_SELF,PETSC_ERR_SUP,"value (eta) too small %1.4e [e=%" PetscInt_FMT "]",(double)PetscRealPart(xi_p[1]),e);
+    PetscCheckFalse(PetscRealPart(xi_p[1]) >  1.0+PETSC_SMALL,PETSC_COMM_SELF,PETSC_ERR_SUP,"value (eta) too large %1.4e [e=%" PetscInt_FMT "]",(double)PetscRealPart(xi_p[1]),e);
 
     /* evaluate basis functions */
     EvaluateBasis_Q1(xi_p,Ni);
@@ -1027,7 +1026,7 @@ static PetscErrorCode SolveTimeDepStokes(PetscInt mx,PetscInt my)
   ierr = PetscOptionsGetReal(NULL,NULL,"-delta_eta",&delta_eta,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetBool(NULL,NULL,"-randomize_coords",&randomize_coords,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetReal(NULL,NULL,"-randomize_fac",&randomize_fac,NULL);CHKERRQ(ierr);
-  if (randomize_fac > 1.0) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_USER,"The value of -randomize_fac should be <= 1.0");
+  PetscCheckFalse(randomize_fac > 1.0,PETSC_COMM_WORLD,PETSC_ERR_USER,"The value of -randomize_fac should be <= 1.0");
   {
     PetscReal   *array_x,*array_e,*array_r;
     PetscInt    p;
@@ -1486,7 +1485,7 @@ static PetscErrorCode BCApplyZero_NORTH(DM da,PetscInt d_idx,Mat A,Vec b)
     ierr = VecAssemblyEnd(b);CHKERRQ(ierr);
   }
   if (A) {
-    ierr = MatZeroRowsColumns(A,nbcs,bc_global_ids,1.0,0,0);CHKERRQ(ierr);
+    ierr = MatZeroRowsColumns(A,nbcs,bc_global_ids,1.0,NULL,NULL);CHKERRQ(ierr);
   }
 
   ierr = PetscFree(bc_vals);CHKERRQ(ierr);

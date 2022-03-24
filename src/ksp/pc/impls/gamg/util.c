@@ -3,6 +3,7 @@
  */
 #include <petsc/private/matimpl.h>
 #include <../src/ksp/pc/impls/gamg/gamg.h>           /*I "petscpc.h" I*/
+#include <petsc/private/kspimpl.h>
 
 /*
    Produces a set of block column indices of the matrix row, one for each block represented in the original row
@@ -10,7 +11,7 @@
    n - the number of block indices in cc[]
    cc - the block indices (must be large enough to contain the indices)
 */
-PETSC_STATIC_INLINE PetscErrorCode MatCollapseRow(Mat Amat,PetscInt row,PetscInt bs,PetscInt *n,PetscInt *cc)
+static inline PetscErrorCode MatCollapseRow(Mat Amat,PetscInt row,PetscInt bs,PetscInt *n,PetscInt *cc)
 {
   PetscInt       cnt = -1,nidx,j;
   const PetscInt *idx;
@@ -36,7 +37,7 @@ PETSC_STATIC_INLINE PetscErrorCode MatCollapseRow(Mat Amat,PetscInt row,PetscInt
     ncollapsed - the number of block indices
     collapsed - the block indices (must be large enough to contain the indices)
 */
-PETSC_STATIC_INLINE PetscErrorCode MatCollapseRows(Mat Amat,PetscInt start,PetscInt bs,PetscInt *w0,PetscInt *w1,PetscInt *w2,PetscInt *ncollapsed,PetscInt **collapsed)
+static inline PetscErrorCode MatCollapseRows(Mat Amat,PetscInt start,PetscInt bs,PetscInt *w0,PetscInt *w1,PetscInt *w2,PetscInt *ncollapsed,PetscInt **collapsed)
 {
   PetscInt       i,nprev,*cprev = w0,ncur = 0,*ccur = w1,*merged = w2,*cprevtmp;
   PetscErrorCode ierr;
@@ -53,7 +54,6 @@ PETSC_STATIC_INLINE PetscErrorCode MatCollapseRows(Mat Amat,PetscInt start,Petsc
   PetscFunctionReturn(0);
 }
 
-
 /* -------------------------------------------------------------------------- */
 /*
    PCGAMGCreateGraph - create simple scaled scalar graph from matrix
@@ -69,6 +69,7 @@ PetscErrorCode PCGAMGCreateGraph(Mat Amat, Mat *a_Gmat)
   PetscInt       Istart,Iend,Ii,jj,kk,ncols,nloc,NN,MM,bs;
   MPI_Comm       comm;
   Mat            Gmat;
+  PetscBool      ismpiaij,isseqaij;
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)Amat,&comm);CHKERRQ(ierr);
@@ -77,21 +78,122 @@ PetscErrorCode PCGAMGCreateGraph(Mat Amat, Mat *a_Gmat)
   ierr = MatGetBlockSize(Amat, &bs);CHKERRQ(ierr);
   nloc = (Iend-Istart)/bs;
 
+  ierr = PetscObjectBaseTypeCompare((PetscObject)Amat,MATSEQAIJ,&isseqaij);CHKERRQ(ierr);
+  ierr = PetscObjectBaseTypeCompare((PetscObject)Amat,MATMPIAIJ,&ismpiaij);CHKERRQ(ierr);
+  PetscCheckFalse(!isseqaij && !ismpiaij,PETSC_COMM_WORLD,PETSC_ERR_USER,"Require (MPI)AIJ matrix type");
   ierr = PetscLogEventBegin(petsc_gamg_setup_events[GRAPH],0,0,0,0);CHKERRQ(ierr);
 
   /* TODO GPU: these calls are potentially expensive if matrices are large and we want to use the GPU */
   /* A solution consists in providing a new API, MatAIJGetCollapsedAIJ, and each class can provide a fast
      implementation */
-  if (bs > 1) {
+  ierr = MatViewFromOptions(Amat, NULL, "-g_mat_view");CHKERRQ(ierr);
+  if (bs > 1 && (isseqaij || ((Mat_MPIAIJ*)Amat->data)->garray)) {
+    PetscInt  *d_nnz, *o_nnz;
+    Mat       a, b, c;
+    MatScalar *aa,val,AA[4096];
+    PetscInt  *aj,*ai,AJ[4096],nc;
+    ierr = PetscInfo(Amat,"New bs>1 PCGAMGCreateGraph. nloc=%D\n",nloc);CHKERRQ(ierr);
+    if (isseqaij) {
+      a = Amat; b = NULL;
+    }
+    else {
+      Mat_MPIAIJ *d = (Mat_MPIAIJ*)Amat->data;
+      a = d->A; b = d->B;
+    }
+    ierr = PetscMalloc2(nloc, &d_nnz,isseqaij ? 0 : nloc, &o_nnz);CHKERRQ(ierr);
+    for (c=a, kk=0 ; c && kk<2 ; c=b, kk++){
+      PetscInt       *nnz = (c==a) ? d_nnz : o_nnz, nmax=0;
+      const PetscInt *cols;
+      for (PetscInt brow=0,jj,ok=1,j0; brow < nloc*bs; brow += bs) { // block rows
+        ierr = MatGetRow(c,brow,&jj,&cols,NULL);CHKERRQ(ierr);
+        nnz[brow/bs] = jj/bs;
+        if (jj%bs) ok = 0;
+        if (cols) j0 = cols[0];
+        else j0 = -1;
+        ierr = MatRestoreRow(c,brow,&jj,&cols,NULL);CHKERRQ(ierr);
+        if (nnz[brow/bs]>nmax) nmax = nnz[brow/bs];
+        for (PetscInt ii=1; ii < bs && nnz[brow/bs] ; ii++) { // check for non-dense blocks
+          ierr = MatGetRow(c,brow+ii,&jj,&cols,NULL);CHKERRQ(ierr);
+          if (jj%bs) ok = 0;
+          if (j0 != cols[0]) ok = 0;
+          if (nnz[brow/bs] != jj/bs) ok = 0;
+          ierr = MatRestoreRow(c,brow+11,&jj,&cols,NULL);CHKERRQ(ierr);
+        }
+        if (!ok) {
+          ierr = PetscFree2(d_nnz,o_nnz);CHKERRQ(ierr);
+          goto old_bs;
+        }
+      }
+      PetscCheck(nmax<4096,PETSC_COMM_SELF,PETSC_ERR_USER,"Buffer %D too small %D.",nmax,4096);
+    }
+    ierr = MatCreate(comm, &Gmat);CHKERRQ(ierr);
+    ierr = MatSetSizes(Gmat,nloc,nloc,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRQ(ierr);
+    ierr = MatSetBlockSizes(Gmat, 1, 1);CHKERRQ(ierr);
+    ierr = MatSetType(Gmat, MATAIJ);CHKERRQ(ierr);
+    ierr = MatSeqAIJSetPreallocation(Gmat,0,d_nnz);CHKERRQ(ierr);
+    ierr = MatMPIAIJSetPreallocation(Gmat,0,d_nnz,0,o_nnz);CHKERRQ(ierr);
+    ierr = PetscFree2(d_nnz,o_nnz);CHKERRQ(ierr);
+    // diag
+    for (PetscInt brow=0,n,grow; brow < nloc*bs; brow += bs) { // block rows
+      Mat_SeqAIJ *aseq  = (Mat_SeqAIJ*)a->data;
+      ai = aseq->i;
+      n  = ai[brow+1] - ai[brow];
+      aj = aseq->j + ai[brow];
+      for (int k=0; k<n; k += bs) { // block columns
+        AJ[k/bs] = aj[k]/bs + Istart/bs; // diag starts at (Istart,Istart)
+        val = 0;
+        for (int ii=0; ii<bs; ii++) { // rows in block
+          aa = aseq->a + ai[brow+ii] + k;
+          for (int jj=0; jj<bs; jj++) { // columns in block
+            val += PetscAbs(PetscRealPart(aa[jj])); // a sort of norm
+          }
+        }
+        AA[k/bs] = val;
+      }
+      grow = Istart/bs + brow/bs;
+      ierr = MatSetValues(Gmat,1,&grow,n/bs,AJ,AA,INSERT_VALUES);CHKERRQ(ierr);
+    }
+    // off-diag
+    if (ismpiaij) {
+      Mat_MPIAIJ        *aij = (Mat_MPIAIJ*)Amat->data;
+      const PetscScalar *vals;
+      const PetscInt    *cols, *garray = aij->garray;
+      PetscCheck(garray,PETSC_COMM_SELF,PETSC_ERR_USER,"No garray ?");
+      for (PetscInt brow=0,grow; brow < nloc*bs; brow += bs) { // block rows
+        ierr = MatGetRow(b,brow,&ncols,&cols,NULL);CHKERRQ(ierr);
+        for (int k=0,cidx=0; k<ncols; k += bs,cidx++) {
+          AA[k/bs] = 0;
+          AJ[cidx] = garray[cols[k]]/bs;
+        }
+        nc = ncols/bs;
+        ierr = MatRestoreRow(b,brow,&ncols,&cols,NULL);CHKERRQ(ierr);
+        for (int ii=0; ii<bs; ii++) { // rows in block
+          ierr = MatGetRow(b,brow+ii,&ncols,&cols,&vals);CHKERRQ(ierr);
+          for (int k=0; k<ncols; k += bs) {
+            for (int jj=0; jj<bs; jj++) { // cols in block
+              AA[k/bs] += PetscAbs(PetscRealPart(vals[k+jj]));
+            }
+          }
+          ierr = MatRestoreRow(b,brow+ii,&ncols,&cols,&vals);CHKERRQ(ierr);
+        }
+        grow = Istart/bs + brow/bs;
+        ierr = MatSetValues(Gmat,1,&grow,nc,AJ,AA,INSERT_VALUES);CHKERRQ(ierr);
+      }
+    }
+    ierr = MatAssemblyBegin(Gmat,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+    ierr = MatAssemblyEnd(Gmat,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+    ierr = MatViewFromOptions(Gmat, NULL, "-g_mat_view");CHKERRQ(ierr);
+  } else if (bs > 1) {
     const PetscScalar *vals;
     const PetscInt    *idx;
     PetscInt          *d_nnz, *o_nnz,*w0,*w1,*w2;
-    PetscBool         ismpiaij,isseqaij;
 
+old_bs:
     /*
        Determine the preallocation needed for the scalar matrix derived from the vector matrix.
     */
 
+    ierr = PetscInfo(Amat,"OLD bs>1 PCGAMGCreateGraph\n");CHKERRQ(ierr);
     ierr = PetscObjectBaseTypeCompare((PetscObject)Amat,MATSEQAIJ,&isseqaij);CHKERRQ(ierr);
     ierr = PetscObjectBaseTypeCompare((PetscObject)Amat,MATMPIAIJ,&ismpiaij);CHKERRQ(ierr);
     ierr = PetscMalloc2(nloc, &d_nnz,isseqaij ? 0 : nloc, &o_nnz);CHKERRQ(ierr);
@@ -103,7 +205,7 @@ PetscErrorCode PCGAMGCreateGraph(Mat Amat, Mat *a_Gmat)
           Determine exact preallocation count for (sequential) scalar matrix
       */
       ierr = MatSeqAIJGetMaxRowNonzeros(Amat,&max_d_nnz);CHKERRQ(ierr);
-      max_d_nnz = PetscMin(nloc,bs*max_d_nnz);CHKERRQ(ierr);
+      max_d_nnz = PetscMin(nloc,bs*max_d_nnz);
       ierr = PetscMalloc3(max_d_nnz, &w0,max_d_nnz, &w1,max_d_nnz, &w2);CHKERRQ(ierr);
       for (Ii = 0, jj = 0; Ii < Iend; Ii += bs, jj++) {
         ierr = MatCollapseRows(Amat,Ii,bs,w0,w1,w2,&d_nnz[jj],NULL);CHKERRQ(ierr);
@@ -121,7 +223,7 @@ PetscErrorCode PCGAMGCreateGraph(Mat Amat, Mat *a_Gmat)
           Determine exact preallocation count for diagonal block portion of scalar matrix
       */
       ierr = MatSeqAIJGetMaxRowNonzeros(Daij,&max_d_nnz);CHKERRQ(ierr);
-      max_d_nnz = PetscMin(nloc,bs*max_d_nnz);CHKERRQ(ierr);
+      max_d_nnz = PetscMin(nloc,bs*max_d_nnz);
       ierr = PetscMalloc3(max_d_nnz, &w0,max_d_nnz, &w1,max_d_nnz, &w2);CHKERRQ(ierr);
       for (Ii = 0, jj = 0; Ii < Iend - Istart; Ii += bs, jj++) {
         ierr = MatCollapseRows(Daij,Ii,bs,w0,w1,w2,&d_nnz[jj],NULL);CHKERRQ(ierr);
@@ -164,6 +266,7 @@ PetscErrorCode PCGAMGCreateGraph(Mat Amat, Mat *a_Gmat)
     }
     ierr = MatAssemblyBegin(Gmat,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
     ierr = MatAssemblyEnd(Gmat,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+    ierr = MatViewFromOptions(Gmat, NULL, "-g_mat_view");CHKERRQ(ierr);
   } else {
     /* just copy scalar matrix - abs() not taken here but scaled later */
     ierr = MatDuplicate(Amat, MAT_COPY_VALUES, &Gmat);CHKERRQ(ierr);
@@ -182,7 +285,7 @@ PetscErrorCode PCGAMGCreateGraph(Mat Amat, Mat *a_Gmat)
 
    Collective on Mat
 
-   Input Parameter:
+   Input Parameters:
 +   a_Gmat - the graph
 .   vfilter - threshold parameter [0,1)
 -   symm - make the result symmetric
@@ -207,7 +310,7 @@ PetscErrorCode PCGAMGFilterGraph(Mat *a_Gmat,PetscReal vfilter,PetscBool symm)
   Vec               diag;
 
   PetscFunctionBegin;
-  ierr = PetscLogEventBegin(petsc_gamg_setup_events[GRAPH],0,0,0,0);CHKERRQ(ierr);
+  ierr = PetscLogEventBegin(petsc_gamg_setup_events[SET16],0,0,0,0);CHKERRQ(ierr);
 
   /* TODO GPU: optimization proposal, each class provides fast implementation of this
      procedure via MatAbs API */
@@ -218,7 +321,7 @@ PetscErrorCode PCGAMGFilterGraph(Mat *a_Gmat,PetscReal vfilter,PetscBool symm)
     PetscBool isaij,ismpiaij;
     ierr = PetscObjectBaseTypeCompare((PetscObject)Gmat,MATSEQAIJ,&isaij);CHKERRQ(ierr);
     ierr = PetscObjectBaseTypeCompare((PetscObject)Gmat,MATMPIAIJ,&ismpiaij);CHKERRQ(ierr);
-    if (!isaij && !ismpiaij) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_USER,"Require (MPI)AIJ matrix type");
+    PetscCheckFalse(!isaij && !ismpiaij,PETSC_COMM_WORLD,PETSC_ERR_USER,"Require (MPI)AIJ matrix type");
     if (isaij) {
       ierr = MatGetInfo(Gmat,MAT_LOCAL,&info);CHKERRQ(ierr);
       ierr = MatSeqAIJGetArray(Gmat,&avals);CHKERRQ(ierr);
@@ -235,7 +338,7 @@ PetscErrorCode PCGAMGFilterGraph(Mat *a_Gmat,PetscReal vfilter,PetscBool symm)
       for (jj = 0; jj<info.nz_used; jj++) avals[jj] = PetscAbsScalar(avals[jj]);
       ierr = MatSeqAIJRestoreArray(aij->B,&avals);CHKERRQ(ierr);
     }
-    ierr = PetscLogEventEnd(petsc_gamg_setup_events[GRAPH],0,0,0,0);CHKERRQ(ierr);
+    ierr = PetscLogEventEnd(petsc_gamg_setup_events[SET16],0,0,0,0);CHKERRQ(ierr);
     PetscFunctionReturn(0);
   }
 
@@ -300,12 +403,12 @@ PetscErrorCode PCGAMGFilterGraph(Mat *a_Gmat,PetscReal vfilter,PetscBool symm)
   } else {
     ierr = MatPropagateSymmetryOptions(Gmat,tGmat);CHKERRQ(ierr);
   }
-  ierr = PetscLogEventEnd(petsc_gamg_setup_events[GRAPH],0,0,0,0);CHKERRQ(ierr);
+  ierr = PetscLogEventEnd(petsc_gamg_setup_events[SET16],0,0,0,0);CHKERRQ(ierr);
 
 #if defined(PETSC_USE_INFO)
   {
     double t1 = (!nnz0) ? 1. : 100.*(double)nnz1/(double)nnz0, t2 = (!nloc) ? 1. : (double)nnz0/(double)nloc;
-    ierr = PetscInfo4(*a_Gmat,"\t %g%% nnz after filtering, with threshold %g, %g nnz ave. (N=%D)\n",t1,vfilter,t2,MM);CHKERRQ(ierr);
+    ierr = PetscInfo(*a_Gmat,"\t %g%% nnz after filtering, with threshold %g, %g nnz ave. (N=%D)\n",t1,vfilter,t2,MM);CHKERRQ(ierr);
   }
 #endif
   ierr    = MatDestroy(&Gmat);CHKERRQ(ierr);
@@ -394,7 +497,7 @@ PetscErrorCode PCGAMGHashTableAdd(PCGAMGHashTable *a_tab, PetscInt a_key, PetscI
   PetscInt kk,idx;
 
   PetscFunctionBegin;
-  if (a_key<0) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_USER,"Negative key %D.",a_key);
+  PetscCheckFalse(a_key<0,PETSC_COMM_SELF,PETSC_ERR_USER,"Negative key %D.",a_key);
   for (kk = 0, idx = GAMG_HASH(a_key); kk < a_tab->size; kk++, idx = (idx==(a_tab->size-1)) ? 0 : idx + 1) {
     if (a_tab->table[idx] == a_key) {
       /* exists */

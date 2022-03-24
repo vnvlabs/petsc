@@ -4,8 +4,10 @@ import os
 class Configure(config.package.GNUPackage):
   def __init__(self, framework):
     config.package.GNUPackage.__init__(self, framework)
-    self.download         = ['http://ftp.mcs.anl.gov/pub/petsc/externalpackages/mpich-3.4.1-petsc1.tar.gz']
-    self.downloaddirnames  = ['mpich']
+    self.version          = '4.0.1'
+    self.download         = ['https://www.mpich.org/static/downloads/'+self.version+'/mpich-'+self.version+'.tar.gz',
+                             'http://ftp.mcs.anl.gov/pub/petsc/externalpackages/mpich-'+self.version+'.tar.gz']
+    self.downloaddirnames = ['mpich']
     self.skippackagewithoptions = 1
     self.isMPI = 1
     return
@@ -14,7 +16,6 @@ class Configure(config.package.GNUPackage):
     config.package.GNUPackage.setupDependencies(self, framework)
     self.compilerFlags   = framework.require('config.compilerFlags',self)
     self.cuda            = framework.require('config.packages.cuda',self)
-    self.valgrind        = framework.require('config.packages.valgrind',self)
     self.hwloc           = framework.require('config.packages.hwloc',self)
     self.odeps           = [self.hwloc]
     return
@@ -22,8 +23,8 @@ class Configure(config.package.GNUPackage):
   def setupHelp(self, help):
     config.package.GNUPackage.setupHelp(self,help)
     import nargs
-    help.addArgument('MPI', '-download-mpich-pm=<hydra, gforker or mpd>',              nargs.Arg(None, 'hydra', 'Launcher for MPI processes'))
-    help.addArgument('MPI', '-download-mpich-device=<ch3:nemesis or see MPICH docs>', nargs.Arg(None, None, 'Communicator for MPI processes'))
+    help.addArgument('MPICH', '-download-mpich-pm=<hydra, gforker or mpd>',              nargs.Arg(None, 'hydra', 'Launcher for MPI processes'))
+    help.addArgument('MPICH', '-download-mpich-device=<ch3:nemesis or see MPICH docs>', nargs.Arg(None, None, 'Communicator for MPI processes'))
     return
 
   def checkDownload(self):
@@ -49,6 +50,7 @@ class Configure(config.package.GNUPackage):
     args.append('--with-pm='+self.argDB['download-mpich-pm'])
     args.append('--disable-java')
     if self.hwloc.found:
+      args.append('--with-hwloc="'+self.hwloc.directory+'"')
       args.append('--with-hwloc-prefix="'+self.hwloc.directory+'"')
     # make sure MPICH does not build with optimization for debug version of PETSc, so we can debug through MPICH
     if self.compilerFlags.debugging:
@@ -64,7 +66,7 @@ class Configure(config.package.GNUPackage):
     args.append('--enable-g=meminit')
     if not self.setCompilers.isDarwin(self.log) and config.setCompilers.Configure.isClang(self.setCompilers.CC, self.log):
       args.append('pac_cv_have_float16=no')
-    if (not self.sharedLibraries.useShared or self.valgrind.found) and config.setCompilers.Configure.isDarwin(self.log):
+    if config.setCompilers.Configure.isDarwin(self.log):
       args.append('--disable-opencl')
 
     # MPICH configure errors out on certain standard configure arguments

@@ -12,7 +12,6 @@ typedef struct {
 
 const char *const PCExoticTypes[] = {"face","wirebasket","PCExoticType","PC_Exotic",NULL};
 
-
 /*
       DMDAGetWireBasketInterpolation - Gets the interpolation for a wirebasket based coarse space
 
@@ -37,8 +36,8 @@ PetscErrorCode DMDAGetWireBasketInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat 
 
   PetscFunctionBegin;
   ierr = DMDAGetInfo(da,&dim,NULL,NULL,NULL,&mp,&np,&pp,&dof,NULL,NULL,NULL,NULL,NULL);CHKERRQ(ierr);
-  if (dof != 1) SETERRQ(PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Only for single field problems");
-  if (dim != 3) SETERRQ(PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Only coded for 3d problems");
+  PetscCheckFalse(dof != 1,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Only for single field problems");
+  PetscCheckFalse(dim != 3,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Only coded for 3d problems");
   ierr   = DMDAGetCorners(da,NULL,NULL,NULL,&m,&n,&p);CHKERRQ(ierr);
   ierr   = DMDAGetGhostCorners(da,&istart,&jstart,&kstart,&mwidth,&nwidth,&pwidth);CHKERRQ(ierr);
   istart = istart ? -1 : 0;
@@ -71,9 +70,9 @@ PetscErrorCode DMDAGetWireBasketInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat 
      Require that all 12 edges and 6 faces have at least one grid point. Otherwise some of the columns of
      Xsurf will be all zero (thus making the coarse matrix singular).
   */
-  if (m-istart < 3) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in X direction must be at least 3");
-  if (n-jstart < 3) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in Y direction must be at least 3");
-  if (p-kstart < 3) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in Z direction must be at least 3");
+  PetscCheckFalse(m-istart < 3,PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in X direction must be at least 3");
+  PetscCheckFalse(n-jstart < 3,PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in Y direction must be at least 3");
+  PetscCheckFalse(p-kstart < 3,PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in Z direction must be at least 3");
 
   cnt = 0;
 
@@ -121,18 +120,16 @@ PetscErrorCode DMDAGetWireBasketInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat 
   for (i=1; i<m-istart-1; i++) xsurf[cnt++ + 24*Nsurf] = 1;
   xsurf[cnt++ + 25*Nsurf] = 1;
 
-
   /* interpolations only sum to 1 when using direct solver */
 #if defined(PETSC_USE_DEBUG_foo)
   for (i=0; i<Nsurf; i++) {
     tmp = 0.0;
     for (j=0; j<26; j++) tmp += xsurf[i+j*Nsurf];
-    if (PetscAbsScalar(tmp-1.0) > 1.e-10) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong Xsurf interpolation at i %D value %g",i,(double)PetscAbsScalar(tmp));
+    PetscCheckFalse(PetscAbsScalar(tmp-1.0) > 1.e-10,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong Xsurf interpolation at i %D value %g",i,(double)PetscAbsScalar(tmp));
   }
 #endif
   ierr = MatDenseRestoreArray(Xsurf,&xsurf);CHKERRQ(ierr);
   /* ierr = MatView(Xsurf,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);*/
-
 
   /*
        I are the indices for all the needed vertices (in global numbering)
@@ -159,9 +156,9 @@ PetscErrorCode DMDAGetWireBasketInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat 
       }
     }
   }
-  if (c != N) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"c != N");
-  if (cint != Nint) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"cint != Nint");
-  if (csurf != Nsurf) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"csurf != Nsurf");
+  PetscCheckFalse(c != N,PETSC_COMM_SELF,PETSC_ERR_PLIB,"c != N");
+  PetscCheckFalse(cint != Nint,PETSC_COMM_SELF,PETSC_ERR_PLIB,"cint != Nint");
+  PetscCheckFalse(csurf != Nsurf,PETSC_COMM_SELF,PETSC_ERR_PLIB,"csurf != Nsurf");
   ierr = DMGetLocalToGlobalMapping(da,&ltg);CHKERRQ(ierr);
   ierr = ISLocalToGlobalMappingApply(ltg,N,II,II);CHKERRQ(ierr);
   ierr = ISLocalToGlobalMappingApply(ltg,Nint,IIint,IIint);CHKERRQ(ierr);
@@ -225,12 +222,11 @@ PetscErrorCode DMDAGetWireBasketInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat 
     tmp = 0.0;
     for (j=0; j<26; j++) tmp += rxint[i+j*Nint];
 
-    if (PetscAbsScalar(tmp-1.0) > 1.e-10) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong Xint interpolation at i %D value %g",i,(double)PetscAbsScalar(tmp));
+    PetscCheckFalse(PetscAbsScalar(tmp-1.0) > 1.e-10,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong Xint interpolation at i %D value %g",i,(double)PetscAbsScalar(tmp));
   }
   ierr = MatDenseRestoreArrayRead(Xint,&rxint);CHKERRQ(ierr);
-  /* ierr =MatView(Xint,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr); */
+  /* ierr = MatView(Xint,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr); */
 #endif
-
 
   /*         total vertices             total faces                                  total edges */
   Ntotal = (mp + 1)*(np + 1)*(pp + 1) + mp*np*(pp+1) + mp*pp*(np+1) + np*pp*(mp+1) + mp*(np+1)*(pp+1) + np*(mp+1)*(pp+1) +  pp*(mp+1)*(np+1);
@@ -266,7 +262,7 @@ PetscErrorCode DMDAGetWireBasketInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat 
     ierr = PetscTableAddCount(ht,globals[i]+1);CHKERRQ(ierr);
   }
   ierr = PetscTableGetCount(ht,&cnt);CHKERRQ(ierr);
-  if (cnt != Ntotal) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Hash table size %D not equal to total number coarse grid points %D",cnt,Ntotal);
+  PetscCheckFalse(cnt != Ntotal,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Hash table size %D not equal to total number coarse grid points %D",cnt,Ntotal);
   ierr = PetscFree(globals);CHKERRQ(ierr);
   for (i=0; i<26; i++) {
     ierr = PetscTableFind(ht,gl[i]+1,&gl[i]);CHKERRQ(ierr);
@@ -303,7 +299,7 @@ PetscErrorCode DMDAGetWireBasketInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat 
     ierr = MatMult(*P,x,y);CHKERRQ(ierr);
     ierr = VecGetArray(y,&yy);CHKERRQ(ierr);
     for (i=0; i<Ng; i++) {
-      if (PetscAbsScalar(yy[i]-1.0) > 1.e-10) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong p interpolation at i %D value %g",i,(double)PetscAbsScalar(yy[i]));
+      PetscCheckFalse(PetscAbsScalar(yy[i]-1.0) > 1.e-10,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong p interpolation at i %D value %g",i,(double)PetscAbsScalar(yy[i]));
     }
     ierr = VecRestoreArray(y,&yy);CHKERRQ(ierr);
     ierr = VecDestroy(x);CHKERRQ(ierr);
@@ -347,8 +343,8 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
 
   PetscFunctionBegin;
   ierr = DMDAGetInfo(da,&dim,NULL,NULL,NULL,&mp,&np,&pp,&dof,NULL,NULL,NULL,NULL,NULL);CHKERRQ(ierr);
-  if (dof != 1) SETERRQ(PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Only for single field problems");
-  if (dim != 3) SETERRQ(PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Only coded for 3d problems");
+  PetscCheckFalse(dof != 1,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Only for single field problems");
+  PetscCheckFalse(dim != 3,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Only coded for 3d problems");
   ierr   = DMDAGetCorners(da,NULL,NULL,NULL,&m,&n,&p);CHKERRQ(ierr);
   ierr   = DMDAGetGhostCorners(da,&istart,&jstart,&kstart,&mwidth,&nwidth,&pwidth);CHKERRQ(ierr);
   istart = istart ? -1 : 0;
@@ -381,9 +377,9 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
      Require that all 12 edges and 6 faces have at least one grid point. Otherwise some of the columns of
      Xsurf will be all zero (thus making the coarse matrix singular).
   */
-  if (m-istart < 3) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in X direction must be at least 3");
-  if (n-jstart < 3) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in Y direction must be at least 3");
-  if (p-kstart < 3) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in Z direction must be at least 3");
+  PetscCheckFalse(m-istart < 3,PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in X direction must be at least 3");
+  PetscCheckFalse(n-jstart < 3,PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in Y direction must be at least 3");
+  PetscCheckFalse(p-kstart < 3,PETSC_COMM_SELF,PETSC_ERR_SUP,"Number of grid points per process in Z direction must be at least 3");
 
   cnt = 0;
   for (j=1; j<n-1-jstart; j++) {
@@ -408,12 +404,11 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
     tmp = 0.0;
     for (j=0; j<6; j++) tmp += xsurf[i+j*Nsurf];
 
-    if (PetscAbsScalar(tmp-1.0) > 1.e-10) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong Xsurf interpolation at i %D value %g",i,(double)PetscAbsScalar(tmp));
+    PetscCheckFalse(PetscAbsScalar(tmp-1.0) > 1.e-10,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong Xsurf interpolation at i %D value %g",i,(double)PetscAbsScalar(tmp));
   }
 #endif
   ierr = MatDenseRestoreArray(Xsurf,&xsurf);CHKERRQ(ierr);
   /* ierr = MatView(Xsurf,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);*/
-
 
   /*
        I are the indices for all the needed vertices (in global numbering)
@@ -440,9 +435,9 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
       }
     }
   }
-  if (c != N) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"c != N");
-  if (cint != Nint) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"cint != Nint");
-  if (csurf != Nsurf) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"csurf != Nsurf");
+  PetscCheckFalse(c != N,PETSC_COMM_SELF,PETSC_ERR_PLIB,"c != N");
+  PetscCheckFalse(cint != Nint,PETSC_COMM_SELF,PETSC_ERR_PLIB,"cint != Nint");
+  PetscCheckFalse(csurf != Nsurf,PETSC_COMM_SELF,PETSC_ERR_PLIB,"csurf != Nsurf");
   ierr = DMGetLocalToGlobalMapping(da,&ltg);CHKERRQ(ierr);
   ierr = ISLocalToGlobalMappingApply(ltg,N,II,II);CHKERRQ(ierr);
   ierr = ISLocalToGlobalMappingApply(ltg,Nint,IIint,IIint);CHKERRQ(ierr);
@@ -508,12 +503,11 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
     tmp = 0.0;
     for (j=0; j<6; j++) tmp += rxint[i+j*Nint];
 
-    if (PetscAbsScalar(tmp-1.0) > 1.e-10) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong Xint interpolation at i %D value %g",i,(double)PetscAbsScalar(tmp));
+    PetscCheckFalse(PetscAbsScalar(tmp-1.0) > 1.e-10,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong Xint interpolation at i %D value %g",i,(double)PetscAbsScalar(tmp));
   }
   ierr = MatDenseRestoreArrayRead(Xint,&rxint);CHKERRQ(ierr);
-  /* ierr =MatView(Xint,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr); */
+  /* ierr = MatView(Xint,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr); */
 #endif
-
 
   /*         total faces    */
   Ntotal =  mp*np*(pp+1) + mp*pp*(np+1) + np*pp*(mp+1);
@@ -544,7 +538,7 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
     ierr = PetscTableAddCount(ht,globals[i]+1);CHKERRQ(ierr);
   }
   ierr = PetscTableGetCount(ht,&cnt);CHKERRQ(ierr);
-  if (cnt != Ntotal) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Hash table size %D not equal to total number coarse grid points %D",cnt,Ntotal);
+  PetscCheckFalse(cnt != Ntotal,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Hash table size %D not equal to total number coarse grid points %D",cnt,Ntotal);
   ierr = PetscFree(globals);CHKERRQ(ierr);
   for (i=0; i<6; i++) {
     ierr = PetscTableFind(ht,gl[i]+1,&gl[i]);CHKERRQ(ierr);
@@ -571,7 +565,6 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
   ierr = MatAssemblyEnd(*P,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = PetscFree2(IIint,IIsurf);CHKERRQ(ierr);
 
-
 #if defined(PETSC_USE_DEBUG_foo)
   {
     Vec         x,y;
@@ -582,7 +575,7 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
     ierr = MatMult(*P,x,y);CHKERRQ(ierr);
     ierr = VecGetArray(y,&yy);CHKERRQ(ierr);
     for (i=0; i<Ng; i++) {
-      if (PetscAbsScalar(yy[i]-1.0) > 1.e-10) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong p interpolation at i %D value %g",i,(double)PetscAbsScalar(yy[i]));
+      PetscCheckFalse(PetscAbsScalar(yy[i]-1.0) > 1.e-10,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Wrong p interpolation at i %D value %g",i,(double)PetscAbsScalar(yy[i]));
     }
     ierr = VecRestoreArray(y,&yy);CHKERRQ(ierr);
     ierr = VecDestroy(x);CHKERRQ(ierr);
@@ -601,7 +594,6 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
   ierr = MatDestroy(&Xsurf);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*@
    PCExoticSetType - Sets the type of coarse grid interpolation to use
@@ -627,7 +619,6 @@ PetscErrorCode DMDAGetFaceInterpolation(PC pc,DM da,PC_Exotic *exotic,Mat Agloba
      Both interpolations are suitable for only scalar problems.
 
    Level: intermediate
-
 
 .seealso: PCEXOTIC, PCExoticType()
 @*/
@@ -661,13 +652,13 @@ PetscErrorCode PCSetUp_Exotic(PC pc)
   MatReuse       reuse = (ex->P) ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX;
 
   PetscFunctionBegin;
-  if (!pc->dm) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONGSTATE,"Need to call PCSetDM() before using this PC");
+  PetscCheckFalse(!pc->dm,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONGSTATE,"Need to call PCSetDM() before using this PC");
   ierr = PCGetOperators(pc,NULL,&A);CHKERRQ(ierr);
   if (ex->type == PC_EXOTIC_FACE) {
     ierr = DMDAGetFaceInterpolation(pc,pc->dm,ex,A,reuse,&ex->P);CHKERRQ(ierr);
   } else if (ex->type == PC_EXOTIC_WIREBASKET) {
     ierr = DMDAGetWireBasketInterpolation(pc,pc->dm,ex,A,reuse,&ex->P);CHKERRQ(ierr);
-  } else SETERRQ1(PetscObjectComm((PetscObject)pc),PETSC_ERR_PLIB,"Unknown exotic coarse space %d",ex->type);
+  } else SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_PLIB,"Unknown exotic coarse space %d",ex->type);
   ierr = PCMGSetInterpolation(pc,1,ex->P);CHKERRQ(ierr);
   /* if PC has attached DM we must remove it or the PCMG will use it to compute incorrect sized vectors and interpolations */
   ierr = PCSetDM(pc,NULL);CHKERRQ(ierr);
@@ -711,7 +702,7 @@ PetscErrorCode PCView_Exotic(PC pc,PetscViewer viewer)
       ierr = PetscViewerASCIIPushTab(viewer);CHKERRQ(ierr);  /* should not need to push this twice? */
       ierr = PetscViewerGetSubViewer(viewer,PETSC_COMM_SELF,&sviewer);CHKERRQ(ierr);
       ierr = MPI_Comm_rank(PetscObjectComm((PetscObject)pc),&rank);CHKERRMPI(ierr);
-      if (!rank) {
+      if (rank == 0) {
         ierr = KSPView(ctx->ksp,sviewer);CHKERRQ(ierr);
       }
       ierr = PetscViewerRestoreSubViewer(viewer,PETSC_COMM_SELF,&sviewer);CHKERRQ(ierr);
@@ -755,7 +746,6 @@ PetscErrorCode PCSetFromOptions_Exotic(PetscOptionItems *PetscOptionsObject,PC p
   PetscFunctionReturn(0);
 }
 
-
 /*MC
      PCEXOTIC - Two level overlapping Schwarz preconditioner with exotic (non-standard) coarse grid spaces
 
@@ -766,29 +756,29 @@ PetscErrorCode PCSetFromOptions_Exotic(PetscOptionItems *PetscOptionsObject,PC p
     By default this uses GMRES on the fine grid smoother so this should be used with KSPFGMRES or the smoother changed to not use GMRES
 
    References:
-+  1. - These coarse grid spaces originate in the work of Bramble, Pasciak  and Schatz, "The Construction
++  * - These coarse grid spaces originate in the work of Bramble, Pasciak  and Schatz, "The Construction
    of Preconditioners for Elliptic Problems by Substructing IV", Mathematics of Computation, volume 53, 1989.
-.  2. - They were generalized slightly in "Domain Decomposition Method for Linear Elasticity", Ph. D. thesis, Barry Smith,
+.  * - They were generalized slightly in "Domain Decomposition Method for Linear Elasticity", Ph. D. thesis, Barry Smith,
    New York University, 1990.
-.  3. - They were then explored in great detail in Dryja, Smith, Widlund, "Schwarz Analysis
+.  * - They were then explored in great detail in Dryja, Smith, Widlund, "Schwarz Analysis
    of Iterative Substructuring Methods for Elliptic Problems in Three Dimensions, SIAM Journal on Numerical
    Analysis, volume 31. 1994. These were developed in the context of iterative substructuring preconditioners.
-.  4. - They were then ingeniously applied as coarse grid spaces for overlapping Schwarz methods by Dohrmann and Widlund.
+.  * - They were then ingeniously applied as coarse grid spaces for overlapping Schwarz methods by Dohrmann and Widlund.
    They refer to them as GDSW (generalized Dryja, Smith, Widlund preconditioners). See, for example,
    Clark R. Dohrmann, Axel Klawonn, and Olof B. Widlund. Extending theory for domain decomposition algorithms to irregular subdomains. In Ulrich Langer, Marco
    Discacciati, David Keyes, Olof Widlund, and Walter Zulehner, editors, Proceedings
    of the 17th International Conference on Domain Decomposition Methods in
    Science and Engineering, held in Strobl, Austria, 2006, number 60 in
    Springer Verlag, Lecture Notes in Computational Science and Engineering, 2007.
-.  5. -  Clark R. Dohrmann, Axel Klawonn, and Olof B. Widlund. A family of energy minimizing coarse spaces for overlapping Schwarz preconditioners. In Ulrich Langer,
+.  * -  Clark R. Dohrmann, Axel Klawonn, and Olof B. Widlund. A family of energy minimizing coarse spaces for overlapping Schwarz preconditioners. In Ulrich Langer,
    Marco Discacciati, David Keyes, Olof Widlund, and Walter Zulehner, editors, Proceedings
    of the 17th International Conference on Domain Decomposition Methods
    in Science and Engineering, held in Strobl, Austria, 2006, number 60 in
    Springer Verlag, Lecture Notes in Computational Science and Engineering, 2007
-.  6. - Clark R. Dohrmann, Axel Klawonn, and Olof B. Widlund. Domain decomposition
+.  * - Clark R. Dohrmann, Axel Klawonn, and Olof B. Widlund. Domain decomposition
    for less regular subdomains: Overlapping Schwarz in two dimensions. SIAM J.
    Numer. Anal., 46(4), 2008.
--  7. - Clark R. Dohrmann and Olof B. Widlund. An overlapping Schwarz
+-  * - Clark R. Dohrmann and Olof B. Widlund. An overlapping Schwarz
    algorithm for almost incompressible elasticity. Technical Report
    TR2008 912, Department of Computer Science, Courant Institute
    of Mathematical Sciences, New York University, May 2008. URL:
@@ -823,7 +813,6 @@ PETSC_EXTERN PetscErrorCode PCCreate_Exotic(PC pc)
   ex->type     = PC_EXOTIC_FACE;
   mg           = (PC_MG*) pc->data;
   mg->innerctx = ex;
-
 
   pc->ops->setfromoptions = PCSetFromOptions_Exotic;
   pc->ops->view           = PCView_Exotic;

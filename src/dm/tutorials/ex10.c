@@ -84,7 +84,7 @@ int main(int argc,char **argv)
 
   ierr = VecAXPY(input,-1.0,gauss);CHKERRQ(ierr);
   ierr = VecNorm(input,NORM_2,&norm);CHKERRQ(ierr);
-  if (norm > 1.e-6) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_PLIB,"Vec read in does not match vector written out");
+  PetscCheckFalse(norm > 1.e-6,PETSC_COMM_WORLD,PETSC_ERR_PLIB,"Vec read in does not match vector written out");
 
   ierr = VecDestroy(&input);CHKERRQ(ierr);
   ierr = VecDestroy(&gauss);CHKERRQ(ierr);
@@ -93,11 +93,10 @@ int main(int argc,char **argv)
   return ierr;
 }
 
-
 /*TEST
 
       build:
-         requires: hdf5 !define(PETSC_USE_CXXCOMPLEX)
+         requires: hdf5 !defined(PETSC_USE_CXXCOMPLEX)
 
       test:
          nsize: 4

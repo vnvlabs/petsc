@@ -211,8 +211,8 @@ PetscErrorCode  PCFactorSetDropTolerance(PC pc,PetscReal dt,PetscReal dtcol,Pets
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
-  PetscValidLogicalCollectiveReal(pc,dtcol,2);
-  PetscValidLogicalCollectiveInt(pc,maxrowcount,3);
+  PetscValidLogicalCollectiveReal(pc,dtcol,3);
+  PetscValidLogicalCollectiveInt(pc,maxrowcount,4);
   ierr = PetscTryMethod(pc,"PCFactorSetDropTolerance_C",(PC,PetscReal,PetscReal,PetscInt),(pc,dt,dtcol,maxrowcount));CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -337,7 +337,7 @@ PetscErrorCode  PCFactorSetLevels(PC pc,PetscInt levels)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
-  if (levels < 0) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_OUTOFRANGE,"negative levels");
+  PetscCheckFalse(levels < 0,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_OUTOFRANGE,"negative levels");
   PetscValidLogicalCollectiveInt(pc,levels,2);
   ierr = PetscTryMethod(pc,"PCFactorSetLevels_C",(PC,PetscInt),(pc,levels));CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -354,7 +354,7 @@ PetscErrorCode  PCFactorSetLevels(PC pc,PetscInt levels)
 -  flg - PETSC_TRUE to turn on, PETSC_FALSE to turn off
 
    Options Database Key:
-.  -pc_factor_diagonal_fill
+.  -pc_factor_diagonal_fill <bool> - allow the diagonal fill
 
    Notes:
    Does not apply with 0 fill.
@@ -385,9 +385,6 @@ PetscErrorCode  PCFactorSetAllowDiagonalFill(PC pc,PetscBool flg)
    Output Parameter:
 .   flg - PETSC_TRUE to turn on, PETSC_FALSE to turn off
 
-   Options Database Key:
-.  -pc_factor_diagonal_fill
-
    Notes:
    Does not apply with 0 fill.
 
@@ -415,7 +412,7 @@ PetscErrorCode  PCFactorGetAllowDiagonalFill(PC pc,PetscBool *flg)
 -  tol - diagonal entries smaller than this in absolute value are considered zero
 
    Options Database Key:
-.  -pc_factor_nonzeros_along_diagonal <tol>
+.  -pc_factor_nonzeros_along_diagonal <tol> - perform the reordering with the given tolerance
 
    Level: intermediate
 
@@ -521,7 +518,7 @@ PetscErrorCode  PCFactorSetFill(PC pc,PetscReal fill)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
-  if (fill < 1.0) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_OUTOFRANGE,"Fill factor cannot be less then 1.0");
+  PetscCheckFalse(fill < 1.0,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_OUTOFRANGE,"Fill factor cannot be less then 1.0");
   ierr = PetscTryMethod(pc,"PCFactorSetFill_C",(PC,PetscReal),(pc,fill));CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -640,7 +637,7 @@ PetscErrorCode  PCFactorSetMatOrderingType(PC pc,MatOrderingType ordering)
 -   dtcol - 0.0 implies no pivoting, 1.0 complete pivoting (slower, requires more memory but more stable)
 
     Options Database Key:
-.   -pc_factor_pivoting <dtcol>
+.   -pc_factor_pivoting <dtcol> - perform the pivoting with the given tolerance
 
     Level: intermediate
 
@@ -668,7 +665,7 @@ PetscErrorCode  PCFactorSetColumnPivot(PC pc,PetscReal dtcol)
 -   pivot - PETSC_TRUE or PETSC_FALSE
 
     Options Database Key:
-.   -pc_factor_pivot_in_blocks <true,false>
+.   -pc_factor_pivot_in_blocks <true,false> - Pivot inside matrix dense blocks for BAIJ and SBAIJ
 
     Level: intermediate
 
@@ -707,7 +704,7 @@ PetscErrorCode  PCFactorSetReuseFill(PC pc,PetscBool flag)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  PetscValidHeaderSpecific(pc,PC_CLASSID,2);
+  PetscValidHeaderSpecific(pc,PC_CLASSID,1);
   PetscValidLogicalCollectiveBool(pc,flag,2);
   ierr = PetscTryMethod(pc,"PCFactorSetReuseFill_C",(PC,PetscBool),(pc,flag));CHKERRQ(ierr);
   PetscFunctionReturn(0);

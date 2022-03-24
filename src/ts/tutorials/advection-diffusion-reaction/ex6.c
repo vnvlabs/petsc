@@ -65,12 +65,12 @@ int main(int argc,char **argv)
   /* Function evaluation */
   ierr = PetscOptionsGetBool(NULL,NULL,"-useLaxWendroff",&useLaxWendroff,NULL);CHKERRQ(ierr);
   if (useLaxWendroff) {
-    if (!rank) {
+    if (rank == 0) {
       ierr = PetscPrintf(PETSC_COMM_SELF,"... Use Lax-Wendroff finite volume\n");CHKERRQ(ierr);
     }
     ierr = TSSetIFunction(ts,NULL,IFunction_LaxWendroff,&appctx);CHKERRQ(ierr);
   } else {
-    if (!rank) {
+    if (rank == 0) {
       ierr = PetscPrintf(PETSC_COMM_SELF,"... Use Lax-LaxFriedrichs finite difference\n");CHKERRQ(ierr);
     }
     ierr = TSSetIFunction(ts,NULL,IFunction_LaxFriedrichs,&appctx);CHKERRQ(ierr);
@@ -293,7 +293,6 @@ PetscErrorCode IFunction_LaxWendroff(TS ts,PetscReal t,Vec U,Vec Udot,Vec F,void
   ierr = DMRestoreLocalVector(da,&localUold);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*TEST
 

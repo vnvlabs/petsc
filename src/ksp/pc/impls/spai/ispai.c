@@ -394,7 +394,6 @@ PetscErrorCode  PCSPAISetMaxNew(PC pc,int maxnew1)
                  can lead to very significant improvement in
                  performance.
 
-
   Level: intermediate
 
 .seealso: PCSPAI, PCSetType()
@@ -477,7 +476,6 @@ PetscErrorCode  PCSPAISetVerbose(PC pc,int verbose)
                  symmetric nonzero pattern -sp 1 may well lead to good
                  results, but the code will not follow the published
                  SPAI algorithm exactly.
-
 
   Level: intermediate
 
@@ -664,9 +662,9 @@ PetscErrorCode ConvertMatToMatrix(MPI_Comm comm, Mat A,Mat AT,matrix **B)
   }
 
   if (AT) {
-    M->lines = new_compressed_lines(M->mnls[rank],1);CHKERRQ(ierr);
+    M->lines = new_compressed_lines(M->mnls[rank],1);
   } else {
-    M->lines = new_compressed_lines(M->mnls[rank],0);CHKERRQ(ierr);
+    M->lines = new_compressed_lines(M->mnls[rank],0);
   }
 
   rows = M->lines;
@@ -707,7 +705,6 @@ PetscErrorCode ConvertMatToMatrix(MPI_Comm comm, Mat A,Mat AT,matrix **B)
 
     ierr = MatRestoreRow(A,i,&nz,&cols,&vals);CHKERRQ(ierr);
   }
-
 
   /************************************************************/
   /************** Set up the column structure *****************/
@@ -763,7 +760,7 @@ PetscErrorCode ConvertMatrixToMat(MPI_Comm comm,matrix *B,Mat *PB)
   m    = n = B->mnls[rank];
   d_nz = o_nz = 0;
 
-  /* Determine preallocation for MatCreateMPIAIJ */
+  /* Determine preallocation for MatCreateAIJ */
   ierr = PetscMalloc1(m,&d_nnz);CHKERRQ(ierr);
   ierr = PetscMalloc1(m,&o_nnz);CHKERRQ(ierr);
   for (i=0; i<m; i++) d_nnz[i] = o_nnz[i] = 0;
@@ -820,7 +817,6 @@ PetscErrorCode ConvertVectorToVec(MPI_Comm comm,vector *v,Vec *Pv)
 
   m = v->mnl;
   M = v->n;
-
 
   ierr = VecCreateMPI(comm,m,M,Pv);CHKERRQ(ierr);
 

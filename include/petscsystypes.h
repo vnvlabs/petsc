@@ -2,7 +2,9 @@
 #define PETSCSYSTYPES_H
 
 #include <petscconf.h>
+#include <petscconf_poison.h>
 #include <petscfix.h>
+#include <stddef.h>
 
 /*MC
     PetscErrorCode - datatype used for return error code from almost all PETSc functions
@@ -47,6 +49,34 @@ typedef int PetscClassId;
 
 M*/
 typedef int PetscMPIInt;
+
+/*MC
+    PetscSizeT - datatype used to represent sizes in memory (like size_t)
+
+    Level: intermediate
+
+    Notes:
+    This is equivalent to size_t, but defined for consistency with Fortran, which lacks a native equivalent of size_t.
+
+.seealso: PetscInt, PetscInt64, PetscCount
+
+M*/
+typedef size_t PetscSizeT;
+
+/*MC
+    PetscCount - signed datatype used to represent counts
+
+    Level: intermediate
+
+    Notes:
+    This is equivalent to ptrdiff_t, but defined for consistency with Fortran, which lacks a native equivalent of ptrdiff_t.
+
+    Use PetscCount_FMT to format with PetscPrintf(), printf(), and related functions.
+
+.seealso: PetscInt, PetscInt64, PetscSizeT
+
+M*/
+typedef ptrdiff_t PetscCount;
 
 /*MC
     PetscEnum - datatype used to pass enum types within PETSc functions.
@@ -102,6 +132,25 @@ M*/
    typedef int PetscInt;
 #endif
 
+#if defined(PETSC_HAVE_STDINT_H) && defined(PETSC_HAVE_INTTYPES_H) && defined(PETSC_HAVE_MPI_INT64_T) /* MPI_INT64_T is not guaranteed to be a macro */
+#  define MPIU_INT64     MPI_INT64_T
+#  define PetscInt64_FMT PRId64
+#elif (PETSC_SIZEOF_LONG_LONG == 8)
+#  define MPIU_INT64     MPI_LONG_LONG_INT
+#  define PetscInt64_FMT "lld"
+#elif defined(PETSC_HAVE___INT64)
+#  define MPIU_INT64     MPI_INT64_T
+#  define PetscInt64_FMT "ld"
+#else
+#  error "cannot determine PetscInt64 type"
+#endif
+
+#if PETSC_SIZEOF_SIZE_T == 8
+#  define PetscCount_FMT PetscInt64_FMT
+#else
+#  define PetscCount_FMT "d"
+#endif
+
 /*MC
    PetscBLASInt - datatype used to represent 'int' parameters to BLAS/LAPACK functions.
 
@@ -135,10 +184,28 @@ M*/
 
 M*/
 #if defined(PETSC_HAVE_64BIT_BLAS_INDICES)
+#  define PetscBLASInt_FMT PetscInt64_FMT
    typedef PetscInt64 PetscBLASInt;
 #else
+#  define PetscBLASInt_FMT "d"
    typedef int PetscBLASInt;
 #endif
+
+/*MC
+   PetscCuBLASInt - datatype used to represent 'int' parameters to cuBLAS/cuSOLVER functions.
+
+   Notes:
+    As of this writing PetscCuBLASInt is always the system `int`.
+
+    PetscErrorCode PetscCuBLASIntCast(a,&b) checks if the given PetscInt a will fit in a PetscCuBLASInt, if not it
+      generates a PETSC_ERR_ARG_OUTOFRANGE error
+
+   Level: intermediate
+
+.seealso: PetscBLASInt, PetscMPIInt, PetscInt, PetscCuBLASIntCast()
+
+M*/
+typedef int PetscCuBLASInt;
 
 /*E
     PetscBool  - Logical variable. Actually an int in C and a logical in Fortran.
@@ -155,7 +222,6 @@ typedef enum { PETSC_FALSE,PETSC_TRUE } PetscBool;
 
 /*MC
    PetscReal - PETSc type that represents a real number version of PetscScalar
-
 
    Notes:
    For MPI calls that require datatypes, use MPIU_REAL as the datatype for PetscScalar and MPIU_SUM, MPIU_MAX, etc. for operations.
@@ -200,6 +266,13 @@ M*/
 
           Complex numbers are automatically available if PETSc was able to find a working complex implementation
 
+    Petsc has a 'fix' for complex numbers to support expressions such as std::complex<PetscReal> + PetscInt, which are not supported by the standard
+    C++ library, but are convenient for petsc users. If the C++ compiler is able to compile code in petsccxxcomplexfix.h (This is checked by
+    configure), we include petsccxxcomplexfix.h to provide this convenience.
+
+    If the fix causes conflicts, or one really does not want this fix for a particular C++ file, one can define PETSC_SKIP_CXX_COMPLEX_FIX
+    at the beginning of the C++ file to skip the fix.
+
    Level: beginner
 
 .seealso: PetscReal, PetscScalar, PetscComplex, PetscInt, MPIU_REAL, MPIU_SCALAR, MPIU_COMPLEX, MPIU_INT, PETSC_i
@@ -212,6 +285,8 @@ M*/
 #      elif !defined(__cplusplus) && defined(PETSC_HAVE_C99_COMPLEX) && defined(PETSC_HAVE_CXX_COMPLEX)  /* User code only - conditional on libary code complex support */
 #        define PETSC_HAVE_COMPLEX 1
 #      endif
+#    elif defined(PETSC_USE_REAL___FLOAT128) && defined(PETSC_HAVE_C99_COMPLEX)
+#        define PETSC_HAVE_COMPLEX 1
 #    endif
 #  else /* !PETSC_CLANGUAGE_CXX */
 #    if !defined(PETSC_USE_REAL___FP16)
@@ -230,9 +305,11 @@ M*/
     #if defined(PETSC_DESIRE_KOKKOS_COMPLEX) /* Defined in petscvec_kokkos.hpp for *.kokkos.cxx files */
       #define petsccomplexlib Kokkos
       #include <Kokkos_Complex.hpp>
-    #elif defined(PETSC_HAVE_CUDA)
+    #elif defined(__CUDACC__) || defined(__HIPCC__)
       #define petsccomplexlib thrust
       #include <thrust/complex.h>
+    #elif defined(PETSC_USE_REAL___FLOAT128)
+      #include <complex.h>
     #else
       #define petsccomplexlib std
       #include <complex>
@@ -244,10 +321,11 @@ M*/
     #elif defined(PETSC_USE_REAL_DOUBLE)
       typedef petsccomplexlib::complex<double> PetscComplex;
     #elif defined(PETSC_USE_REAL___FLOAT128)
-      typedef petsccomplexlib::complex<__float128> PetscComplex; /* Notstandard and not expected to work, use __complex128 */
+      typedef __complex128 PetscComplex;
     #endif
 
-    #if !defined(PETSC_SKIP_CXX_COMPLEX_FIX)
+    /* Include a PETSc C++ complex 'fix'. Check PetscComplex manual page for details */
+    #if defined(PETSC_HAVE_CXX_COMPLEX_FIX) && !defined(PETSC_SKIP_CXX_COMPLEX_FIX)
       #include <petsccxxcomplexfix.h>
     #endif
   #else /* c99 complex support */
@@ -596,7 +674,6 @@ M*/
 
 M*/
 
-
 /*S
    PetscSubcomm - A decomposition of an MPI communicator into subcommunicators
 
@@ -627,7 +704,6 @@ $     PETSC_SUBCOMM_INTERLACED - the first communicator contains rank 0,3, the s
    This is used in objects such as PCREDUNDANT to manage the subcommunicators on which the redundant computations
       are performed.
 
-
 .seealso: PetscSubcommCreate(), PetscSubcommSetNumber(), PetscSubcommSetType(), PetscSubcommView(), PetscSubcommSetFromOptions()
 
 S*/
@@ -656,32 +732,4 @@ S*/
 typedef struct _n_PetscSegBuffer *PetscSegBuffer;
 
 typedef struct _n_PetscOptionsHelpPrinted *PetscOptionsHelpPrinted;
-
-/*E
-  PetscMemType - Memory type of a pointer
-
-  Level: beginner
-
-  Developer Note:
-   Encoding of the bitmask in binary: xxxxyyyz
-   z = 0:                Host memory
-   z = 1:                Device memory
-   yyy = 000:            CUDA-related memory
-   yyy = 001:            HIP-related memory
-   xxxxyyy1 = 0000,0001: CUDA memory
-   xxxxyyy1 = 0001,0001: CUDA NVSHMEM memory
-   xxxxyyy1 = 0000,0011: HIP memory
-
-  Other types of memory, e.g., CUDA managed memory, can be added when needed.
-
-.seealso: VecGetArrayAndMemType(), PetscSFBcastWithMemTypeBegin(), PetscSFReduceWithMemTypeBegin()
-E*/
-typedef enum {PETSC_MEMTYPE_HOST=0, PETSC_MEMTYPE_DEVICE=0x01, PETSC_MEMTYPE_CUDA=0x01, PETSC_MEMTYPE_NVSHMEM=0x11,PETSC_MEMTYPE_HIP=0x03} PetscMemType;
-
-#define PetscMemTypeHost(m)    (((m) & 0x1) == PETSC_MEMTYPE_HOST)
-#define PetscMemTypeDevice(m)  (((m) & 0x1) == PETSC_MEMTYPE_DEVICE)
-#define PetscMemTypeCUDA(m)    (((m) & 0xF) == PETSC_MEMTYPE_CUDA)
-#define PetscMemTypeHIP(m)     (((m) & 0xF) == PETSC_MEMTYPE_HIP)
-#define PetscMemTypeNVSHMEM(m) ((m) == PETSC_MEMTYPE_NVSHMEM)
-
 #endif

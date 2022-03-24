@@ -27,6 +27,7 @@ typedef const char* PCType;
 #define PCJACOBI          "jacobi"
 #define PCSOR             "sor"
 #define PCLU              "lu"
+#define PCQR              "qr"
 #define PCSHELL           "shell"
 #define PCBJACOBI         "bjacobi"
 #define PCMG              "mg"
@@ -36,6 +37,7 @@ typedef const char* PCType;
 #define PCASM             "asm"
 #define PCGASM            "gasm"
 #define PCKSP             "ksp"
+#define PCBJKOKKOS        "bjkokkos"
 #define PCCOMPOSITE       "composite"
 #define PCREDUNDANT       "redundant"
 #define PCSPAI            "spai"
@@ -71,7 +73,7 @@ typedef const char* PCType;
 #define PCHMG             "hmg"
 #define PCDEFLATION       "deflation"
 #define PCHPDDM           "hpddm"
-#define PCHARA            "hara"
+#define PCH2OPUS          "h2opus"
 
 /*E
     PCSide - If the preconditioner is to be applied to the left, right
@@ -269,8 +271,8 @@ typedef enum { PC_MG_MULTIPLICATIVE,PC_MG_ADDITIVE,PC_MG_FULL,PC_MG_KASKADE } PC
    Level: beginner
 
    Values:
-+  PC_MG_V_CYCLE
--  PC_MG_W_CYCLE
++  PC_MG_V_CYCLE - use the v cycle
+-  PC_MG_W_CYCLE - use the w cycle
 
 .seealso: PCMGSetCycleType()
 

@@ -151,7 +151,7 @@ static PetscErrorCode KSPSetUp_TCQMR(KSP ksp)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (ksp->pc_side == PC_SYMMETRIC) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"no symmetric preconditioning for KSPTCQMR");
+  PetscCheckFalse(ksp->pc_side == PC_SYMMETRIC,PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"no symmetric preconditioning for KSPTCQMR");
   ierr = KSPSetWorkVecs(ksp,TCQMR_VECS);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -160,7 +160,7 @@ static PetscErrorCode KSPSetUp_TCQMR(KSP ksp)
      KSPTCQMR - A variant of QMR (quasi minimal residual) developed by Tony Chan
 
    Options Database Keys:
-.   see KSPSolve()
+    see KSPSolve()
 
    Level: beginner
 
@@ -172,7 +172,7 @@ static PetscErrorCode KSPSetUp_TCQMR(KSP ksp)
           it is a bound on the true residual.
 
   References:
-.  1. - Tony F. Chan, Lisette de Pillis, and Henk van der Vorst, Transpose free formulations of Lanczos type methods for nonsymmetric linear systems,
+. * - Tony F. Chan, Lisette de Pillis, and Henk van der Vorst, Transpose free formulations of Lanczos type methods for nonsymmetric linear systems,
   Numerical Algorithms, Volume 17, 1998.
 
 .seealso:  KSPCreate(), KSPSetType(), KSPType (for list of available types), KSP, KSPTFQMR

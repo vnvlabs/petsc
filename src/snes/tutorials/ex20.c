@@ -75,7 +75,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
 
   ierr = PetscOptionsBegin(comm, "", "Poisson Problem Options", "DMPLEX");CHKERRQ(ierr);
   ierr = PetscOptionsBool("-cr", "Use compatible relaxarion", "ex20.c", options->cr, &options->cr, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsEnd();
+  ierr = PetscOptionsEnd();CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -84,28 +84,27 @@ static PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
   PetscErrorCode ierr;
 
   PetscFunctionBeginUser;
-  ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_TRUE, NULL, NULL, NULL, NULL, PETSC_TRUE, dm);CHKERRQ(ierr);
-  ierr = DMLocalizeCoordinates(*dm);CHKERRQ(ierr);
-  ierr = PetscObjectSetName((PetscObject) *dm, "Mesh");CHKERRQ(ierr);
-  ierr = DMSetApplicationContext(*dm, user);CHKERRQ(ierr);
+  ierr = DMCreate(comm, dm);CHKERRQ(ierr);
+  ierr = DMSetType(*dm, DMPLEX);CHKERRQ(ierr);
   ierr = DMSetFromOptions(*dm);CHKERRQ(ierr);
+  ierr = DMSetApplicationContext(*dm, user);CHKERRQ(ierr);
   ierr = DMViewFromOptions(*dm, NULL, "-dm_view");CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
 static PetscErrorCode SetupPrimalProblem(DM dm, AppCtx *user)
 {
-  PetscDS        prob;
+  PetscDS        ds;
   DMLabel        label;
   const PetscInt id = 1;
   PetscErrorCode ierr;
 
   PetscFunctionBeginUser;
-  ierr = DMGetDS(dm, &prob);CHKERRQ(ierr);
-  ierr = PetscDSSetResidual(prob, 0, f0_trig_u, f1_u);CHKERRQ(ierr);
-  ierr = PetscDSSetJacobian(prob, 0, 0, NULL, NULL, NULL, g3_uu);CHKERRQ(ierr);
-  ierr = PetscDSSetExactSolution(prob, 0, trig_u, user);CHKERRQ(ierr);
+  ierr = DMGetDS(dm, &ds);CHKERRQ(ierr);
   ierr = DMGetLabel(dm, "marker", &label);CHKERRQ(ierr);
+  ierr = PetscDSSetResidual(ds, 0, f0_trig_u, f1_u);CHKERRQ(ierr);
+  ierr = PetscDSSetJacobian(ds, 0, 0, NULL, NULL, NULL, g3_uu);CHKERRQ(ierr);
+  ierr = PetscDSSetExactSolution(ds, 0, trig_u, user);CHKERRQ(ierr);
   ierr = DMAddBoundary(dm, DM_BC_ESSENTIAL, "wall", label, 1, &id, 0, 0, NULL, (void (*)(void)) trig_u, NULL, user, NULL);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -199,6 +198,8 @@ int main(int argc, char **argv)
 
   test:
     suffix: 2d_p1_gmg_vcycle_cr
+    TODO: broken
+    # cannot MatShift() a MATNORMAL until this MatType inherits from MATSHELL, cf. https://gitlab.com/petsc/petsc/-/issues/972
     requires: triangle
     args: -potential_petscspace_degree 1 -dm_plex_box_faces 2,2 -dm_refine_hierarchy 3 \
           -ksp_rtol 5e-10 -pc_type mg  -pc_mg_adapt_cr \
@@ -234,18 +235,14 @@ int main(int argc, char **argv)
     requires: triangle
     args: -potential_petscspace_degree 1 -dm_refine 3 \
       -ksp_type cg -ksp_rtol 1.e-11 -ksp_norm_type unpreconditioned -ksp_converged_rate \
-      -pc_type gamg \
+      -pc_type gamg -pc_gamg_esteig_ksp_max_it 10 -pc_gamg_esteig_ksp_type cg \
         -pc_gamg_type agg -pc_gamg_agg_nsmooths 1 \
         -pc_gamg_coarse_eq_limit 1000 \
         -pc_gamg_square_graph 1 \
         -pc_gamg_threshold 0.05 \
         -pc_gamg_threshold_scale .0 \
-      -mg_levels_ksp_type chebyshev -mg_levels_ksp_norm_type preconditioned -mg_levels_ksp_converged_rate \
-        -mg_levels_ksp_max_it 5 \
-        -mg_levels_esteig_ksp_type cg \
-        -mg_levels_esteig_ksp_max_it 10 \
-        -mg_levels_ksp_chebyshev_esteig 0,0.05,0,1.05 \
-        -mg_levels_pc_type jacobi \
+        -mg_levels_ksp_type chebyshev -mg_levels_ksp_norm_type preconditioned -mg_levels_ksp_converged_rate \
+        -mg_levels_ksp_max_it 5                                                \
       -matptap_via scalable
 
 TEST*/

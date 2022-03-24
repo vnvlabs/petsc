@@ -184,7 +184,6 @@ static PetscErrorCode IntegrandHessianProductPP(TS ts,PetscReal t,Vec U,Vec *Vl,
   PetscFunctionReturn(0);
 }
 
-
 static PetscErrorCode CostIntegrand(TS ts,PetscReal t,Vec U,Vec R,void *ctx)
 {
   Aircraft          actx = (Aircraft)ctx;
@@ -252,7 +251,7 @@ int main(int argc,char **argv)
   /* Initialize program */
   ierr = PetscInitialize(&argc,&argv,NULL,NULL);if (ierr) return ierr;
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
-  if (size != 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_WRONG_MPI_SIZE,"This is a uniprocessor example only!");
+  PetscCheck(size == 1,PETSC_COMM_WORLD,PETSC_ERR_WRONG_MPI_SIZE,"This is a uniprocessor example only!");
 
   /* Parameter settings */
   aircraft.ftime = 1.;   /* time interval in hour */
@@ -363,21 +362,21 @@ int main(int argc,char **argv)
   }
   ierr = VecRestoreArray(PL,&p);CHKERRQ(ierr);
 
-  ierr = TaoSetInitialVector(tao,P);CHKERRQ(ierr);
+  ierr = TaoSetSolution(tao,P);CHKERRQ(ierr);
   ierr = TaoSetVariableBounds(tao,PL,PU);CHKERRQ(ierr);
   /* Set routine for function and gradient evaluation */
-  ierr = TaoSetObjectiveAndGradientRoutine(tao,FormObjFunctionGradient,(void *)&aircraft);CHKERRQ(ierr);
+  ierr = TaoSetObjectiveAndGradient(tao,NULL,FormObjFunctionGradient,(void *)&aircraft);CHKERRQ(ierr);
 
   if (aircraft.eh) {
     if (aircraft.mf) {
       ierr = MatCreateShell(PETSC_COMM_WORLD,PETSC_DECIDE,PETSC_DECIDE,2*aircraft.nsteps,2*aircraft.nsteps,(void*)&aircraft,&aircraft.H);CHKERRQ(ierr);
       ierr = MatShellSetOperation(aircraft.H,MATOP_MULT,(void(*)(void))MyMatMult);CHKERRQ(ierr);
       ierr = MatSetOption(aircraft.H,MAT_SYMMETRIC,PETSC_TRUE);CHKERRQ(ierr);
-      ierr = TaoSetHessianRoutine(tao,aircraft.H,aircraft.H,MatrixFreeObjHessian,(void*)&aircraft);CHKERRQ(ierr);
+      ierr = TaoSetHessian(tao,aircraft.H,aircraft.H,MatrixFreeObjHessian,(void*)&aircraft);CHKERRQ(ierr);
     } else {
       ierr = MatCreateDense(MPI_COMM_WORLD,PETSC_DETERMINE,PETSC_DETERMINE,2*aircraft.nsteps,2*aircraft.nsteps,NULL,&(aircraft.H));CHKERRQ(ierr);
       ierr = MatSetOption(aircraft.H,MAT_SYMMETRIC,PETSC_TRUE);CHKERRQ(ierr);
-      ierr = TaoSetHessianRoutine(tao,aircraft.H,aircraft.H,FormObjHessian,(void *)&aircraft);CHKERRQ(ierr);
+      ierr = TaoSetHessian(tao,aircraft.H,aircraft.H,FormObjHessian,(void *)&aircraft);CHKERRQ(ierr);
     }
   }
 
@@ -437,7 +436,7 @@ int main(int argc,char **argv)
    Input Parameters:
    tao - the Tao context
    P   - the input vector
-   ctx - optional aircraft-defined context, as set by TaoSetObjectiveAndGradientRoutine()
+   ctx - optional aircraft-defined context, as set by TaoSetObjectiveAndGradient()
 
    Output Parameters:
    f   - the newly evaluated function
@@ -655,5 +654,4 @@ PetscErrorCode ComputeObjHessianWithSOA(Vec Dir,PetscScalar arr[],Aircraft actx)
       suffix: 3
       args:  -ts_adapt_type none -ts_type rk -ts_rk_type 3 -viewer_binary_skip_info -tao_monitor -tao_view -tao_type bntr -tao_bnk_pc_type none -exacthessian -matrixfree
 TEST*/
-
 

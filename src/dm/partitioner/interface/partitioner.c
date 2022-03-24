@@ -12,6 +12,13 @@
   Options Database Key:
 . -petscpartitioner_type <type> - Sets the PetscPartitioner type; use -help for a list of available types
 
+  Note:
+$ PETSCPARTITIONERCHACO    - The Chaco partitioner (--download-chaco)
+$ PETSCPARTITIONERPARMETIS - The ParMetis partitioner (--download-parmetis)
+$ PETSCPARTITIONERSHELL    - A shell partitioner implemented by the user
+$ PETSCPARTITIONERSIMPLE   - A simple partitioner that divides cells into equal, contiguous chunks
+$ PETSCPARTITIONERGATHER   - Gathers all cells onto process 0
+
   Level: intermediate
 
 .seealso: PetscPartitionerGetType(), PetscPartitionerCreate()
@@ -29,7 +36,7 @@ PetscErrorCode PetscPartitionerSetType(PetscPartitioner part, PetscPartitionerTy
 
   ierr = PetscPartitionerRegisterAll();CHKERRQ(ierr);
   ierr = PetscFunctionListFind(PetscPartitionerList, name, &r);CHKERRQ(ierr);
-  if (!r) SETERRQ1(PetscObjectComm((PetscObject) part), PETSC_ERR_ARG_UNKNOWN_TYPE, "Unknown PetscPartitioner type: %s", name);
+  PetscCheckFalse(!r,PetscObjectComm((PetscObject) part), PETSC_ERR_ARG_UNKNOWN_TYPE, "Unknown PetscPartitioner type: %s", name);
 
   if (part->ops->destroy) {
     ierr = (*part->ops->destroy)(part);CHKERRQ(ierr);
@@ -93,7 +100,7 @@ PetscErrorCode PetscPartitionerViewFromOptions(PetscPartitioner A,PetscObject ob
 
   Collective on PetscPartitioner
 
-  Input Parameter:
+  Input Parameters:
 + part - the PetscPartitioner object to view
 - v    - the viewer
 
@@ -296,7 +303,7 @@ PetscErrorCode PetscPartitionerDestroy(PetscPartitioner *part)
 
   Level: developer
 
-.seealso PetscPartitionerCreate(), PetscSectionCreate(), PetscSectionSetChart(), PetscSectionSetDof()
+.seealso PetscPartitionerCreate(), PetscPartitionerSetType(), PetscSectionCreate(), PetscSectionSetChart(), PetscSectionSetDof()
 @*/
 PetscErrorCode PetscPartitionerPartition(PetscPartitioner part, PetscInt nparts, PetscInt numVertices, PetscInt start[], PetscInt adjacency[], PetscSection vertexSection, PetscSection targetSection, PetscSection partSection, IS *partition)
 {
@@ -305,8 +312,8 @@ PetscErrorCode PetscPartitionerPartition(PetscPartitioner part, PetscInt nparts,
   PetscFunctionBegin;
   PetscValidHeaderSpecific(part, PETSCPARTITIONER_CLASSID, 1);
   PetscValidLogicalCollectiveInt(part, nparts, 2);
-  if (nparts <= 0) SETERRQ(PetscObjectComm((PetscObject) part), PETSC_ERR_ARG_OUTOFRANGE, "Number of parts must be positive");
-  if (numVertices < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Number of vertices must be non-negative");
+  PetscCheckFalse(nparts <= 0,PetscObjectComm((PetscObject) part), PETSC_ERR_ARG_OUTOFRANGE, "Number of parts must be positive");
+  PetscCheckFalse(numVertices < 0,PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Number of vertices must be non-negative");
   if (numVertices && !part->noGraph) {
     PetscValidIntPointer(start, 4);
     PetscValidIntPointer(start + numVertices, 4);
@@ -317,14 +324,14 @@ PetscErrorCode PetscPartitionerPartition(PetscPartitioner part, PetscInt nparts,
 
     PetscValidHeaderSpecific(vertexSection, PETSC_SECTION_CLASSID, 6);
     ierr = PetscSectionGetChart(vertexSection, &s, &e);CHKERRQ(ierr);
-    if (s > 0 || e < numVertices) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Invalid vertexSection chart [%D,%D)",s,e);
+    PetscCheckFalse(s > 0 || e < numVertices,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Invalid vertexSection chart [%D,%D)",s,e);
   }
   if (targetSection) {
     PetscInt s,e;
 
     PetscValidHeaderSpecific(targetSection, PETSC_SECTION_CLASSID, 7);
     ierr = PetscSectionGetChart(targetSection, &s, &e);CHKERRQ(ierr);
-    if (s > 0 || e < nparts) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Invalid targetSection chart [%D,%D)",s,e);
+    PetscCheckFalse(s > 0 || e < nparts,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Invalid targetSection chart [%D,%D)",s,e);
   }
   PetscValidHeaderSpecific(partSection, PETSC_SECTION_CLASSID, 8);
   PetscValidPointer(partition, 9);
@@ -335,7 +342,7 @@ PetscErrorCode PetscPartitionerPartition(PetscPartitioner part, PetscInt nparts,
     ierr = PetscSectionSetDof(partSection, 0, numVertices);CHKERRQ(ierr);
     ierr = ISCreateStride(PetscObjectComm((PetscObject)part),numVertices,0,1,partition);CHKERRQ(ierr);
   } else {
-    if (!part->ops->partition) SETERRQ1(PetscObjectComm((PetscObject) part), PETSC_ERR_SUP, "PetscPartitioner %s has no partitioning method", ((PetscObject)part)->type_name);
+    PetscCheckFalse(!part->ops->partition,PetscObjectComm((PetscObject) part), PETSC_ERR_SUP, "PetscPartitioner %s has no partitioning method", ((PetscObject)part)->type_name);
     ierr = (*part->ops->partition)(part, nparts, numVertices, start, adjacency, vertexSection, targetSection, partSection, partition);CHKERRQ(ierr);
   }
   ierr = PetscSectionSetUp(partSection);CHKERRQ(ierr);
@@ -381,7 +388,7 @@ PetscErrorCode PetscPartitionerPartition(PetscPartitioner part, PetscInt nparts,
 
   Level: beginner
 
-.seealso: PetscPartitionerSetType(), PETSCPARTITIONERCHACO, PETSCPARTITIONERPARMETIS, PETSCPARTITIONERSHELL, PETSCPARTITIONERSIMPLE, PETSCPARTITIONERGATHER
+.seealso: PetscPartitionerSetType(), PetscPartitionerDestroy()
 @*/
 PetscErrorCode PetscPartitionerCreate(MPI_Comm comm, PetscPartitioner *part)
 {
@@ -405,4 +412,3 @@ PetscErrorCode PetscPartitionerCreate(MPI_Comm comm, PetscPartitioner *part)
   *part = p;
   PetscFunctionReturn(0);
 }
-

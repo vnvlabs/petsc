@@ -3,9 +3,9 @@
 
 #include <petsc/private/petscimpl.h>
 
-#define kh_inline   PETSC_INLINE
+#define kh_inline   inline
 #define klib_unused PETSC_UNUSED
-#include <petsc/private/kernels/khash.h>
+#include <petsc/private/khash/khash.h>
 
 /* Required for khash <= 0.2.5 */
 #if !defined(kcalloc)
@@ -84,20 +84,13 @@
         } }
 #endif /*kh_foreach_value*/
 
-
 /* --- Helper macro for error checking --- */
 
 #if defined(PETSC_USE_DEBUG)
-#define PetscHashAssert(expr) do {                 \
-  if (PetscUnlikely(!(expr)))                      \
-    SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,        \
-             "[khash] Assertion: `%s' failed.",    \
-             PetscStringize(expr));                \
-} while (0)
+#define PetscHashAssert(expr) PetscCheck(expr,PETSC_COMM_SELF,PETSC_ERR_LIB,"[khash] Assertion: `%s' failed.",PetscStringize(expr))
 #else
 #define PetscHashAssert(expr) ((void)(expr))
 #endif
-
 
 /* --- Low level iterator API --- */
 
@@ -120,7 +113,6 @@ typedef khiter_t PetscHashIter;
 
 #define PetscHashIterSetVal(ht,i,v) (kh_val((ht),(i)) = (v))
 
-
 /* --- Thomas Wang integer hash functions --- */
 
 typedef khint32_t PetscHash32_t;
@@ -128,7 +120,7 @@ typedef khint64_t PetscHash64_t;
 typedef khint_t   PetscHash_t;
 
 /* Thomas Wang's first version for 32bit integers */
-PETSC_STATIC_INLINE PetscHash_t PetscHash_UInt32_v0(PetscHash32_t key)
+static inline PetscHash_t PetscHash_UInt32_v0(PetscHash32_t key)
 {
   key += ~(key << 15);
   key ^=  (key >> 10);
@@ -140,7 +132,7 @@ PETSC_STATIC_INLINE PetscHash_t PetscHash_UInt32_v0(PetscHash32_t key)
 }
 
 /* Thomas Wang's second version for 32bit integers */
-PETSC_STATIC_INLINE PetscHash_t PetscHash_UInt32_v1(PetscHash32_t key)
+static inline PetscHash_t PetscHash_UInt32_v1(PetscHash32_t key)
 {
   key = ~key + (key << 15); /* key = (key << 15) - key - 1; */
   key =  key ^ (key >> 12);
@@ -151,13 +143,13 @@ PETSC_STATIC_INLINE PetscHash_t PetscHash_UInt32_v1(PetscHash32_t key)
   return key;
 }
 
-PETSC_STATIC_INLINE PetscHash_t PetscHash_UInt32(PetscHash32_t key)
+static inline PetscHash_t PetscHash_UInt32(PetscHash32_t key)
 {
   return PetscHash_UInt32_v1(key);
 }
 
 /* Thomas Wang's version for 64bit integer -> 32bit hash */
-PETSC_STATIC_INLINE PetscHash32_t PetscHash_UInt64_32(PetscHash64_t key)
+static inline PetscHash32_t PetscHash_UInt64_32(PetscHash64_t key)
 {
   key = ~key + (key << 18); /* key = (key << 18) - key - 1; */
   key =  key ^ (key >> 31);
@@ -169,7 +161,7 @@ PETSC_STATIC_INLINE PetscHash32_t PetscHash_UInt64_32(PetscHash64_t key)
 }
 
 /* Thomas Wang's version for 64bit integer -> 64bit hash */
-PETSC_STATIC_INLINE PetscHash64_t PetscHash_UInt64_64(PetscHash64_t key)
+static inline PetscHash64_t PetscHash_UInt64_64(PetscHash64_t key)
 {
   key = ~key + (key << 21); /* key = (key << 21) - key - 1; */
   key =  key ^ (key >> 24);
@@ -181,14 +173,14 @@ PETSC_STATIC_INLINE PetscHash64_t PetscHash_UInt64_64(PetscHash64_t key)
   return key;
 }
 
-PETSC_STATIC_INLINE PetscHash_t PetscHash_UInt64(PetscHash64_t key)
+static inline PetscHash_t PetscHash_UInt64(PetscHash64_t key)
 {
   return sizeof(PetscHash_t) < sizeof(PetscHash64_t)
     ? (PetscHash_t)PetscHash_UInt64_32(key)
     : (PetscHash_t)PetscHash_UInt64_64(key);
 }
 
-PETSC_STATIC_INLINE PetscHash_t PetscHashInt(PetscInt key)
+static inline PetscHash_t PetscHashInt(PetscInt key)
 {
 #if defined(PETSC_USE_64BIT_INDICES)
   return PetscHash_UInt64((PetscHash64_t)key);
@@ -197,7 +189,7 @@ PETSC_STATIC_INLINE PetscHash_t PetscHashInt(PetscInt key)
 #endif
 }
 
-PETSC_STATIC_INLINE PetscHash_t PetscHashPointer(void *key)
+static inline PetscHash_t PetscHashPointer(void *key)
 {
 #if PETSC_SIZEOF_VOID_P == 8
   return PetscHash_UInt64((PetscHash64_t)key);
@@ -206,7 +198,7 @@ PETSC_STATIC_INLINE PetscHash_t PetscHashPointer(void *key)
 #endif
 }
 
-PETSC_STATIC_INLINE PetscHash_t PetscHashCombine(PetscHash_t seed, PetscHash_t hash)
+static inline PetscHash_t PetscHashCombine(PetscHash_t seed, PetscHash_t hash)
 {
   /* https://doi.org/10.1002/asi.10170 */
   /* https://dl.acm.org/citation.cfm?id=759509 */
@@ -214,6 +206,5 @@ PETSC_STATIC_INLINE PetscHash_t PetscHashCombine(PetscHash_t seed, PetscHash_t h
 }
 
 #define PetscHashEqual(a,b) ((a) == (b))
-
 
 #endif /* PETSC_HASHTABLE_H */

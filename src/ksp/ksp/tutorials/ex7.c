@@ -17,8 +17,6 @@ linear solvers on the individual blocks.\n\n";
    Processors: n
 T*/
 
-
-
 /*
   Include "petscksp.h" so that we can use KSP solvers.  Note that this file
   automatically includes:
@@ -116,7 +114,6 @@ int main(int argc,char **args)
   ierr = KSPGetPC(ksp,&pc);CHKERRQ(ierr);
   ierr = PCSetType(pc,PCBJACOBI);CHKERRQ(ierr);
 
-
   /* -------------------------------------------------------------------
                    Define the problem decomposition
      ------------------------------------------------------------------- */
@@ -140,7 +137,6 @@ int main(int argc,char **args)
     Set runtime options
   */
   ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
-
 
   /* -------------------------------------------------------------------
                Set the linear solvers for the subblocks
@@ -188,7 +184,7 @@ int main(int argc,char **args)
     */
     for (i=0; i<nlocal; i++) {
       ierr = KSPGetPC(subksp[i],&subpc);CHKERRQ(ierr);
-      if (!rank) {
+      if (rank == 0) {
         if (i%2) {
           ierr = PCSetType(subpc,PCILU);CHKERRQ(ierr);
         } else {
@@ -235,7 +231,6 @@ int main(int argc,char **args)
   ierr = PetscFinalize();
   return ierr;
 }
-
 
 /*TEST
 
@@ -296,7 +291,7 @@ int main(int argc,char **args)
       args: -ksp_monitor_short -mat_type aijcusparse -sub_pc_factor_mat_solver_type cusparse
 
    testset:
-      args: -ksp_monitor_short -pc_type gamg -ksp_view
+      args: -ksp_monitor_short -pc_type gamg -ksp_view -pc_gamg_esteig_ksp_type cg -pc_gamg_esteig_ksp_max_it 10
       test:
         suffix: gamg_cuda
         nsize: {{1 2}separate output}
@@ -307,7 +302,7 @@ int main(int argc,char **args)
       test:
         suffix: gamg_kokkos
         nsize: {{1 2}separate output}
-        requires: kokkos_kernels
+        requires: !sycl kokkos_kernels
         args: -mat_type aijkokkos
 
 TEST*/

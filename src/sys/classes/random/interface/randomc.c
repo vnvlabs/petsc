@@ -12,19 +12,19 @@
     one to reinitialize and set the seed.
  */
 
-#include <../src/sys/classes/random/randomimpl.h>                              /*I "petscsys.h" I*/
+#include <petsc/private/randomimpl.h>                              /*I "petscsys.h" I*/
 #include <petscviewer.h>
 
 /* Logging support */
 PetscClassId PETSC_RANDOM_CLASSID;
 
-/*@
+/*@C
    PetscRandomDestroy - Destroys a context that has been formed by
    PetscRandomCreate().
 
    Collective on PetscRandom
 
-   Intput Parameter:
+   Input Parameter:
 .  r  - the random number generator context
 
    Level: intermediate
@@ -45,7 +45,6 @@ PetscErrorCode  PetscRandomDestroy(PetscRandom *r)
   ierr = PetscHeaderDestroy(r);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*@C
    PetscRandomGetSeed - Gets the random seed.
@@ -100,7 +99,7 @@ PetscErrorCode  PetscRandomSetSeed(PetscRandom r,unsigned long seed)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(r,PETSC_RANDOM_CLASSID,1);
   r->seed = seed;
-  ierr    = PetscInfo1(NULL,"Setting seed to %d\n",(int)seed);CHKERRQ(ierr);
+  ierr    = PetscInfo(NULL,"Setting seed to %d\n",(int)seed);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -288,7 +287,7 @@ PetscErrorCode  PetscRandomView(PetscRandom rnd,PetscViewer viewer)
 
     ierr = PetscObjectGetName((PetscObject)rnd,&name);CHKERRQ(ierr);
     ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
-    if (!((PetscObject)rnd)->amsmem && !rank) {
+    if (!((PetscObject)rnd)->amsmem && rank == 0) {
       char       dir[1024];
 
       ierr = PetscObjectViewSAWs((PetscObject)rnd,viewer);CHKERRQ(ierr);
@@ -348,7 +347,7 @@ PetscErrorCode  PetscRandomCreate(MPI_Comm comm,PetscRandom *r)
   PetscMPIInt    rank;
 
   PetscFunctionBegin;
-  PetscValidPointer(r,3);
+  PetscValidPointer(r,2);
   *r = NULL;
   ierr = PetscRandomInitializePackage();CHKERRQ(ierr);
 

@@ -3,7 +3,6 @@
     This file implements GMRES (a Generalized Minimal Residual) method.
     Reference:  Saad and Schultz, 1986.
 
-
     Some comments on left vs. right preconditioning, and restarts.
     Left and right preconditioning.
     If right preconditioning is chosen, then the problem being solved
@@ -121,17 +120,17 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
 
   PetscFunctionBegin;
   if (itcount) *itcount = 0;
-  ierr    = VecNormalize(VEC_VV(0),&res);CHKERRQ(ierr);
+  ierr = VecNormalize(VEC_VV(0),&res);CHKERRQ(ierr);
   KSPCheckNorm(ksp,res);
 
   /* the constant .1 is arbitrary, just some measure at how incorrect the residuals are */
   if ((ksp->rnorm > 0.0) && (PetscAbsReal(res-ksp->rnorm) > gmres->breakdowntol*gmres->rnorm0)) {
-      if (ksp->errorifnotconverged) SETERRQ3(PetscObjectComm((PetscObject)ksp),PETSC_ERR_CONV_FAILED,"Residual norm computed by GMRES recursion formula %g is far from the computed residual norm %g at restart, residual norm at start of cycle %g",(double)ksp->rnorm,(double)res,(double)gmres->rnorm0);
-      else {
-        ierr = PetscInfo3(ksp,"Residual norm computed by GMRES recursion formula %g is far from the computed residual norm %g at restart, residual norm at start of cycle %g",(double)ksp->rnorm,(double)res,(double)gmres->rnorm0);
-        ksp->reason =  KSP_DIVERGED_BREAKDOWN;
-        PetscFunctionReturn(0);
-      }
+    PetscCheckFalse(ksp->errorifnotconverged,PetscObjectComm((PetscObject)ksp),PETSC_ERR_CONV_FAILED,"Residual norm computed by GMRES recursion formula %g is far from the computed residual norm %g at restart, residual norm at start of cycle %g",(double)ksp->rnorm,(double)res,(double)gmres->rnorm0);
+    else {
+      ierr = PetscInfo(ksp,"Residual norm computed by GMRES recursion formula %g is far from the computed residual norm %g at restart, residual norm at start of cycle %g",(double)ksp->rnorm,(double)res,(double)gmres->rnorm0);CHKERRQ(ierr);
+      ksp->reason =  KSP_DIVERGED_BREAKDOWN;
+      PetscFunctionReturn(0);
+    }
   }
   *GRS(0) = gmres->rnorm0 = res;
 
@@ -178,7 +177,7 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
     hapbnd = PetscAbsScalar(tt / *GRS(it));
     if (hapbnd > gmres->haptol) hapbnd = gmres->haptol;
     if (tt < hapbnd) {
-      ierr   = PetscInfo2(ksp,"Detected happy breakdown, current hapbnd = %14.12e tt = %14.12e\n",(double)hapbnd,(double)tt);CHKERRQ(ierr);
+      ierr   = PetscInfo(ksp,"Detected happy breakdown, current hapbnd = %14.12e tt = %14.12e\n",(double)hapbnd,(double)tt);CHKERRQ(ierr);
       hapend = PETSC_TRUE;
     }
     ierr = KSPGMRESUpdateHessenberg(ksp,it,hapend,&res);CHKERRQ(ierr);
@@ -196,7 +195,7 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
       if (ksp->normtype == KSP_NORM_NONE) { /* convergence test was skipped in this case */
         ksp->reason = KSP_CONVERGED_HAPPY_BREAKDOWN;
       } else if (!ksp->reason) {
-        if (ksp->errorifnotconverged) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"You reached the happy break down, but convergence was not indicated. Residual norm = %g",(double)res);
+        PetscCheckFalse(ksp->errorifnotconverged,PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"You reached the happy break down, but convergence was not indicated. Residual norm = %g",(double)res);
         else {
           ksp->reason = KSP_DIVERGED_BREAKDOWN;
           break;
@@ -213,7 +212,6 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
   }
 
   if (itcount) *itcount = it;
-
 
   /*
     Down here we have to solve for the "best" coefficients of the Krylov
@@ -234,7 +232,7 @@ PetscErrorCode KSPSolve_GMRES(KSP ksp)
   PetscInt       N = gmres->max_k + 1;
 
   PetscFunctionBegin;
-  if (ksp->calc_sings && !gmres->Rsvd) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ORDER,"Must call KSPSetComputeSingularValues() before KSPSetUp() is called");
+  PetscCheckFalse(ksp->calc_sings && !gmres->Rsvd,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ORDER,"Must call KSPSetComputeSingularValues() before KSPSetUp() is called");
 
   ierr     = PetscObjectSAWsTakeAccess((PetscObject)ksp);CHKERRQ(ierr);
   ksp->its = 0;
@@ -242,11 +240,10 @@ PetscErrorCode KSPSolve_GMRES(KSP ksp)
 
   itcount     = 0;
   gmres->fullcycle = 0;
-  ksp->reason = KSP_CONVERGED_ITERATING;
   ksp->rnorm  = -1.0; /* special marker for KSPGMRESCycle() */
-  while (!ksp->reason) {
-    ierr     = KSPInitialResidual(ksp,ksp->vec_sol,VEC_TEMP,VEC_TEMP_MATOP,VEC_VV(0),ksp->vec_rhs);CHKERRQ(ierr);
-    ierr     = KSPGMRESCycle(&its,ksp);CHKERRQ(ierr);
+  while (!ksp->reason || (ksp->rnorm == -1 && ksp->reason == KSP_DIVERGED_PC_FAILED)) {
+    ierr = KSPInitialResidual(ksp,ksp->vec_sol,VEC_TEMP,VEC_TEMP_MATOP,VEC_VV(0),ksp->vec_rhs);CHKERRQ(ierr);
+    ierr = KSPGMRESCycle(&its,ksp);CHKERRQ(ierr);
     /* Store the Hessenberg matrix and the basis vectors of the Krylov subspace
     if the cycle is complete for the computation of the Ritz pairs */
     if (its == gmres->max_k) {
@@ -358,10 +355,10 @@ static PetscErrorCode KSPGMRESBuildSoln(PetscScalar *nrs,Vec vs,Vec vdest,KSP ks
   if (*HH(it,it) != 0.0) {
     nrs[it] = *GRS(it) / *HH(it,it);
   } else {
-    if (ksp->errorifnotconverged) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"You reached the break down in GMRES; HH(it,it) = 0");
+    PetscCheckFalse(ksp->errorifnotconverged,PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"You reached the break down in GMRES; HH(it,it) = 0");
     else ksp->reason = KSP_DIVERGED_BREAKDOWN;
 
-    ierr = PetscInfo2(ksp,"Likely your matrix or preconditioner is singular. HH(it,it) is identically zero; it = %D GRS(it) = %g\n",it,(double)PetscAbsScalar(*GRS(it)));CHKERRQ(ierr);
+    ierr = PetscInfo(ksp,"Likely your matrix or preconditioner is singular. HH(it,it) is identically zero; it = %D GRS(it) = %g\n",it,(double)PetscAbsScalar(*GRS(it)));CHKERRQ(ierr);
     PetscFunctionReturn(0);
   }
   for (ii=1; ii<=it; ii++) {
@@ -369,10 +366,10 @@ static PetscErrorCode KSPGMRESBuildSoln(PetscScalar *nrs,Vec vs,Vec vdest,KSP ks
     tt = *GRS(k);
     for (j=k+1; j<=it; j++) tt = tt - *HH(k,j) * nrs[j];
     if (*HH(k,k) == 0.0) {
-      if (ksp->errorifnotconverged) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"Likely your matrix or preconditioner is singular. HH(k,k) is identically zero; k = %D\n",k);
+      PetscCheckFalse(ksp->errorifnotconverged,PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"Likely your matrix or preconditioner is singular. HH(k,k) is identically zero; k = %D",k);
       else {
         ksp->reason = KSP_DIVERGED_BREAKDOWN;
-        ierr = PetscInfo1(ksp,"Likely your matrix or preconditioner is singular. HH(k,k) is identically zero; k = %D\n",k);CHKERRQ(ierr);
+        ierr = PetscInfo(ksp,"Likely your matrix or preconditioner is singular. HH(k,k) is identically zero; k = %D\n",k);CHKERRQ(ierr);
         PetscFunctionReturn(0);
       }
     }
@@ -423,7 +420,7 @@ static PetscErrorCode KSPGMRESUpdateHessenberg(KSP ksp,PetscInt it,PetscBool hap
   if (!hapend) {
     tt = PetscSqrtScalar(PetscConj(*hh) * *hh + PetscConj(*(hh+1)) * *(hh+1));
     if (tt == 0.0) {
-      if (ksp->errorifnotconverged) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"tt == 0.0");
+      PetscCheckFalse(ksp->errorifnotconverged,PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"tt == 0.0");
       else {
         ksp->reason = KSP_DIVERGED_NULL;
         PetscFunctionReturn(0);
@@ -436,7 +433,7 @@ static PetscErrorCode KSPGMRESUpdateHessenberg(KSP ksp,PetscInt it,PetscBool hap
     *hh        = PetscConj(*cc) * *hh + *ss * *(hh+1);
     *res       = PetscAbsScalar(*GRS(it+1));
   } else {
-    /* happy breakdown: HH(it+1, it) = 0, therfore we don't need to apply
+    /* happy breakdown: HH(it+1, it) = 0, therefore we don't need to apply
             another rotation matrix (so RH doesn't change).  The new residual is
             always the new sine term times the residual from last time (GRS(it)),
             but now the new sine rotation would be zero...so the residual should
@@ -552,7 +549,7 @@ PetscErrorCode KSPView_GMRES(KSP ksp,PetscViewer viewer)
 -  dummy - an collection of viewers created with KSPViewerCreate()
 
    Options Database Keys:
-.   -ksp_gmres_kyrlov_monitor
+.   -ksp_gmres_krylov_monitor <bool> - Plot the Krylov directions
 
    Notes:
     A new PETSCVIEWERDRAW is created for each Krylov vector so they can all be simultaneously viewed
@@ -622,7 +619,7 @@ PetscErrorCode  KSPGMRESSetHapTol_GMRES(KSP ksp,PetscReal tol)
   KSP_GMRES *gmres = (KSP_GMRES*)ksp->data;
 
   PetscFunctionBegin;
-  if (tol < 0.0) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Tolerance must be non-negative");
+  PetscCheckFalse(tol < 0.0,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Tolerance must be non-negative");
   gmres->haptol = tol;
   PetscFunctionReturn(0);
 }
@@ -636,7 +633,7 @@ PetscErrorCode  KSPGMRESSetBreakdownTolerance_GMRES(KSP ksp,PetscReal tol)
     gmres->breakdowntol = 0.1;
     PetscFunctionReturn(0);
   }
-  if (tol < 0.0) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Breakdown tolerance must be non-negative");
+  PetscCheckFalse(tol < 0.0,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Breakdown tolerance must be non-negative");
   gmres->breakdowntol = tol;
   PetscFunctionReturn(0);
 }
@@ -656,7 +653,7 @@ PetscErrorCode  KSPGMRESSetRestart_GMRES(KSP ksp,PetscInt max_k)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (max_k < 1) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Restart must be positive");
+  PetscCheckFalse(max_k < 1,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Restart must be positive");
   if (!ksp->setupstage) {
     gmres->max_k = max_k;
   } else if (gmres->max_k != max_k) {
@@ -721,7 +718,7 @@ PetscErrorCode  KSPGMRESGetCGSRefinementType_GMRES(KSP ksp,KSPGMRESCGSRefinement
 -  type - the type of refinement
 
   Options Database:
-.  -ksp_gmres_cgs_refinement_type <refine_never,refine_ifneeded,refine_always>
+.  -ksp_gmres_cgs_refinement_type <refine_never,refine_ifneeded,refine_always> - refinement type
 
    Level: intermediate
 
@@ -752,7 +749,7 @@ PetscErrorCode  KSPGMRESSetCGSRefinementType(KSP ksp,KSPGMRESCGSRefinementType t
 .  type - the type of refinement
 
   Options Database:
-.  -ksp_gmres_cgs_refinement_type <refine_never,refine_ifneeded,refine_always>
+.  -ksp_gmres_cgs_refinement_type <refine_never,refine_ifneeded,refine_always> - type of refinement
 
    Level: intermediate
 
@@ -769,7 +766,6 @@ PetscErrorCode  KSPGMRESGetCGSRefinementType(KSP ksp,KSPGMRESCGSRefinementType *
   PetscFunctionReturn(0);
 }
 
-
 /*@
    KSPGMRESSetRestart - Sets number of iterations at which GMRES, FGMRES and LGMRES restarts.
 
@@ -780,7 +776,7 @@ PetscErrorCode  KSPGMRESGetCGSRefinementType(KSP ksp,KSPGMRESCGSRefinementType *
 -  restart - integer restart value
 
   Options Database:
-.  -ksp_gmres_restart <positive integer>
+.  -ksp_gmres_restart <positive integer> - integer restart value
 
     Note: The default value is 30.
 
@@ -835,7 +831,7 @@ PetscErrorCode  KSPGMRESGetRestart(KSP ksp, PetscInt *restart)
 -  tol - the tolerance
 
   Options Database:
-.  -ksp_gmres_haptol <positive real value>
+.  -ksp_gmres_haptol <positive real value> - set tolerance for determining happy breakdown
 
    Note: Happy breakdown is the rare case in GMRES where an 'exact' solution is obtained after
          a certain number of iterations. If you attempt more iterations after this point unstable
@@ -865,7 +861,7 @@ PetscErrorCode  KSPGMRESSetHapTol(KSP ksp,PetscReal tol)
 -  tol - the tolerance
 
   Options Database:
-.  -ksp_gmres_breakdown_tolerance <positive real value>
+.  -ksp_gmres_breakdown_tolerance <positive real value> - set tolerance for determining divergence breakdown
 
    Note: divergence breakdown occurs when GMRES residual increases significantly
          during restart
@@ -888,7 +884,6 @@ PetscErrorCode  KSPGMRESSetBreakdownTolerance(KSP ksp,PetscReal tol)
      KSPGMRES - Implements the Generalized Minimal Residual method.
                 (Saad and Schultz, 1986) with restart
 
-
    Options Database Keys:
 +   -ksp_gmres_restart <restart> - the number of Krylov directions to orthogonalize against
 .   -ksp_gmres_haptol <tol> - sets the tolerance for "happy ending" (exact convergence)
@@ -906,7 +901,7 @@ PetscErrorCode  KSPGMRESSetBreakdownTolerance(KSP ksp,PetscReal tol)
     Left and right preconditioning are supported, but not symmetric preconditioning.
 
    References:
-.     1. - YOUCEF SAAD AND MARTIN H. SCHULTZ, GMRES: A GENERALIZED MINIMAL RESIDUAL ALGORITHM FOR SOLVING NONSYMMETRIC LINEAR SYSTEMS.
+.  * - YOUCEF SAAD AND MARTIN H. SCHULTZ, GMRES: A GENERALIZED MINIMAL RESIDUAL ALGORITHM FOR SOLVING NONSYMMETRIC LINEAR SYSTEMS.
           SIAM J. ScI. STAT. COMPUT. Vo|. 7, No. 3, July 1986.
 
 .seealso:  KSPCreate(), KSPSetType(), KSPType (for list of available types), KSP, KSPFGMRES, KSPLGMRES,
@@ -940,7 +935,7 @@ PETSC_EXTERN PetscErrorCode KSPCreate_GMRES(KSP ksp)
   ksp->ops->setfromoptions               = KSPSetFromOptions_GMRES;
   ksp->ops->computeextremesingularvalues = KSPComputeExtremeSingularValues_GMRES;
   ksp->ops->computeeigenvalues           = KSPComputeEigenvalues_GMRES;
-#if !defined(PETSC_USE_COMPLEX) && !defined(PETSC_HAVE_ESSL)
+#if !defined(PETSC_USE_COMPLEX)
   ksp->ops->computeritz                  = KSPComputeRitz_GMRES;
 #endif
   ierr = PetscObjectComposeFunction((PetscObject)ksp,"KSPGMRESSetPreAllocateVectors_C",KSPGMRESSetPreAllocateVectors_GMRES);CHKERRQ(ierr);

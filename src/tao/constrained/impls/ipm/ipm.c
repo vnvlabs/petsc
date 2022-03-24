@@ -738,7 +738,7 @@ PetscErrorCode IPMUpdateAi(Tao tao)
     ierr = MatCreate(comm,&ipmP->Ai);CHKERRQ(ierr);
     ierr = MatSetType(ipmP->Ai,MATAIJ);CHKERRQ(ierr);
 
-    ierr = TaoGetSolutionVector(tao,&solu);CHKERRQ(ierr);
+    ierr = TaoGetSolution(tao,&solu);CHKERRQ(ierr);
     ierr = VecGetLocalSize(solu,&nloc);CHKERRQ(ierr);
     ierr = MatSetSizes(ipmP->Ai,PETSC_DECIDE,nloc,ipmP->nb,PETSC_DECIDE);CHKERRQ(ierr);
     ierr = MatSetFromOptions(ipmP->Ai);CHKERRQ(ierr);
@@ -798,7 +798,7 @@ PetscErrorCode IPMUpdateAi(Tao tao)
     ierr = VecScatterBegin(ipmP->ci_scat,tao->constraints_inequality,ipmP->ci,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
     ierr = VecScatterEnd(ipmP->ci_scat,tao->constraints_inequality,ipmP->ci,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
   }
-  if (!ipmP->work){
+  if (!ipmP->work) {
     VecDuplicate(tao->solution,&ipmP->work);
   }
   ierr = VecCopy(tao->solution,ipmP->work);CHKERRQ(ierr);
@@ -981,7 +981,7 @@ PetscErrorCode IPMUpdateK(Tao tao)
         newrow = i;
         newcol = i-r2+c1;
         newval = -1.0;
-        MatSetValues(ipmP->K,1,&newrow,1,&newcol,&newval,INSERT_VALUES);CHKERRQ(ierr);
+        ierr = MatSetValues(ipmP->K,1,&newrow,1,&newcol,&newval,INSERT_VALUES);CHKERRQ(ierr);
       }
     }
 

@@ -98,7 +98,7 @@ int main(int argc,char **argv)
      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   ierr = PetscInitialize(&argc,&argv,(char*)0,help);if (ierr) return ierr;
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
-  if (size > 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_SUP,"Only for sequential runs");
+  PetscCheck(size == 1,PETSC_COMM_WORLD,PETSC_ERR_WRONG_MPI_SIZE,"Only for sequential runs");
 
  /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Create index for slow part and fast part
@@ -180,7 +180,7 @@ int main(int argc,char **argv)
   ierr = TSGetTime(ts,&tt);CHKERRQ(ierr);
   ierr = sol_true(tt,Utrue,&ctx);CHKERRQ(ierr);
   ierr = VecAXPY(Utrue,-1.0,U);CHKERRQ(ierr);
-  ierr = VecNorm(Utrue,NORM_2,&error);
+  ierr = VecNorm(Utrue,NORM_2,&error);CHKERRQ(ierr);
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      Print norm2 error

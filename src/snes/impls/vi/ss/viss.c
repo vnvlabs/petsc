@@ -27,12 +27,12 @@ static PetscErrorCode SNESVIComputeMeritFunction(Vec phi, PetscReal *merit,Petsc
   PetscFunctionReturn(0);
 }
 
-PETSC_STATIC_INLINE PetscScalar Phi(PetscScalar a,PetscScalar b)
+static inline PetscScalar Phi(PetscScalar a,PetscScalar b)
 {
   return a + b - PetscSqrtScalar(a*a + b*b);
 }
 
-PETSC_STATIC_INLINE PetscScalar DPhi(PetscScalar a,PetscScalar b)
+static inline PetscScalar DPhi(PetscScalar a,PetscScalar b)
 {
   if ((PetscAbsScalar(a) >= 1.e-6) || (PetscAbsScalar(b) >= 1.e-6)) return 1.0 - a/ PetscSqrtScalar(a*a + b*b);
   else return .5;
@@ -164,6 +164,7 @@ PetscErrorCode SNESVIComputeJacobian(Mat jac, Mat jac_pre,Vec Da, Vec Db)
   PetscErrorCode ierr;
 
   /* Do row scaling  and add diagonal perturbation */
+  PetscFunctionBegin;
   ierr = MatDiagonalScale(jac,Db,NULL);CHKERRQ(ierr);
   ierr = MatDiagonalSet(jac,Da,ADD_VALUES);CHKERRQ(ierr);
   if (jac != jac_pre) { /* If jac and jac_pre are different */
@@ -195,8 +196,6 @@ PetscErrorCode SNESVIComputeMeritFunctionGradient(Mat H, Vec phi, Vec dpsi)
   ierr = MatMultTranspose(H,phi,dpsi);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
-
 
 /*
    SNESSolve_VINEWTONSSLS - Solves the complementarity problem with a semismooth Newton
@@ -302,14 +301,14 @@ PetscErrorCode SNESSolve_VINEWTONSSLS(SNES snes)
 
     if (kspreason < 0) {
       if (++snes->numLinearSolveFailures >= snes->maxLinearSolveFailures) {
-        ierr         = PetscInfo2(snes,"iter=%D, number linear solve failures %D greater than current SNES allowed, stopping solve\n",snes->iter,snes->numLinearSolveFailures);CHKERRQ(ierr);
+        ierr         = PetscInfo(snes,"iter=%D, number linear solve failures %D greater than current SNES allowed, stopping solve\n",snes->iter,snes->numLinearSolveFailures);CHKERRQ(ierr);
         snes->reason = SNES_DIVERGED_LINEAR_SOLVE;
         break;
       }
     }
     ierr              = KSPGetIterationNumber(snes->ksp,&lits);CHKERRQ(ierr);
     snes->linear_its += lits;
-    ierr              = PetscInfo2(snes,"iter=%D, linear solve iterations=%D\n",snes->iter,lits);CHKERRQ(ierr);
+    ierr              = PetscInfo(snes,"iter=%D, linear solve iterations=%D\n",snes->iter,lits);CHKERRQ(ierr);
     /*
     if (snes->ops->precheck) {
       PetscBool changed_y = PETSC_FALSE;
@@ -329,7 +328,7 @@ PetscErrorCode SNESSolve_VINEWTONSSLS(SNES snes)
     ierr = SNESLineSearchApply(snes->linesearch, X, vi->phi, &gnorm, Y);CHKERRQ(ierr);
     ierr = SNESLineSearchGetReason(snes->linesearch, &lssucceed);CHKERRQ(ierr);
     ierr = SNESLineSearchGetNorms(snes->linesearch, &xnorm, &gnorm, &ynorm);CHKERRQ(ierr);
-    ierr = PetscInfo4(snes,"fnorm=%18.16e, gnorm=%18.16e, ynorm=%18.16e, lssucceed=%d\n",(double)vi->phinorm,(double)gnorm,(double)ynorm,(int)lssucceed);CHKERRQ(ierr);
+    ierr = PetscInfo(snes,"fnorm=%18.16e, gnorm=%18.16e, ynorm=%18.16e, lssucceed=%d\n",(double)vi->phinorm,(double)gnorm,(double)ynorm,(int)lssucceed);CHKERRQ(ierr);
     if (snes->reason == SNES_DIVERGED_FUNCTION_COUNT) break;
     if (snes->domainerror) {
       snes->reason              = SNES_DIVERGED_FUNCTION_DOMAIN;
@@ -363,7 +362,7 @@ PetscErrorCode SNESSolve_VINEWTONSSLS(SNES snes)
     if (snes->reason) break;
   }
   if (i == maxits) {
-    ierr = PetscInfo1(snes,"Maximum number of iterations has been reached: %D\n",maxits);CHKERRQ(ierr);
+    ierr = PetscInfo(snes,"Maximum number of iterations has been reached: %D\n",maxits);CHKERRQ(ierr);
     if (!snes->reason) snes->reason = SNES_DIVERGED_MAX_IT;
   }
   sdm->ops->computefunction = vi->computeuserfunction;
@@ -437,7 +436,6 @@ static PetscErrorCode SNESSetFromOptions_VINEWTONSSLS(PetscOptionItems *PetscOpt
   PetscFunctionReturn(0);
 }
 
-
 /* -------------------------------------------------------------------------- */
 /*MC
       SNESVINEWTONSSLS - Semi-smooth solver for variational inequalities based on Newton's method
@@ -449,9 +447,9 @@ static PetscErrorCode SNESSetFromOptions_VINEWTONSSLS(PetscOptionItems *PetscOpt
    Level: beginner
 
    References:
-+  1. -  T. S. Munson, F. Facchinei, M. C. Ferris, A. Fischer, and C. Kanzow. The semismooth
++  * -  T. S. Munson, F. Facchinei, M. C. Ferris, A. Fischer, and C. Kanzow. The semismooth
      algorithm for large scale complementarity problems. INFORMS Journal on Computing, 13 (2001).
--  2. -  T. S. Munson, and S. Benson. Flexible Complementarity Solvers for Large Scale
+-  * -  T. S. Munson, and S. Benson. Flexible Complementarity Solvers for Large Scale
      Applications, Optimization Methods and Software, 21 (2006).
 
 .seealso:  SNESVISetVariableBounds(), SNESVISetComputeVariableBounds(), SNESCreate(), SNES, SNESSetType(), SNESVINEWTONRSLS, SNESNEWTONTR, SNESLineSearchSetType(),SNESLineSearchSetPostCheck(), SNESLineSearchSetPreCheck()

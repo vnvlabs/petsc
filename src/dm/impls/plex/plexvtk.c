@@ -120,7 +120,7 @@ static PetscErrorCode DMPlexVTKWriteCells_ASCII(DM dm, FILE *fp, PetscInt *total
   ierr     = ISGetIndices(globalVertexNumbers, &gvertex);CHKERRQ(ierr);
   ierr     = PetscMalloc1(maxCells, &corners);CHKERRQ(ierr);
   ierr     = PetscFPrintf(comm, fp, "CELLS %D %D\n", totCells, totCorners+totCells);CHKERRQ(ierr);
-  if (!rank) {
+  if (rank == 0) {
     PetscInt *remoteVertices, *vertices;
 
     ierr = PetscMalloc1(maxCorners, &vertices);CHKERRQ(ierr);
@@ -196,14 +196,14 @@ static PetscErrorCode DMPlexVTKWriteCells_ASCII(DM dm, FILE *fp, PetscInt *total
       ierr = DMPlexRestoreTransitiveClosure(dm, c, PETSC_TRUE, &closureSize, &closure);CHKERRQ(ierr);
       ierr = DMPlexReorderCell(dm, c, localVertices+k-nC);CHKERRQ(ierr);
     }
-    if (k != numSend) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB, "Invalid number of vertices to send %D should be %D", k, numSend);
+    PetscCheckFalse(k != numSend,PETSC_COMM_SELF,PETSC_ERR_PLIB, "Invalid number of vertices to send %D should be %D", k, numSend);
     ierr = MPI_Send(&numSend, 1, MPIU_INT, 0, tag, comm);CHKERRMPI(ierr);
     ierr = MPI_Send(localVertices, numSend, MPIU_INT, 0, tag, comm);CHKERRMPI(ierr);
     ierr = PetscFree(localVertices);CHKERRQ(ierr);
   }
   ierr = ISRestoreIndices(globalVertexNumbers, &gvertex);CHKERRQ(ierr);
   ierr = PetscFPrintf(comm, fp, "CELL_TYPES %D\n", totCells);CHKERRQ(ierr);
-  if (!rank) {
+  if (rank == 0) {
     PetscInt cellType;
 
     for (c = 0; c < numCells; ++c) {
@@ -256,7 +256,7 @@ static PetscErrorCode DMPlexVTKWritePartition_ASCII(DM dm, FILE *fp)
     }
     ++numCells;
   }
-  if (!rank) {
+  if (rank == 0) {
     for (c = 0; c < numCells; ++c) {ierr = PetscFPrintf(comm, fp, "%d\n", rank);CHKERRQ(ierr);}
     for (proc = 1; proc < size; ++proc) {
       MPI_Status status;
@@ -325,7 +325,7 @@ static PetscErrorCode DMPlexVTKWriteSection_ASCII(DM dm, PetscSection section, P
   ierr = MPIU_Allreduce(&numDof, &maxDof, 1, MPIU_INT, MPI_MAX, comm);CHKERRMPI(ierr);
   enforceDof = PetscMax(enforceDof, maxDof);
   ierr = VecGetArray(v, &array);CHKERRQ(ierr);
-  if (!rank) {
+  if (rank == 0) {
     PetscVTKReal dval;
     PetscScalar  val;
     char formatString[8];
@@ -466,12 +466,9 @@ static PetscErrorCode DMPlexVTKWriteAll_ASCII(DM dm, PetscViewer viewer)
   PetscViewer_VTK          *vtk = (PetscViewer_VTK*) viewer->data;
   FILE                     *fp;
   PetscViewerVTKObjectLink link;
-  PetscSection             coordSection, globalCoordSection;
-  PetscLayout              vLayout;
-  Vec                      coordinates;
-  PetscReal                lengthScale;
   PetscInt                 totVertices, totCells = 0, loops_per_scalar, l;
   PetscBool                hasPoint = PETSC_FALSE, hasCell = PETSC_FALSE, writePartition = PETSC_FALSE, localized, writeComplex;
+  const char               *dmname;
   PetscErrorCode           ierr;
 
   PetscFunctionBegin;
@@ -483,22 +480,39 @@ static PetscErrorCode DMPlexVTKWriteAll_ASCII(DM dm, PetscViewer viewer)
   writeComplex = PETSC_FALSE;
 #endif
   ierr = DMGetCoordinatesLocalized(dm,&localized);CHKERRQ(ierr);
-  if (localized) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"VTK output with localized coordinates not yet supported");
   ierr = PetscObjectGetComm((PetscObject)dm,&comm);CHKERRQ(ierr);
+  PetscCheckFalse(localized,comm,PETSC_ERR_SUP,"VTK output with localized coordinates not yet supported");
   ierr = PetscFOpen(comm, vtk->filename, "wb", &fp);CHKERRQ(ierr);
+  ierr = PetscObjectGetName((PetscObject)dm, &dmname);CHKERRQ(ierr);
   ierr = PetscFPrintf(comm, fp, "# vtk DataFile Version 2.0\n");CHKERRQ(ierr);
-  ierr = PetscFPrintf(comm, fp, "Simplicial Mesh Example\n");CHKERRQ(ierr);
+  ierr = PetscFPrintf(comm, fp, "%s\n", dmname);CHKERRQ(ierr);
   ierr = PetscFPrintf(comm, fp, "ASCII\n");CHKERRQ(ierr);
   ierr = PetscFPrintf(comm, fp, "DATASET UNSTRUCTURED_GRID\n");CHKERRQ(ierr);
   /* Vertices */
-  ierr = DMPlexGetScale(dm, PETSC_UNIT_LENGTH, &lengthScale);CHKERRQ(ierr);
-  ierr = DMGetCoordinateSection(dm, &coordSection);CHKERRQ(ierr);
-  ierr = PetscSectionCreateGlobalSection(coordSection, dm->sf, PETSC_FALSE, PETSC_FALSE, &globalCoordSection);CHKERRQ(ierr);
-  ierr = DMGetCoordinatesLocal(dm, &coordinates);CHKERRQ(ierr);
-  ierr = PetscSectionGetPointLayout(PetscObjectComm((PetscObject)dm), globalCoordSection, &vLayout);CHKERRQ(ierr);
-  ierr = PetscLayoutGetSize(vLayout, &totVertices);CHKERRQ(ierr);
-  ierr = PetscFPrintf(comm, fp, "POINTS %D double\n", totVertices);CHKERRQ(ierr);
-  ierr = DMPlexVTKWriteSection_ASCII(dm, coordSection, globalCoordSection, coordinates, fp, 3, PETSC_DETERMINE, lengthScale, 0);CHKERRQ(ierr);
+  {
+    PetscSection  section, coordSection, globalCoordSection;
+    Vec           coordinates;
+    PetscReal     lengthScale;
+    DMLabel       label;
+    IS            vStratumIS;
+    PetscLayout   vLayout;
+
+    ierr = DMPlexGetScale(dm, PETSC_UNIT_LENGTH, &lengthScale);CHKERRQ(ierr);
+    ierr = DMGetCoordinatesLocal(dm, &coordinates);CHKERRQ(ierr);
+    ierr = DMPlexGetDepthLabel(dm, &label);CHKERRQ(ierr);
+    ierr = DMLabelGetStratumIS(label, 0, &vStratumIS);CHKERRQ(ierr);
+    ierr = DMGetCoordinateSection(dm, &section);CHKERRQ(ierr);                                 /* This section includes all points */
+    ierr = PetscSectionCreateSubmeshSection(section, vStratumIS, &coordSection);CHKERRQ(ierr); /* This one includes just vertices */
+    ierr = PetscSectionCreateGlobalSection(coordSection, dm->sf, PETSC_FALSE, PETSC_FALSE, &globalCoordSection);CHKERRQ(ierr);
+    ierr = PetscSectionGetPointLayout(comm, globalCoordSection, &vLayout);CHKERRQ(ierr);
+    ierr = PetscLayoutGetSize(vLayout, &totVertices);CHKERRQ(ierr);
+    ierr = PetscFPrintf(comm, fp, "POINTS %D double\n", totVertices);CHKERRQ(ierr);
+    ierr = DMPlexVTKWriteSection_ASCII(dm, coordSection, globalCoordSection, coordinates, fp, 3, PETSC_DETERMINE, lengthScale, 0);CHKERRQ(ierr);
+    ierr = ISDestroy(&vStratumIS);CHKERRQ(ierr);
+    ierr = PetscLayoutDestroy(&vLayout);CHKERRQ(ierr);
+    ierr = PetscSectionDestroy(&coordSection);CHKERRQ(ierr);
+    ierr = PetscSectionDestroy(&globalCoordSection);CHKERRQ(ierr);
+  }
   /* Cells */
   ierr = DMPlexVTKWriteCells_ASCII(dm, fp, &totCells);CHKERRQ(ierr);
   /* Vertex fields */
@@ -569,7 +583,7 @@ static PetscErrorCode DMPlexVTKWriteAll_ASCII(DM dm, PetscViewer viewer)
           }
         }
       }
-      if (!section) SETERRQ1(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Vector %s had no PetscSection composed with it and could not create one from VecGetDM()", name);
+      PetscCheckFalse(!section,PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Vector %s had no PetscSection composed with it and could not create one from VecGetDM()", name);
       if (link->field >= 0) {
         const char *fieldname;
 
@@ -615,7 +629,7 @@ static PetscErrorCode DMPlexVTKWriteAll_ASCII(DM dm, PetscViewer viewer)
           ierr = DMGetLocalSection(dmX, &section);CHKERRQ(ierr);
         }
       }
-      if (!section) SETERRQ1(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Vector %s had no PetscSection composed with it and could not create one from VecGetDM()", name);
+      PetscCheckFalse(!section,PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "Vector %s had no PetscSection composed with it and could not create one from VecGetDM()", name);
       if (link->field >= 0) {
         const char *fieldname;
 
@@ -643,8 +657,6 @@ static PetscErrorCode DMPlexVTKWriteAll_ASCII(DM dm, PetscViewer viewer)
     }
   }
   /* Cleanup */
-  ierr = PetscSectionDestroy(&globalCoordSection);CHKERRQ(ierr);
-  ierr = PetscLayoutDestroy(&vLayout);CHKERRQ(ierr);
   ierr = PetscFClose(comm, fp);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -654,7 +666,7 @@ static PetscErrorCode DMPlexVTKWriteAll_ASCII(DM dm, PetscViewer viewer)
 
   Collective
 
-  Input Arguments:
+  Input Parameters:
 + odm - The DMPlex specifying the mesh, passed as a PetscObject
 - viewer - viewer of type VTK
 
@@ -677,7 +689,7 @@ PetscErrorCode DMPlexVTKWriteAll(PetscObject odm, PetscViewer viewer)
   PetscValidHeaderSpecific(dm, DM_CLASSID, 1);
   PetscValidHeaderSpecific(viewer, PETSC_VIEWER_CLASSID, 2);
   ierr = PetscObjectTypeCompare((PetscObject) viewer, PETSCVIEWERVTK, &isvtk);CHKERRQ(ierr);
-  if (!isvtk) SETERRQ1(PetscObjectComm((PetscObject)viewer), PETSC_ERR_ARG_INCOMP, "Cannot use viewer type %s", ((PetscObject)viewer)->type_name);
+  PetscCheckFalse(!isvtk,PetscObjectComm((PetscObject)viewer), PETSC_ERR_ARG_INCOMP, "Cannot use viewer type %s", ((PetscObject)viewer)->type_name);
   switch (viewer->format) {
   case PETSC_VIEWER_ASCII_VTK_DEPRECATED:
     ierr = DMPlexVTKWriteAll_ASCII(dm, viewer);CHKERRQ(ierr);
@@ -685,7 +697,7 @@ PetscErrorCode DMPlexVTKWriteAll(PetscObject odm, PetscViewer viewer)
   case PETSC_VIEWER_VTK_VTU:
     ierr = DMPlexVTKWriteAll_VTU(dm, viewer);CHKERRQ(ierr);
     break;
-  default: SETERRQ1(PetscObjectComm((PetscObject)dm), PETSC_ERR_SUP, "No support for format '%s'", PetscViewerFormats[viewer->format]);
+  default: SETERRQ(PetscObjectComm((PetscObject)dm), PETSC_ERR_SUP, "No support for format '%s'", PetscViewerFormats[viewer->format]);
   }
   PetscFunctionReturn(0);
 }

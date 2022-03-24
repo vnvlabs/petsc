@@ -238,7 +238,7 @@ PetscErrorCode MatLUFactorNumeric_SeqBAIJ_4(Mat B,Mat A,const MatFactorInfo *inf
         /* PetscKernel_A_gets_A_times_B(bs,pc,pv,mwork); *pc = *pc * (*pv); */
         ierr = PetscKernel_A_gets_A_times_B_4(pc,pv,mwork);CHKERRQ(ierr);
 
-        pj = b->j + bdiag[row+1]+1; /* begining of U(row,:) */
+        pj = b->j + bdiag[row+1]+1; /* beginning of U(row,:) */
         pv = b->a + bs2*(bdiag[row+1]+1);
         nz = bdiag[row] - bdiag[row+1] - 1; /* num of entries inU(row,:), excluding diag */
         for (j=0; j<nz; j++) {
@@ -261,7 +261,7 @@ PetscErrorCode MatLUFactorNumeric_SeqBAIJ_4(Mat B,Mat A,const MatFactorInfo *inf
       ierr = PetscArraycpy(pv+bs2*j,rtmp+bs2*pj[j],bs2);CHKERRQ(ierr);
     }
 
-    /* Mark diagonal and invert diagonal for simplier triangular solves */
+    /* Mark diagonal and invert diagonal for simpler triangular solves */
     pv   = b->a + bs2*bdiag[i];
     pj   = b->j + bdiag[i];
     ierr = PetscArraycpy(pv,rtmp+bs2*pj[0],bs2);CHKERRQ(ierr);
@@ -506,7 +506,7 @@ PetscErrorCode MatLUFactorNumeric_SeqBAIJ_4_NaturalOrdering(Mat B,Mat A,const Ma
         /* PetscKernel_A_gets_A_times_B(bs,pc,pv,mwork); *pc = *pc * (*pv); */
         ierr = PetscKernel_A_gets_A_times_B_4(pc,pv,mwork);CHKERRQ(ierr);
 
-        pj = b->j + bdiag[row+1]+1; /* begining of U(row,:) */
+        pj = b->j + bdiag[row+1]+1; /* beginning of U(row,:) */
         pv = b->a + bs2*(bdiag[row+1]+1);
         nz = bdiag[row] - bdiag[row+1] - 1; /* num of entries inU(row,:), excluding diag */
         for (j=0; j<nz; j++) {
@@ -529,7 +529,7 @@ PetscErrorCode MatLUFactorNumeric_SeqBAIJ_4_NaturalOrdering(Mat B,Mat A,const Ma
       ierr = PetscArraycpy(pv+bs2*j,rtmp+bs2*pj[j],bs2);CHKERRQ(ierr);
     }
 
-    /* Mark diagonal and invert diagonal for simplier triangular solves */
+    /* Mark diagonal and invert diagonal for simpler triangular solves */
     pv   = b->a + bs2*bdiag[i];
     pj   = b->j + bdiag[i];
     ierr = PetscArraycpy(pv,rtmp+bs2*pj[0],bs2);CHKERRQ(ierr);
@@ -579,10 +579,10 @@ PetscErrorCode MatLUFactorNumeric_SeqBAIJ_4_NaturalOrdering_SSE(Mat B,Mat A,cons
   allowzeropivot = PetscNot(A->erroriffailure);
   SSE_SCOPE_BEGIN;
 
-  if ((unsigned long)aa%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer aa is not 16 byte aligned.  SSE will not work.");
-  if ((unsigned long)ba%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer ba is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)aa%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer aa is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)ba%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer ba is not 16 byte aligned.  SSE will not work.");
   ierr = PetscMalloc1(16*(n+1),&rtmp);CHKERRQ(ierr);
-  if ((unsigned long)rtmp%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer rtmp is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)rtmp%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer rtmp is not 16 byte aligned.  SSE will not work.");
 /*    if ((unsigned long)bj==(unsigned long)aj) { */
 /*      colscale = 4; */
 /*    } */
@@ -1022,10 +1022,10 @@ PetscErrorCode MatLUFactorNumeric_SeqBAIJ_4_NaturalOrdering_SSE_usj_Inplace(Mat 
   allowzeropivot = PetscNot(A->erroriffailure);
   SSE_SCOPE_BEGIN;
 
-  if ((unsigned long)aa%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer aa is not 16 byte aligned.  SSE will not work.");
-  if ((unsigned long)ba%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer ba is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)aa%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer aa is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)ba%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer ba is not 16 byte aligned.  SSE will not work.");
   ierr = PetscMalloc1(16*(n+1),&rtmp);CHKERRQ(ierr);
-  if ((unsigned long)rtmp%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer rtmp is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)rtmp%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer rtmp is not 16 byte aligned.  SSE will not work.");
 /*    if ((unsigned long)bj==(unsigned long)aj) { */
 /*      colscale = 4; */
 /*    } */
@@ -1464,10 +1464,10 @@ PetscErrorCode MatLUFactorNumeric_SeqBAIJ_4_NaturalOrdering_SSE_usj(Mat C,Mat A,
   allowzeropivot = PetscNot(A->erroriffailure);
   SSE_SCOPE_BEGIN;
 
-  if ((unsigned long)aa%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer aa is not 16 byte aligned.  SSE will not work.");
-  if ((unsigned long)ba%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer ba is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)aa%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer aa is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)ba%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer ba is not 16 byte aligned.  SSE will not work.");
   ierr = PetscMalloc1(16*(n+1),&rtmp);CHKERRQ(ierr);
-  if ((unsigned long)rtmp%16!=0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer rtmp is not 16 byte aligned.  SSE will not work.");
+  PetscCheckFalse((unsigned long)rtmp%16!=0,PETSC_COMM_SELF,PETSC_ERR_ARG_BADPTR,"Pointer rtmp is not 16 byte aligned.  SSE will not work.");
 /*    if ((unsigned long)bj==(unsigned long)aj) { */
 /*      colscale = 4; */
 /*    } */

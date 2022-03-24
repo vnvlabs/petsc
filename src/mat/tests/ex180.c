@@ -13,7 +13,7 @@ int main(int argc,char **args)
   ierr = PetscInitialize(&argc,&args,(char*)0,help);if (ierr) return ierr;
   /* Determine files from which we read the matrix */
   ierr = PetscOptionsGetString(NULL,NULL,"-f",file,sizeof(file),&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_USER,"Must indicate binary file with the -f");
+  PetscCheckFalse(!flg,PETSC_COMM_WORLD,PETSC_ERR_USER,"Must indicate binary file with the -f");
 
   /* Load matrices */
   ierr = PetscViewerBinaryOpen(PETSC_COMM_WORLD,file,FILE_MODE_READ,&fd);CHKERRQ(ierr);
@@ -33,65 +33,65 @@ int main(int argc,char **args)
       test:
          args: -mat_type aij -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 2
          nsize: 2
          args: -mat_type aij -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 3
          args: -mat_type baij -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 4more
          nsize: 2
          args: -mat_type baij -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 5
          args: -mat_type sbaij -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 6
          nsize: 2
          args: -mat_type sbaij -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 7
          args: -mat_type sbaij -matload_block_size 4 -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 8
          nsize: 2
          args: -mat_type sbaij -matload_block_size 4 -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 9
          args: -mat_type baij -matload_block_size 4 -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
       test:
          suffix: 10
          nsize: 2
          args: -mat_type baij -matload_block_size 4 -f ${wPETSC_DIR}/share/petsc/datafiles/matrices/ns-real-int32-float64 -malloc_dump
          output_file: output/ex180_1.out
-         requires: !complex double !define(PETSC_USE_64BIT_INDICES)
+         requires: !complex double !defined(PETSC_USE_64BIT_INDICES)
 
 TEST*/

@@ -41,7 +41,7 @@ PetscErrorCode  KSPSolve_LCD(KSP ksp)
 
   PetscFunctionBegin;
   ierr = PCGetDiagonalScale(ksp->pc,&diagonalscale);CHKERRQ(ierr);
-  if (diagonalscale) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(diagonalscale,PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
 
   lcd   = (KSP_LCD*)ksp->data;
   X     = ksp->vec_sol;
@@ -136,7 +136,6 @@ PetscErrorCode KSPReset_LCD(KSP ksp)
   PetscFunctionReturn(0);
 }
 
-
 PetscErrorCode KSPDestroy_LCD(KSP ksp)
 {
   PetscErrorCode ierr;
@@ -184,9 +183,9 @@ PetscErrorCode KSPSetFromOptions_LCD(PetscOptionItems *PetscOptionsObject,KSP ks
   PetscFunctionBegin;
   ierr = PetscOptionsHead(PetscOptionsObject,"KSP LCD options");CHKERRQ(ierr);
   ierr = PetscOptionsInt("-ksp_lcd_restart","Number of vectors conjugate","KSPLCDSetRestart",lcd->restart,&lcd->restart,&flg);CHKERRQ(ierr);
-  if (flg && lcd->restart < 1) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Restart must be positive");
+  PetscCheckFalse(flg && lcd->restart < 1,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Restart must be positive");
   ierr = PetscOptionsReal("-ksp_lcd_haptol","Tolerance for exact convergence (happy ending)","KSPLCDSetHapTol",lcd->haptol,&lcd->haptol,&flg);CHKERRQ(ierr);
-  if (flg && lcd->haptol < 0.0) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Tolerance must be non-negative");
+  PetscCheckFalse(flg && lcd->haptol < 0.0,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_OUTOFRANGE,"Tolerance must be non-negative");
   PetscFunctionReturn(0);
 }
 
@@ -203,24 +202,23 @@ PetscErrorCode KSPSetFromOptions_LCD(PetscOptionItems *PetscOptionsObject,KSP ks
     Support only for left preconditioning
 
     References:
-+    1. - J.Y. Yuan, G.H.Golub, R.J. Plemmons, and W.A.G. Cecilio. Semiconjugate
++   * - J.Y. Yuan, G.H.Golub, R.J. Plemmons, and W.A.G. Cecilio. Semiconjugate
      direction methods for real positive definite system. BIT Numerical
      Mathematics, 44(1),2004.
-.    2. - Y. Dai and J.Y. Yuan. Study on semiconjugate direction methods for
+.   * - Y. Dai and J.Y. Yuan. Study on semiconjugate direction methods for
      nonsymmetric systems. International Journal for Numerical Methods in
      Engineering, 60, 2004.
-.    3. - L. Catabriga, A.L.G.A. Coutinho, and L.P.Franca. Evaluating the LCD
+.   * - L. Catabriga, A.L.G.A. Coutinho, and L.P.Franca. Evaluating the LCD
      algorithm for solving linear systems of equations arising from implicit
      SUPG formulation of compressible flows. International Journal for
      Numerical Methods in Engineering, 60, 2004
--    4. - L. Catabriga, A. M. P. Valli, B. Z. Melotti, L. M. Pessoa,
+-   * - L. Catabriga, A. M. P. Valli, B. Z. Melotti, L. M. Pessoa,
      A. L. G. A. Coutinho, Performance of LCD iterative method in the finite
      element and finite difference solution of convection diffusion
      equations,  Communications in Numerical Methods in Engineering, (Early
      View).
 
   Contributed by: Lucia Catabriga <luciac@ices.utexas.edu>
-
 
 .seealso:  KSPCreate(), KSPSetType(), KSPType (for list of available types), KSP,
            KSPCGSetType(), KSPLCDSetRestart(), KSPLCDSetHapTol()

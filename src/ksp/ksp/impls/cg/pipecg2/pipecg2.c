@@ -66,7 +66,7 @@ static PetscErrorCode VecMergedDot2_Private(Vec N,Vec M,Vec W,PetscScalar *wm,Pe
   ierr = VecGetLocalSize(N,&n);CHKERRQ(ierr);
 
   PetscPragmaSIMD
-  for (j=0; j<n; j++){
+  for (j=0; j<n; j++) {
     sumwm += PW[j] * PetscConj(PM[j]);
     sumnm += PN[j] * PetscConj(PM[j]);
   }
@@ -542,7 +542,7 @@ static PetscErrorCode  KSPSolve_PIPECG2(KSP ksp)
   PetscFunctionBegin;
   pcomm = PetscObjectComm((PetscObject)ksp);
   ierr = PCGetDiagonalScale(ksp->pc,&diagonalscale);CHKERRQ(ierr);
-  if (diagonalscale) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(diagonalscale,PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
 
   X = ksp->vec_sol;
   B = ksp->vec_rhs;
@@ -591,7 +591,7 @@ static PetscErrorCode  KSPSolve_PIPECG2(KSP ksp)
   lambda[11]= delta[0];
   lambda[12] = dps;
 
-#if defined(PETSC_HAVE_MPI_IALLREDUCE)
+#if defined(PETSC_HAVE_MPI_NONBLOCKING_COLLECTIVES)
   ierr = MPI_Iallreduce(MPI_IN_PLACE,&lambda[10],3,MPIU_SCALAR,MPIU_SUM,pcomm,&req);CHKERRMPI(ierr);
 #else
   ierr = MPIU_Allreduce(MPI_IN_PLACE,&lambda[10],3,MPIU_SCALAR,MPIU_SUM,pcomm);CHKERRMPI(ierr);
@@ -659,7 +659,7 @@ static PetscErrorCode  KSPSolve_PIPECG2(KSP ksp)
     gamma[0] = gamma[1];
     delta[0] = delta[1];
 
-#if defined(PETSC_HAVE_MPI_IALLREDUCE)
+#if defined(PETSC_HAVE_MPI_NONBLOCKING_COLLECTIVES)
     ierr = MPI_Iallreduce(MPI_IN_PLACE,lambda,15,MPIU_SCALAR,MPIU_SUM,pcomm,&req);CHKERRMPI(ierr);
 #else
     ierr = MPIU_Allreduce(MPI_IN_PLACE,lambda,15,MPIU_SCALAR,MPIU_SUM,pcomm);CHKERRMPI(ierr);

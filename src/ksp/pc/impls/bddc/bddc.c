@@ -165,6 +165,7 @@ static PetscErrorCode PCView_BDDC(PC pc,PetscViewer viewer)
     if (pcbddc->graphmaxcount != PETSC_MAX_INT) {
       ierr = PetscViewerASCIIPrintf(viewer,"  Graph max count: %D\n",pcbddc->graphmaxcount);CHKERRQ(ierr);
     }
+    ierr = PetscViewerASCIIPrintf(viewer,"  Corner selection: %d (selected %d)\n",pcbddc->corner_selection,pcbddc->corner_selected);CHKERRQ(ierr);
     ierr = PetscViewerASCIIPrintf(viewer,"  Use vertices: %d (vertex size %D)\n",pcbddc->use_vertices,pcbddc->vertex_size);CHKERRQ(ierr);
     ierr = PetscViewerASCIIPrintf(viewer,"  Use edges: %d\n",pcbddc->use_edges);CHKERRQ(ierr);
     ierr = PetscViewerASCIIPrintf(viewer,"  Use faces: %d\n",pcbddc->use_faces);CHKERRQ(ierr);
@@ -253,7 +254,7 @@ static PetscErrorCode PCView_BDDC(PC pc,PetscViewer viewer)
 
     /* local solvers */
     ierr = PetscViewerGetSubViewer(viewer,PetscObjectComm((PetscObject)pcbddc->ksp_D),&subviewer);CHKERRQ(ierr);
-    if (!rank) {
+    if (rank == 0) {
       ierr = PetscViewerASCIIPrintf(subviewer,"--- Interior solver (rank 0)\n");CHKERRQ(ierr);
       ierr = PetscViewerASCIIPushTab(subviewer);CHKERRQ(ierr);
       ierr = KSPView(pcbddc->ksp_D,subviewer);CHKERRQ(ierr);
@@ -396,7 +397,7 @@ PetscErrorCode PCBDDCSetDivergenceMat(PC pc, Mat divudotp, PetscBool trans, IS v
   PetscValidLogicalCollectiveBool(pc,trans,3);
   if (vl2l) PetscValidHeaderSpecific(vl2l,IS_CLASSID,4);
   ierr = PetscObjectTypeCompare((PetscObject)divudotp,MATIS,&ismatis);CHKERRQ(ierr);
-  if (!ismatis) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Divergence matrix needs to be of type MATIS");
+  PetscCheckFalse(!ismatis,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"Divergence matrix needs to be of type MATIS");
   ierr = PetscTryMethod(pc,"PCBDDCSetDivergenceMat_C",(PC,Mat,PetscBool,IS),(pc,divudotp,trans,vl2l));CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -441,12 +442,12 @@ PetscErrorCode PCBDDCSetChangeOfBasisMat(PC pc, Mat change, PetscBool interior)
     PetscInt rows_c,cols_c,rows,cols;
     ierr = MatGetSize(pc->mat,&rows,&cols);CHKERRQ(ierr);
     ierr = MatGetSize(change,&rows_c,&cols_c);CHKERRQ(ierr);
-    if (rows_c != rows) SETERRQ2(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid number of rows for change of basis matrix! %D != %D",rows_c,rows);
-    if (cols_c != cols) SETERRQ2(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid number of columns for change of basis matrix! %D != %D",cols_c,cols);
+    PetscCheckFalse(rows_c != rows,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid number of rows for change of basis matrix! %D != %D",rows_c,rows);
+    PetscCheckFalse(cols_c != cols,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid number of columns for change of basis matrix! %D != %D",cols_c,cols);
     ierr = MatGetLocalSize(pc->mat,&rows,&cols);CHKERRQ(ierr);
     ierr = MatGetLocalSize(change,&rows_c,&cols_c);CHKERRQ(ierr);
-    if (rows_c != rows) SETERRQ2(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid number of local rows for change of basis matrix! %D != %D",rows_c,rows);
-    if (cols_c != cols) SETERRQ2(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid number of local columns for change of basis matrix! %D != %D",cols_c,cols);
+    PetscCheckFalse(rows_c != rows,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid number of local rows for change of basis matrix! %D != %D",rows_c,rows);
+    PetscCheckFalse(cols_c != cols,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid number of local columns for change of basis matrix! %D != %D",cols_c,cols);
   }
   ierr = PetscTryMethod(pc,"PCBDDCSetChangeOfBasisMat_C",(PC,Mat,PetscBool),(pc,change,interior));CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -636,7 +637,7 @@ static PetscErrorCode PCBDDCSetCoarseningRatio_BDDC(PC pc,PetscInt k)
 -  k - coarsening ratio (H/h at the coarser level)
 
    Options Database Keys:
-.    -pc_bddc_coarsening_ratio
+.    -pc_bddc_coarsening_ratio <int> - Set coarsening ratio used in multilevel coarsening
 
    Level: intermediate
 
@@ -702,7 +703,7 @@ static PetscErrorCode PCBDDCSetLevels_BDDC(PC pc,PetscInt levels)
   PC_BDDC  *pcbddc = (PC_BDDC*)pc->data;
 
   PetscFunctionBegin;
-  if (levels > PETSC_PCBDDC_MAXLEVELS-1) SETERRQ1(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Maximum number of additional levels for BDDC is %d",PETSC_PCBDDC_MAXLEVELS-1);
+  PetscCheckFalse(levels > PETSC_PCBDDC_MAXLEVELS-1,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Maximum number of additional levels for BDDC is %d",PETSC_PCBDDC_MAXLEVELS-1);
   pcbddc->max_levels = levels;
   PetscFunctionReturn(0);
 }
@@ -717,7 +718,7 @@ static PetscErrorCode PCBDDCSetLevels_BDDC(PC pc,PetscInt levels)
 -  levels - the maximum number of levels
 
    Options Database Keys:
-.    -pc_bddc_levels
+.    -pc_bddc_levels <int> - Set maximum number of levels for multilevel
 
    Level: intermediate
 
@@ -748,7 +749,7 @@ static PetscErrorCode PCBDDCSetDirichletBoundaries_BDDC(PC pc,IS DirichletBounda
   if (pcbddc->DirichletBoundaries) {
     ierr = ISEqual(DirichletBoundaries,pcbddc->DirichletBoundaries,&isequal);CHKERRQ(ierr);
   }
-  /* last user setting takes precendence -> destroy any other customization */
+  /* last user setting takes precedence -> destroy any other customization */
   ierr = ISDestroy(&pcbddc->DirichletBoundariesLocal);CHKERRQ(ierr);
   ierr = ISDestroy(&pcbddc->DirichletBoundaries);CHKERRQ(ierr);
   pcbddc->DirichletBoundaries = DirichletBoundaries;
@@ -795,7 +796,7 @@ static PetscErrorCode PCBDDCSetDirichletBoundariesLocal_BDDC(PC pc,IS DirichletB
   if (pcbddc->DirichletBoundariesLocal) {
     ierr = ISEqual(DirichletBoundaries,pcbddc->DirichletBoundariesLocal,&isequal);CHKERRQ(ierr);
   }
-  /* last user setting takes precendence -> destroy any other customization */
+  /* last user setting takes precedence -> destroy any other customization */
   ierr = ISDestroy(&pcbddc->DirichletBoundariesLocal);CHKERRQ(ierr);
   ierr = ISDestroy(&pcbddc->DirichletBoundaries);CHKERRQ(ierr);
   pcbddc->DirichletBoundariesLocal = DirichletBoundaries;
@@ -841,7 +842,7 @@ static PetscErrorCode PCBDDCSetNeumannBoundaries_BDDC(PC pc,IS NeumannBoundaries
   if (pcbddc->NeumannBoundaries) {
     ierr = ISEqual(NeumannBoundaries,pcbddc->NeumannBoundaries,&isequal);CHKERRQ(ierr);
   }
-  /* last user setting takes precendence -> destroy any other customization */
+  /* last user setting takes precedence -> destroy any other customization */
   ierr = ISDestroy(&pcbddc->NeumannBoundariesLocal);CHKERRQ(ierr);
   ierr = ISDestroy(&pcbddc->NeumannBoundaries);CHKERRQ(ierr);
   pcbddc->NeumannBoundaries = NeumannBoundaries;
@@ -888,7 +889,7 @@ static PetscErrorCode PCBDDCSetNeumannBoundariesLocal_BDDC(PC pc,IS NeumannBound
   if (pcbddc->NeumannBoundariesLocal) {
     ierr = ISEqual(NeumannBoundaries,pcbddc->NeumannBoundariesLocal,&isequal);CHKERRQ(ierr);
   }
-  /* last user setting takes precendence -> destroy any other customization */
+  /* last user setting takes precedence -> destroy any other customization */
   ierr = ISDestroy(&pcbddc->NeumannBoundariesLocal);CHKERRQ(ierr);
   ierr = ISDestroy(&pcbddc->NeumannBoundaries);CHKERRQ(ierr);
   pcbddc->NeumannBoundariesLocal = NeumannBoundaries;
@@ -1116,7 +1117,7 @@ static PetscErrorCode PCBDDCSetLocalAdjacencyGraph_BDDC(PC pc, PetscInt nvtxs,co
       mat_graph->xadj    = (PetscInt*)xadj;
       mat_graph->adjncy  = (PetscInt*)adjncy;
       mat_graph->freecsr = PETSC_FALSE;
-    } else SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"Unsupported copy mode %D",copymode);
+    } else SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Unsupported copy mode %D",copymode);
     mat_graph->nvtxs_csr = nvtxs;
     pcbddc->recompute_topography = PETSC_TRUE;
   }
@@ -1186,7 +1187,7 @@ static PetscErrorCode PCBDDCSetDofsSplittingLocal_BDDC(PC pc,PetscInt n_is, IS I
     ierr = ISDestroy(&pcbddc->ISForDofsLocal[i]);CHKERRQ(ierr);
   }
   ierr = PetscFree(pcbddc->ISForDofsLocal);CHKERRQ(ierr);
-  /* last user setting takes precendence -> destroy any other customization */
+  /* last user setting takes precedence -> destroy any other customization */
   for (i=0;i<pcbddc->n_ISForDofs;i++) {
     ierr = ISDestroy(&pcbddc->ISForDofs[i]);CHKERRQ(ierr);
   }
@@ -1262,7 +1263,7 @@ static PetscErrorCode PCBDDCSetDofsSplitting_BDDC(PC pc,PetscInt n_is, IS ISForD
     ierr = ISDestroy(&pcbddc->ISForDofs[i]);CHKERRQ(ierr);
   }
   ierr = PetscFree(pcbddc->ISForDofs);CHKERRQ(ierr);
-  /* last user setting takes precendence -> destroy any other customization */
+  /* last user setting takes precedence -> destroy any other customization */
   for (i=0;i<pcbddc->n_ISForDofsLocal;i++) {
     ierr = ISDestroy(&pcbddc->ISForDofsLocal[i]);CHKERRQ(ierr);
   }
@@ -1602,9 +1603,9 @@ PetscErrorCode PCSetUp_BDDC(PC pc)
 
   PetscFunctionBegin;
   ierr = PetscObjectTypeCompare((PetscObject)pc->pmat,MATIS,&ismatis);CHKERRQ(ierr);
-  if (!ismatis) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"PCBDDC preconditioner requires matrix of type MATIS");
+  PetscCheckFalse(!ismatis,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_WRONG,"PCBDDC preconditioner requires matrix of type MATIS");
   ierr = MatGetSize(pc->pmat,&nrows,&ncols);CHKERRQ(ierr);
-  if (nrows != ncols) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"PCBDDC preconditioner requires a square preconditioning matrix");
+  PetscCheckFalse(nrows != ncols,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"PCBDDC preconditioner requires a square preconditioning matrix");
   ierr = MPI_Comm_size(PetscObjectComm((PetscObject)pc),&size);CHKERRMPI(ierr);
 
   matis = (Mat_IS*)pc->pmat->data;
@@ -1722,7 +1723,7 @@ PetscErrorCode PCSetUp_BDDC(PC pc)
     if (pcbddc->compute_nonetflux) {
       MatNullSpace nnfnnsp;
 
-      if (!pcbddc->divudotp) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Missing divudotp operator");
+      PetscCheckFalse(!pcbddc->divudotp,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Missing divudotp operator");
       ierr = PCBDDCComputeNoNetFlux(pc->pmat,pcbddc->divudotp,pcbddc->divudotp_trans,pcbddc->divudotp_vl2l,pcbddc->mat_graph,&nnfnnsp);CHKERRQ(ierr);
       /* TODO what if a nearnullspace is already attached? */
       if (nnfnnsp) {
@@ -1981,7 +1982,7 @@ PetscErrorCode PCApply_BDDC(PC pc,Vec r,Vec z)
     }
   }
   if (pcbddc->interface_extension == PC_BDDC_INTERFACE_EXT_LUMP) {
-    if (!pcbddc->switch_static) SETERRQ(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"You forgot to pass -pc_bddc_switch_static");
+    PetscCheckFalse(!pcbddc->switch_static,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"You forgot to pass -pc_bddc_switch_static");
     ierr = VecScatterBegin(pcis->global_to_D,r,pcis->vec1_D,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
     ierr = VecScatterEnd(pcis->global_to_D,r,pcis->vec1_D,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
   }
@@ -2540,7 +2541,7 @@ static PetscErrorCode PCView_BDDCIPC(PC pc, PetscViewer viewer)
   PetscBool      isascii;
 
   PetscFunctionBegin;
-  ierr = PCShellGetContext(pc,(void **)&bddcipc_ctx);CHKERRQ(ierr);
+  ierr = PCShellGetContext(pc,&bddcipc_ctx);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERASCII,&isascii);CHKERRQ(ierr);
   if (isascii) {
     ierr = PetscViewerASCIIPrintf(viewer,"BDDC interface preconditioner\n");CHKERRQ(ierr);
@@ -2561,9 +2562,9 @@ static PetscErrorCode PCSetUp_BDDCIPC(PC pc)
   PC_IS          *pcis;
 
   PetscFunctionBegin;
-  ierr = PCShellGetContext(pc,(void **)&bddcipc_ctx);CHKERRQ(ierr);
+  ierr = PCShellGetContext(pc,&bddcipc_ctx);CHKERRQ(ierr);
   ierr = PetscObjectTypeCompare((PetscObject)bddcipc_ctx->bddc,PCBDDC,&isbddc);CHKERRQ(ierr);
-  if (!isbddc) SETERRQ1(PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid type %s. Must be of type bddc",((PetscObject)bddcipc_ctx->bddc)->type_name);
+  PetscCheckFalse(!isbddc,PetscObjectComm((PetscObject)pc),PETSC_ERR_SUP,"Invalid type %s. Must be of type bddc",((PetscObject)bddcipc_ctx->bddc)->type_name);
   ierr = PCSetUp(bddcipc_ctx->bddc);CHKERRQ(ierr);
 
   /* create interface scatter */
@@ -2585,7 +2586,7 @@ static PetscErrorCode PCApply_BDDCIPC(PC pc, Vec r, Vec x)
   VecScatter     tmps;
 
   PetscFunctionBegin;
-  ierr = PCShellGetContext(pc,(void **)&bddcipc_ctx);CHKERRQ(ierr);
+  ierr = PCShellGetContext(pc,&bddcipc_ctx);CHKERRQ(ierr);
   pcis = (PC_IS*)(bddcipc_ctx->bddc->data);
   tmps = pcis->global_to_B;
   pcis->global_to_B = bddcipc_ctx->g2l;
@@ -2604,7 +2605,7 @@ static PetscErrorCode PCApplyTranspose_BDDCIPC(PC pc, Vec r, Vec x)
   VecScatter     tmps;
 
   PetscFunctionBegin;
-  ierr = PCShellGetContext(pc,(void **)&bddcipc_ctx);CHKERRQ(ierr);
+  ierr = PCShellGetContext(pc,&bddcipc_ctx);CHKERRQ(ierr);
   pcis = (PC_IS*)(bddcipc_ctx->bddc->data);
   tmps = pcis->global_to_B;
   pcis->global_to_B = bddcipc_ctx->g2l;
@@ -2621,7 +2622,7 @@ static PetscErrorCode PCDestroy_BDDCIPC(PC pc)
   BDDCIPC_ctx    bddcipc_ctx;
 
   PetscFunctionBegin;
-  ierr = PCShellGetContext(pc,(void **)&bddcipc_ctx);CHKERRQ(ierr);
+  ierr = PCShellGetContext(pc,&bddcipc_ctx);CHKERRQ(ierr);
   ierr = PCDestroy(&bddcipc_ctx->bddc);CHKERRQ(ierr);
   ierr = VecScatterDestroy(&bddcipc_ctx->g2l);CHKERRQ(ierr);
   ierr = PetscFree(bddcipc_ctx);CHKERRQ(ierr);
@@ -2999,10 +3000,10 @@ PetscErrorCode PCBDDCCreateFETIDPOperators(PC pc, PetscBool fully_redundant, con
    will use a threshold of 5 for constraints' selection at the first coarse level and will redistribute the coarse problem of the first coarse level on 3 processors
 
    References:
-+   [1] - C. R. Dohrmann. "An approximate BDDC preconditioner", Numerical Linear Algebra with Applications Volume 14, Issue 2, pages 149--168, March 2007
-.   [2] - A. Klawonn and O. B. Widlund. "Dual-Primal FETI Methods for Linear Elasticity", Communications on Pure and Applied Mathematics Volume 59, Issue 11, pages 1523--1572, November 2006
-.   [3] - J. Mandel, B. Sousedik, C. R. Dohrmann. "Multispace and Multilevel BDDC", Computing Volume 83, Issue 2--3, pages 55--85, November 2008
--   [4] - C. Pechstein and C. R. Dohrmann. "Modern domain decomposition methods BDDC, deluxe scaling, and an algebraic approach", Seminar talk, Linz, December 2013, http://people.ricam.oeaw.ac.at/c.pechstein/pechstein-bddc2013.pdf
++  * - C. R. Dohrmann. "An approximate BDDC preconditioner", Numerical Linear Algebra with Applications Volume 14, Issue 2, pages 149--168, March 2007
+.  * - A. Klawonn and O. B. Widlund. "Dual-Primal FETI Methods for Linear Elasticity", Communications on Pure and Applied Mathematics Volume 59, Issue 11, pages 1523--1572, November 2006
+.  * - J. Mandel, B. Sousedik, C. R. Dohrmann. "Multispace and Multilevel BDDC", Computing Volume 83, Issue 2--3, pages 55--85, November 2008
+-  * - C. Pechstein and C. R. Dohrmann. "Modern domain decomposition methods BDDC, deluxe scaling, and an algebraic approach", Seminar talk, Linz, December 2013, http://people.ricam.oeaw.ac.at/c.pechstein/pechstein-bddc2013.pdf
 
    Level: intermediate
 
@@ -3020,7 +3021,7 @@ PETSC_EXTERN PetscErrorCode PCCreate_BDDC(PC pc)
 
   PetscFunctionBegin;
   ierr     = PetscNewLog(pc,&pcbddc);CHKERRQ(ierr);
-  pc->data = (void*)pcbddc;
+  pc->data = pcbddc;
 
   /* create PCIS data structure */
   ierr = PCISCreate(pc);CHKERRQ(ierr);

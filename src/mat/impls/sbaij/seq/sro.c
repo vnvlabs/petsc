@@ -24,7 +24,6 @@ C    M(I,J) IS STORED IN ROW I (AND THUS M(J,I) IS NOT STORED);  WHEREAS
 C    IF M(I,J) WILL BE IN THE STRICT LOWER TRIANGLE OF M, THEN M(J,I) IS
 C    STORED IN ROW J (AND THUS M(I,J) IS NOT STORED).
 
-
   -- output: new index set (inew, jnew) for A and a map a2anew that maps
              values a to anew, such that all
              nonzero A_(perm(i),iperm(k)) will be stored in the upper triangle.
@@ -50,7 +49,7 @@ PetscErrorCode  MatReorderingSeqSBAIJ(Mat A,IS perm)
   ierr = ISGetIndices(iperm,&riip);CHKERRQ(ierr);
 
   for (i=0; i<mbs; i++) {
-    if (rip[i] != riip[i]) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Non-symmetric permutation, use symmetric permutation for symmetric matrices");
+    PetscCheckFalse(rip[i] != riip[i],PETSC_COMM_SELF,PETSC_ERR_ARG_INCOMP,"Non-symmetric permutation, use symmetric permutation for symmetric matrices");
   }
   ierr = ISRestoreIndices(iperm,&riip);CHKERRQ(ierr);
   ierr = ISDestroy(&iperm);CHKERRQ(ierr);
@@ -129,7 +128,7 @@ PetscErrorCode  MatReorderingSeqSBAIJ(Mat A,IS perm)
       /* ak = aa[k]; aa[k] = aa[j]; aa[j] = ak; */
     }
   }
-  ierr= ISRestoreIndices(perm,&rip);CHKERRQ(ierr);
+  ierr = ISRestoreIndices(perm,&rip);CHKERRQ(ierr);
 
   a->inew = ai;
   a->jnew = aj;
@@ -148,5 +147,4 @@ PetscErrorCode  MatReorderingSeqSBAIJ(Mat A,IS perm)
   PetscFunctionReturn(0);
 #endif
 }
-
 

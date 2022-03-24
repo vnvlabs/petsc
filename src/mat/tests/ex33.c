@@ -37,7 +37,7 @@ PetscErrorCode TestMPIDerivedDataType()
 
   PetscFunctionBeginUser;
   ierr = MPI_Comm_size(MPI_COMM_WORLD, &size);CHKERRMPI(ierr);
-  if (size < 2) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Must use at least 2 processors");
+  PetscCheckFalse(size < 2,PETSC_COMM_SELF,PETSC_ERR_SUP,"Must use at least 2 processors");
   ierr = MPI_Comm_rank(MPI_COMM_WORLD, &rank);CHKERRMPI(ierr);
 
   if (rank == 0) {
@@ -64,7 +64,7 @@ PetscErrorCode TestMPIDerivedDataType()
     ierr = MPI_Recv(buffer, 6, rtype2, 0, 123, MPI_COMM_WORLD, &status);CHKERRMPI(ierr);
     for (i=0; i<4; i++) {
       for (j=0; j<6; j++) {
-        ierr = PetscPrintf(MPI_COMM_SELF,"  %g", (double)PetscRealPart(buffer[i+j*4]));
+        ierr = PetscPrintf(MPI_COMM_SELF,"  %g", (double)PetscRealPart(buffer[i+j*4]));CHKERRQ(ierr);
       }
       ierr = PetscPrintf(MPI_COMM_SELF,"\n");CHKERRQ(ierr);
     }
@@ -138,7 +138,7 @@ int main(int argc, char **args)
 
   /* Check accuracy */
   ierr = MatMatMultEqual(A,X,Y,10,&flg);CHKERRQ(ierr);
-  if (!flg) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_NOTSAMETYPE,"Error in MatMatMult()");
+  PetscCheckFalse(!flg,PETSC_COMM_SELF,PETSC_ERR_ARG_NOTSAMETYPE,"Error in MatMatMult()");
 
   ierr = MatDestroy(&A);CHKERRQ(ierr);
   ierr = MatDestroy(&X);CHKERRQ(ierr);

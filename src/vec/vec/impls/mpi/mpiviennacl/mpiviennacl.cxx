@@ -28,7 +28,7 @@ PetscErrorCode VecDestroy_MPIViennaCL(Vec v)
       delete (Vec_ViennaCL*) v->spptr;
     }
   } catch(std::exception const & ex) {
-    SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"ViennaCL error: %s", ex.what());
+    SETERRQ(PETSC_COMM_SELF,PETSC_ERR_LIB,"ViennaCL error: %s", ex.what());
   }
   ierr = VecDestroy_MPI(v);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -41,7 +41,7 @@ PetscErrorCode VecNorm_MPIViennaCL(Vec xin,NormType type,PetscReal *z)
 
   PetscFunctionBegin;
   if (type == NORM_2 || type == NORM_FROBENIUS) {
-    ierr  = VecNorm_SeqViennaCL(xin,NORM_2,&work);
+    ierr  = VecNorm_SeqViennaCL(xin,NORM_2,&work);CHKERRQ(ierr);
     work *= work;
     ierr  = MPIU_Allreduce(&work,&sum,1,MPIU_REAL,MPIU_SUM,PetscObjectComm((PetscObject)xin));CHKERRMPI(ierr);
     *z    = PetscSqrtReal(sum);
@@ -118,7 +118,6 @@ PetscErrorCode VecMDot_MPIViennaCL(Vec xin,PetscInt nv,const Vec y[],PetscScalar
 .seealso: VecCreate(), VecSetType(), VecSetFromOptions(), VecCreateMPIWithArray(), VECMPI, VecType, VecCreateMPI(), VecCreateMPI()
 M*/
 
-
 PetscErrorCode VecDuplicate_MPIViennaCL(Vec win,Vec *v)
 {
   PetscErrorCode ierr;
@@ -173,14 +172,13 @@ PetscErrorCode VecDotNorm2_MPIViennaCL(Vec s,Vec t,PetscScalar *dp,PetscScalar *
   PetscFunctionReturn(0);
 }
 
-
-PetscErrorCode VecBindToCPU_MPIViennaCL(Vec vv, PetscBool pin)
+PetscErrorCode VecBindToCPU_MPIViennaCL(Vec vv, PetscBool bind)
 {
   PetscErrorCode ierr;
   PetscFunctionBegin;
-  vv->boundtocpu = pin;
+  vv->boundtocpu = bind;
 
-  if (pin) {
+  if (bind) {
     ierr = VecViennaCLCopyFromGPU(vv);CHKERRQ(ierr);
     vv->offloadmask = PETSC_OFFLOAD_CPU; /* since the CPU code will likely change values in the vector */
     vv->ops->dotnorm2               = NULL;
@@ -248,7 +246,6 @@ PetscErrorCode VecBindToCPU_MPIViennaCL(Vec vv, PetscBool pin)
   PetscFunctionReturn(0);
 }
 
-
 PETSC_EXTERN PetscErrorCode VecCreate_MPIViennaCL(Vec vv)
 {
   PetscErrorCode ierr;
@@ -263,7 +260,6 @@ PETSC_EXTERN PetscErrorCode VecCreate_MPIViennaCL(Vec vv)
   vv->offloadmask = PETSC_OFFLOAD_BOTH;
   PetscFunctionReturn(0);
 }
-
 
 PETSC_EXTERN PetscErrorCode VecCreate_ViennaCL(Vec v)
 {
@@ -317,7 +313,7 @@ PetscErrorCode  VecCreateMPIViennaCLWithArray(MPI_Comm comm,PetscInt bs,PetscInt
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  if (n == PETSC_DECIDE) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Must set local size of vector");
+  PetscCheckFalse(n == PETSC_DECIDE,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Must set local size of vector");
   ierr = PetscSplitOwnership(comm,&n,&N);CHKERRQ(ierr);
   ierr = VecCreate(comm,vv);CHKERRQ(ierr);
   ierr = VecSetSizes(*vv,n,N);CHKERRQ(ierr);

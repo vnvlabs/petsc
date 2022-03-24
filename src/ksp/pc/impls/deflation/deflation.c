@@ -53,7 +53,6 @@ PetscErrorCode PCDeflationSetInitOnly(PC pc,PetscBool flg)
   PetscFunctionReturn(0);
 }
 
-
 static PetscErrorCode PCDeflationSetLevels_Deflation(PC pc,PetscInt current,PetscInt max)
 {
   PC_Deflation   *def = (PC_Deflation*)pc->data;
@@ -413,7 +412,7 @@ PetscErrorCode PCDeflationGetPC(PC pc,PC *apc)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
-  PetscValidPointer(pc,2);
+  PetscValidPointer(pc,1);
   ierr = PetscTryMethod(pc,"PCDeflationGetPC_C",(PC,PC*),(pc,apc));CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -623,7 +622,7 @@ static PetscErrorCode PCSetUp_Deflation(PC pc)
         ierr = MatGetColumnNorms(def->WtAW,NORM_INFINITY,norms);CHKERRQ(ierr);
         for (i=0; i<m; i++) {
           if (norms[i] < 100*PETSC_MACHINE_EPSILON) {
-            SETERRQ1(comm,PETSC_ERR_SUP,"Column %D of W is in kernel of A.",i);
+            SETERRQ(comm,PETSC_ERR_SUP,"Column %D of W is in kernel of A.",i);
           }
         }
         ierr = PetscFree(norms);CHKERRQ(ierr);
@@ -667,15 +666,15 @@ static PetscErrorCode PCSetUp_Deflation(PC pc)
       ierr = KSPAppendOptionsPrefix(def->WtAWinv,"deflation_tel_");CHKERRQ(ierr);
       ierr = PCSetFromOptions(pcinner);CHKERRQ(ierr);
       ierr = PetscObjectTypeCompare((PetscObject)pcinner,PCTELESCOPE,&match);CHKERRQ(ierr);
-      if (!match) SETERRQ(comm,PETSC_ERR_SUP,"User can not owerwrite PCTELESCOPE on bottom level, use reduction factor = 1 instead.");
+      PetscCheckFalse(!match,comm,PETSC_ERR_SUP,"User can not owerwrite PCTELESCOPE on bottom level, use reduction factor = 1 instead.");
       /* Reduction factor choice */
       red = def->reductionfact;
       if (red < 0) {
         ierr = MPI_Comm_size(comm,&commsize);CHKERRMPI(ierr);
-        red  = ceil((float)commsize/ceil((float)m/commsize));
+        red  = PetscCeilInt(commsize,PetscCeilInt(m,commsize));
         ierr = PetscObjectTypeCompareAny((PetscObject)(def->WtAW),&match,MATSEQDENSE,MATMPIDENSE,MATDENSE,"");CHKERRQ(ierr);
         if (match) red = commsize;
-        ierr = PetscInfo1(pc,"Auto choosing reduction factor %D\n",red);CHKERRQ(ierr);
+        ierr = PetscInfo(pc,"Auto choosing reduction factor %D\n",red);CHKERRQ(ierr);
       }
       ierr = PCTelescopeSetReductionFactor(pcinner,red);CHKERRQ(ierr);
       ierr = PCSetUp(pcinner);CHKERRQ(ierr);
@@ -881,10 +880,10 @@ static PetscErrorCode PCSetFromOptions_Deflation(PetscOptionItems *PetscOptionsO
      Prof. Reinhard Nabben at the Institute of Mathematics, TU Berlin.
 
    References:
-+    [1] - A. Nicolaides. "Deflation of conjugate gradients with applications to boundary value problems", SIAM J. Numer. Anal. 24.2, 1987.
-.    [2] - Z. Dostal. "Conjugate gradient method with preconditioning by projector", Int J. Comput. Math. 23.3-4, 1988.
-.    [3] - Y. A. Erlangga and R. Nabben. "Multilevel Projection-Based Nested Krylov Iteration for Boundary Value Problems", SIAM J. Sci. Comput. 30.3, 2008.
--    [4] - J. Kruzik "Implementation of the Deflated Variants of the Conjugate Gradient Method", Master's thesis, VSB-TUO, 2018 - http://dspace5.vsb.cz/bitstream/handle/10084/130303/KRU0097_USP_N2658_2612T078_2018.pdf
++  * - A. Nicolaides. "Deflation of conjugate gradients with applications to boundary value problems", SIAM J. Numer. Anal. 24.2, 1987.
+.  * - Z. Dostal. "Conjugate gradient method with preconditioning by projector", Int J. Comput. Math. 23.3-4, 1988.
+.  * - Y. A. Erlangga and R. Nabben. "Multilevel Projection-Based Nested Krylov Iteration for Boundary Value Problems", SIAM J. Sci. Comput. 30.3, 2008.
+-  * - J. Kruzik "Implementation of the Deflated Variants of the Conjugate Gradient Method", Master's thesis, VSB-TUO, 2018 - http://dspace5.vsb.cz/bitstream/handle/10084/130303/KRU0097_USP_N2658_2612T078_2018.pdf
 
    Level: intermediate
 

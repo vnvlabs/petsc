@@ -59,7 +59,7 @@ def pathToLabel(path):
     label=prefix+"-"+suffix+'_*'
   else:
     path=path.rstrip('/')
-    label=path.replace("/","_")+"-*"
+    label=path.replace("/","_").replace('tests_','tests-').replace('tutorials_','tutorials-')
   return label
 
 def get_value(varset):
@@ -256,15 +256,36 @@ def do_query(use_source, startdir, srcdir, testdir, petsc_dir, petsc_arch,
     # Filter results using searchin
     newresList=[]
     if searchin.strip():
-        for key in resList:
-            if fnmatch.filter([key],searchin):
-              newresList.append(key)
+        if not searchin.startswith('!'):
+            for key in resList:
+                if fnmatch.filter([key],searchin):
+                  newresList.append(key)
+        else:
+            for key in resList:
+                if not fnmatch.filter([key],searchin[1:]):
+                  newresList.append(key)
         resList=newresList
 
     # Print in flat list suitable for use by gmakefile.test
     print(' '.join(resList))
 
     return
+
+def expand_path_like(petscdir,petscarch,pathlike):
+    def remove_prefix(text,prefix):
+        return text[text.startswith(prefix) and len(prefix):]
+
+    # expand user second, as expandvars may insert a '~'
+    string = os.path.expanduser(os.path.expandvars(pathlike))
+    # if the dirname check succeeds then likely we have a glob expression
+    pardir = os.path.dirname(string)
+    if os.path.exists(pardir):
+        suffix   = string.replace(pardir,'') # get whatever is left over
+        pathlike = remove_prefix(os.path.relpath(os.path.abspath(pardir),petscdir),'.'+os.path.sep)
+        if petscarch == '':
+            pathlike = pathlike.replace(os.path.sep.join(('share','petsc','examples'))+'/','')
+        pathlike += suffix
+    return pathlike
 
 def main():
     parser = optparse.OptionParser(usage="%prog [options] field match_pattern")
@@ -310,10 +331,13 @@ def main():
     petsc_arch = opts.petsc_arch
     petsc_full_arch = os.path.join(petsc_dir, petsc_arch)
 
-    if opts.srcdir == 'src':
-      petsc_full_src = os.path.join(petsc_dir, 'src')
+    if petsc_arch == '':
+        petsc_full_src = os.path.join(petsc_dir, 'share', 'petsc', 'examples', 'src')
     else:
-      petsc_full_src = opts.srcdir
+      if opts.srcdir == 'src':
+        petsc_full_src = os.path.join(petsc_dir, 'src')
+      else:
+        petsc_full_src = opts.srcdir
     if opts.testdir == 'tests':
       petsc_full_test = os.path.join(petsc_full_arch, 'tests')
     else:
@@ -339,6 +363,8 @@ def main():
         if not os.path.isdir(petsc_full_src):
             print("Source directory must be a directory"+petsc_full_src)
             return
+
+    match = expand_path_like(petsc_dir,petsc_arch,match)
 
     # Do the actual query
     do_query(opts.use_source, startdir, petsc_full_src, petsc_full_test,

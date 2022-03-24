@@ -10,8 +10,6 @@ static char help[] = "Synchronized printing.\n\n";
    Processors: n
 T*/
 
-
-
 #include <petscsys.h>
 int main(int argc,char **argv)
 {
@@ -24,7 +22,7 @@ int main(int argc,char **argv)
                  supplied to PETSc and options supplied to MPI.
     help       - When PETSc executable is invoked with the option -help,
                  it prints the various options that can be applied at
-                 runtime.  The user can use the "help" variable place
+                 runtime.  The user can use the "help" variable to place
                  additional help messages in this printout.
   */
   ierr = PetscInitialize(&argc,&argv,NULL,help);if (ierr) return ierr;
@@ -78,7 +76,6 @@ int main(int argc,char **argv)
   ierr = PetscFinalize();
   return ierr;
 }
-
 
 /*TEST
 

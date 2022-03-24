@@ -36,7 +36,7 @@ PetscErrorCode  AOSetType(AO ao, AOType method)
 
   ierr = AORegisterAll();CHKERRQ(ierr);
   ierr = PetscFunctionListFind(AOList,method,&r);CHKERRQ(ierr);
-  if (!r) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_UNKNOWN_TYPE, "Unknown AO type: %s", method);
+  PetscCheckFalse(!r,PETSC_COMM_SELF,PETSC_ERR_ARG_UNKNOWN_TYPE, "Unknown AO type: %s", method);
   if (ao->ops->destroy) {
     ierr             = (*ao->ops->destroy)(ao);CHKERRQ(ierr);
     ao->ops->destroy = NULL;
@@ -73,7 +73,6 @@ PetscErrorCode  AOGetType(AO ao, AOType *type)
   PetscFunctionReturn(0);
 }
 
-
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 /*@C
@@ -99,5 +98,4 @@ PetscErrorCode  AORegister(const char sname[], PetscErrorCode (*function)(AO))
   ierr = PetscFunctionListAdd(&AOList,sname,function);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 

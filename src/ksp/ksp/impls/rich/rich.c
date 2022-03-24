@@ -33,7 +33,7 @@ PetscErrorCode  KSPSolve_Richardson(KSP ksp)
 
   PetscFunctionBegin;
   ierr = PCGetDiagonalScale(ksp->pc,&diagonalscale);CHKERRQ(ierr);
-  if (diagonalscale) SETERRQ1(PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(diagonalscale,PetscObjectComm((PetscObject)ksp),PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
 
   ksp->its = 0;
 
@@ -96,7 +96,7 @@ PetscErrorCode  KSPSolve_Richardson(KSP ksp)
       ierr  = KSP_PCApplyBAorAB(ksp,z,y,w);CHKERRQ(ierr); /* y = BAz = BABr */
       ierr  = VecDotNorm2(z,y,&rdot,&abr);CHKERRQ(ierr);   /*   rdot = (Br)^T(BABR); abr = (BABr)^T (BABr) */
       scale = rdot/abr;
-      ierr  = PetscInfo1(ksp,"Self-scale factor %g\n",(double)PetscRealPart(scale));CHKERRQ(ierr);
+      ierr  = PetscInfo(ksp,"Self-scale factor %g\n",(double)PetscRealPart(scale));CHKERRQ(ierr);
       ierr  = VecAXPY(x,scale,z);CHKERRQ(ierr);   /*   x  <- x + scale z */
       ierr  = VecAXPY(r,-scale,w);CHKERRQ(ierr);  /*  r <- r - scale*Az */
       ierr  = VecAXPY(z,-scale,y);CHKERRQ(ierr);  /*  z <- z - scale*y */
@@ -264,7 +264,7 @@ static PetscErrorCode KSPBuildResidual_Richardson(KSP ksp,Vec t,Vec v,Vec *V)
 $    -ksp_type richardson -pc_type jacobi gives one classically Jacobi preconditioning
 
   References:
-.  1. - L. F. Richardson, "The Approximate Arithmetical Solution by Finite Differences of Physical Problems Involving
+. * - L. F. Richardson, "The Approximate Arithmetical Solution by Finite Differences of Physical Problems Involving
    Differential Equations, with an Application to the Stresses in a Masonry Dam",
   Philosophical Transactions of the Royal Society of London. Series A,
   Containing Papers of a Mathematical or Physical Character, Vol. 210, 1911 (1911).

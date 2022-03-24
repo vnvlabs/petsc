@@ -1,8 +1,8 @@
 
 static char help[] = "Solves a nonlinear system in parallel with a user-defined Newton method.\n\
-Uses KSP to solve the linearized Newton sytems.  This solver\n\
+Uses KSP to solve the linearized Newton systems.  This solver\n\
 is a very simplistic inexact Newton method.  The intent of this code is to\n\
-demonstrate the repeated solution of linear sytems with the same nonzero pattern.\n\
+demonstrate the repeated solution of linear systems with the same nonzero pattern.\n\
 \n\
 This is NOT the recommended approach for solving nonlinear problems with PETSc!\n\
 We urge users to employ the SNES component for solving nonlinear problems whenever\n\
@@ -114,7 +114,7 @@ int main(int argc,char **argv)
   ierr = PetscOptionsGetInt(NULL,NULL,"-mx",&user.mx,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetInt(NULL,NULL,"-my",&user.my,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetReal(NULL,NULL,"-par",&user.param,NULL);CHKERRQ(ierr);
-  if (user.param >= bratu_lambda_max || user.param <= bratu_lambda_min) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"Lambda is out of range");
+  PetscCheckFalse(user.param >= bratu_lambda_max || user.param <= bratu_lambda_min,PETSC_COMM_WORLD,PETSC_ERR_ARG_OUTOFRANGE,"Lambda is out of range");
   N = user.mx*user.my;
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -134,7 +134,7 @@ int main(int argc,char **argv)
   Nx   = PETSC_DECIDE; Ny = PETSC_DECIDE;
   ierr = PetscOptionsGetInt(NULL,NULL,"-Nx",&Nx,NULL);CHKERRQ(ierr);
   ierr = PetscOptionsGetInt(NULL,NULL,"-Ny",&Ny,NULL);CHKERRQ(ierr);
-  if (Nx*Ny != size && (Nx != PETSC_DECIDE || Ny != PETSC_DECIDE)) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_INCOMP,"Incompatible number of processors:  Nx * Ny != size");
+  PetscCheckFalse(Nx*Ny != size && (Nx != PETSC_DECIDE || Ny != PETSC_DECIDE),PETSC_COMM_WORLD,PETSC_ERR_ARG_INCOMP,"Incompatible number of processors:  Nx * Ny != size");
   ierr = DMDACreate2d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,DM_BOUNDARY_NONE,DMDA_STENCIL_STAR,user.mx,user.my,Nx,Ny,1,1,NULL,NULL,&user.da);CHKERRQ(ierr);
   ierr = DMSetFromOptions(user.da);CHKERRQ(ierr);
   ierr = DMSetUp(user.da);CHKERRQ(ierr);
@@ -147,7 +147,6 @@ int main(int argc,char **argv)
   ierr = DMCreateLocalVector(user.da,&user.localX);CHKERRQ(ierr);
   ierr = VecDuplicate(X,&F);CHKERRQ(ierr);
   ierr = VecDuplicate(X,&Y);CHKERRQ(ierr);
-
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      Create matrix data structure for Jacobian
@@ -198,7 +197,7 @@ int main(int argc,char **argv)
       This solver is a very simplistic inexact Newton method, with no
       no damping strategies or bells and whistles. The intent of this code
       is  merely to demonstrate the repeated solution with KSP of linear
-      sytems with the same nonzero structure.
+      systems with the same nonzero structure.
 
       This is NOT the recommended approach for solving nonlinear problems
       with PETSc!  We urge users to employ the SNES component for solving

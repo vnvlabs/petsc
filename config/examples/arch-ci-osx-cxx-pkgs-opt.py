@@ -15,12 +15,14 @@ configure_options = [
   '--with-clanguage=cxx',
   '--with-debugging=0',
   '--with-visibility=0', # CXXFLAGS disables this option
+  '--debugLevel=4',
 
   #'--prefix=petsc-install', temporarily disable for gitlab-ci
 
   #'-download-fblaslapack=1',
   '--download-mpich=1',
   '--download-mpich-device=ch3:sock',
+  '--download-mpich-configure-arguments=--disable-two-level-namespace', # workaround for AMREX build failure with MPICH 4.0.1 and above
   '--download-cmake=1',
   '--download-metis=1',
   '--download-parmetis=1',
@@ -43,6 +45,7 @@ configure_options = [
   '--download-moab=1',
   '--download-saws',
   '--download-revolve=1',
+  '--download-cams=1',
   '--download-ctetgen=1',
   '--download-tetgen=1',
   '--download-mfem=1',

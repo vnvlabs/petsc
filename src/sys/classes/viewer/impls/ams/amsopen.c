@@ -24,7 +24,6 @@
     Fortran Note:
     This routine is not supported in Fortran.
 
-
     Notes:
     Unlike other viewers that only access the object being viewed on the call to XXXView(object,viewer) the SAWs viewer allows
     one to view the object asynchronously as the program continues to run. One can remove SAWs access to the object with a call to
@@ -64,7 +63,6 @@ PetscErrorCode PetscViewerSAWsOpen(MPI_Comm comm,PetscViewer *lab)
    The object must have already been named before calling this routine since naming an
    object can be collective.
 
-
 .seealso: PetscObjectSetName(), PetscObjectSAWsViewOff()
 
 @*/
@@ -78,8 +76,8 @@ PetscErrorCode  PetscObjectViewSAWs(PetscObject obj,PetscViewer viewer)
   PetscValidHeader(obj,1);
   if (obj->amsmem) PetscFunctionReturn(0);
   ierr = MPI_Comm_rank(PETSC_COMM_WORLD,&rank);CHKERRMPI(ierr);
-  if (rank) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Should only be being called on rank zero");
-  if (!obj->name) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Object must already have been named");
+  PetscCheckFalse(rank,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Should only be being called on rank zero");
+  PetscCheckFalse(!obj->name,PETSC_COMM_SELF,PETSC_ERR_PLIB,"Object must already have been named");
 
   obj->amsmem = PETSC_TRUE;
   ierr = PetscSNPrintf(dir,1024,"/PETSc/Objects/%s/Class",obj->name);CHKERRQ(ierr);

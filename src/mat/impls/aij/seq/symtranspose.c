@@ -14,7 +14,6 @@
 
 #include <../src/mat/impls/aij/seq/aij.h>
 
-
 PetscErrorCode MatGetSymbolicTranspose_SeqAIJ(Mat A,PetscInt *Ati[],PetscInt *Atj[])
 {
   PetscErrorCode ierr;
@@ -189,9 +188,6 @@ PetscErrorCode MatTranspose_SeqAIJ(Mat A,MatReuse reuse,Mat *B)
   } else {
     ierr = MatHeaderMerge(A,&At);CHKERRQ(ierr);
   }
-#if defined(PETSC_HAVE_DEVICE)
-  (*B)->offloadmask = PETSC_OFFLOAD_CPU;
-#endif
   PetscFunctionReturn(0);
 }
 

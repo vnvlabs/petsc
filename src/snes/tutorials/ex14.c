@@ -12,8 +12,6 @@ The command line options include:\n\
    Processors: n
 T*/
 
-
-
 /* ------------------------------------------------------------------------
 
     Solid Fuel Ignition (SFI) problem.  This problem is modeled by
@@ -28,7 +26,6 @@ T*/
     A finite difference approximation with the usual 7-point stencil
     is used to discretize the boundary value problem to obtain a nonlinear
     system of equations.
-
 
   ------------------------------------------------------------------------- */
 
@@ -45,7 +42,6 @@ T*/
 #include <petscdm.h>
 #include <petscdmda.h>
 #include <petscsnes.h>
-
 
 /*
    User-defined application context - contains data needed by the
@@ -88,7 +84,7 @@ int main(int argc,char **argv)
   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   user.param = 6.0;
   ierr       = PetscOptionsGetReal(NULL,NULL,"-par",&user.param,NULL);CHKERRQ(ierr);
-  if (user.param >= bratu_lambda_max || user.param <= bratu_lambda_min) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Lambda is out of range");
+  PetscCheckFalse(user.param >= bratu_lambda_max || user.param <= bratu_lambda_min,PETSC_COMM_SELF,PETSC_ERR_ARG_OUTOFRANGE,"Lambda is out of range");
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      Create nonlinear solver context
@@ -501,8 +497,6 @@ PetscErrorCode FormJacobian(SNES snes,Vec X,Mat J,Mat jac,void *ptr)
   PetscFunctionReturn(0);
 }
 
-
-
 /*TEST
 
    test:
@@ -528,6 +522,12 @@ PetscErrorCode FormJacobian(SNES snes,Vec X,Mat J,Mat jac,void *ptr)
       suffix: 4
       nsize: 4
       args: -fdcoloring_local -fdcoloring -ksp_monitor_short -da_refine 1
+      requires: !single
+
+   test:
+      suffix: 5
+      nsize: 4
+      args: -fdcoloring_local -fdcoloring -ksp_monitor_short -da_refine 1 -snes_type newtontrdc
       requires: !single
 
 TEST*/

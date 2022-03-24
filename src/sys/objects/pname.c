@@ -110,8 +110,6 @@ PetscErrorCode PetscObjectPrintClassNamePrefixType(PetscObject obj,PetscViewer v
 
    Developer Note: this needs to generate the exact same string on all ranks that share the object. The current algorithm may not always work.
 
-
-
 .seealso: PetscObjectGetName(), PetscObjectSetName()
 @*/
 PetscErrorCode  PetscObjectName(PetscObject obj)
@@ -126,20 +124,18 @@ PetscErrorCode  PetscObjectName(PetscObject obj)
   if (!obj->name) {
     union {MPI_Comm comm; void *ptr; char raw[sizeof(MPI_Comm)]; } ucomm;
     ierr = MPI_Comm_get_attr(obj->comm,Petsc_Counter_keyval,(void*)&counter,&flg);CHKERRMPI(ierr);
-    if (!flg) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_CORRUPT,"Bad MPI communicator supplied; must be a PETSc communicator");
+    PetscCheckFalse(!flg,PETSC_COMM_SELF,PETSC_ERR_ARG_CORRUPT,"Bad MPI communicator supplied; must be a PETSc communicator");
     ucomm.ptr = NULL;
     ucomm.comm = obj->comm;
     ierr = MPI_Bcast(ucomm.raw,sizeof(MPI_Comm),MPI_BYTE,0,obj->comm);CHKERRMPI(ierr);
     /* If the union has extra bytes, their value is implementation-dependent, but they will normally be what we set last
      * in 'ucomm.ptr = NULL'.  This output is always implementation-defined (and varies from run to run) so the union
      * abuse acceptable. */
-    ierr = PetscSNPrintf(name,64,"%s_%p_%D",obj->class_name,ucomm.ptr,counter->namecount++);CHKERRQ(ierr);
+    ierr = PetscSNPrintf(name,64,"%s_%p_%" PetscInt_FMT,obj->class_name,ucomm.ptr,counter->namecount++);CHKERRQ(ierr);
     ierr = PetscStrallocpy(name,&obj->name);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
 }
-
-
 
 PetscErrorCode  PetscObjectChangeTypeName(PetscObject obj,const char type_name[])
 {

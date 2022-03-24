@@ -17,7 +17,7 @@ PetscFunctionList PCList = NULL;
 
    Collective on PC
 
-   Input Parameter:
+   Input Parameters:
 +  pc - the preconditioner context.
 -  type - a known method
 
@@ -64,7 +64,7 @@ PetscErrorCode  PCSetType(PC pc,PCType type)
   if (match) PetscFunctionReturn(0);
 
   ierr =  PetscFunctionListFind(PCList,type,&r);CHKERRQ(ierr);
-  if (!r) SETERRQ1(PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_UNKNOWN_TYPE,"Unable to find requested PC type %s",type);
+  PetscCheckFalse(!r,PetscObjectComm((PetscObject)pc),PETSC_ERR_ARG_UNKNOWN_TYPE,"Unable to find requested PC type %s",type);
   /* Destroy the previous private PC context */
   if (pc->ops->destroy) {
     ierr             = (*pc->ops->destroy)(pc);CHKERRQ(ierr);
@@ -124,7 +124,7 @@ extern PetscErrorCode PCGetDefaultType_Private(PC,const char*[]);
 .  pc - the preconditioner context
 
    Options Database:
-.   -pc_use_amat true,false see PCSetUseAmat()
+.   -pc_use_amat true,false - see PCSetUseAmat()
 
    Level: developer
 
@@ -214,7 +214,6 @@ PetscErrorCode  PCSetDM(PC pc,DM dm)
 .  dm - the dm
 
    Level: intermediate
-
 
 .seealso: PCSetDM(), KSPSetDM(), KSPGetDM()
 @*/

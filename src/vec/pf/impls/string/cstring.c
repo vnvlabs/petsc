@@ -2,7 +2,7 @@
 #include <../src/vec/pf/pfimpl.h>            /*I "petscpf.h" I*/
 
 /*
-        Ths PF generates a function on the fly and loads it into the running
+        This PF generates a function on the fly and loads it into the running
    program.
 */
 
@@ -88,7 +88,7 @@ PetscErrorCode  PFStringCreateFunction(PF pf,char *string,void **f)
   ierr = PetscGetUserName(username,64);CHKERRQ(ierr);
   sprintf(lib,"%s/%s/libpetscdlib",tmp,username);
   ierr = PetscDLLibrarySym(comm,NULL,lib,"PFApply_String",f);CHKERRQ(ierr);
-  if (!f) SETERRQ1(PetscObjectComm((PetscObject)pf),PETSC_ERR_ARG_WRONGSTATE,"Cannot find function %s",lib);
+  PetscCheckFalse(!f,PetscObjectComm((PetscObject)pf),PETSC_ERR_ARG_WRONGSTATE,"Cannot find function %s",lib);
 #endif
   PetscFunctionReturn(0);
 }
@@ -126,8 +126,4 @@ PETSC_EXTERN PetscErrorCode PFCreate_String(PF pf,void *value)
   pf->ops->setfromoptions = PFSetFromOptions_String;
   PetscFunctionReturn(0);
 }
-
-
-
-
 

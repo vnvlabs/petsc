@@ -132,8 +132,9 @@ static PetscErrorCode TSMPRKGenerateTableau3(PetscInt ratio,PetscInt s,const Pet
 
      This method has four stages for slow and fast parts. The refinement factor of the stepsize is 2.
      r = 2, np = 2
+
      Options database:
-.     -ts_mprk_type 2a22
+.     -ts_mprk_type 2a22 - select this scheme
 
      Level: advanced
 
@@ -144,8 +145,9 @@ M*/
 
      This method has eight stages for slow and medium and fast parts. The refinement factor of the stepsize is 2.
      r = 2, np = 3
+
      Options database:
-.     -ts_mprk_type 2a23
+.     -ts_mprk_type 2a23 - select this scheme
 
      Level: advanced
 
@@ -156,8 +158,9 @@ M*/
 
      This method has four stages for slow and fast parts. The refinement factor of the stepsize is 3.
      r = 3, np = 2
+
      Options database:
-.     -ts_mprk_type 2a32
+.     -ts_mprk_type 2a32 - select this scheme
 
      Level: advanced
 
@@ -168,8 +171,9 @@ M*/
 
      This method has eight stages for slow and medium and fast parts. The refinement factor of the stepsize is 3.
      r = 3, np = 3
+
      Options database:
-.     -ts_mprk_type 2a33
+.     -ts_mprk_type 2a33- select this scheme
 
      Level: advanced
 
@@ -181,7 +185,7 @@ M*/
      This method has eight stages for both slow and fast parts.
 
      Options database:
-.     -ts_mprk_type pm3  (put here temporarily)
+.     -ts_mprk_type pm3 - select this scheme
 
      Level: advanced
 
@@ -193,7 +197,7 @@ M*/
      This method has five stages for both slow and fast parts.
 
      Options database:
-.     -ts_mprk_type p2
+.     -ts_mprk_type p2 - select this scheme
 
      Level: advanced
 
@@ -205,7 +209,7 @@ M*/
      This method has ten stages for both slow and fast parts.
 
      Options database:
-.     -ts_mprk_type p3
+.     -ts_mprk_type p3 - select this scheme
 
      Level: advanced
 
@@ -489,14 +493,14 @@ PetscErrorCode TSMPRKRegister(TSMPRKType name,PetscInt order,
 
   PetscFunctionBegin;
   PetscValidCharPointer(name,1);
-  PetscValidRealPointer(Asb,4);
+  PetscValidRealPointer(Asb,6);
   if (bsb) PetscValidRealPointer(bsb,7);
   if (csb) PetscValidRealPointer(csb,8);
-  if (rsb) PetscValidRealPointer(rsb,9);
+  if (rsb) PetscValidIntPointer(rsb,9);
   if (Amb) PetscValidRealPointer(Amb,10);
   if (bmb) PetscValidRealPointer(bmb,11);
   if (cmb) PetscValidRealPointer(cmb,12);
-  if (rmb) PetscValidRealPointer(rmb,13);
+  if (rmb) PetscValidIntPointer(rmb,13);
   PetscValidRealPointer(Af,14);
   if (bf) PetscValidRealPointer(bf,15);
   if (cf) PetscValidRealPointer(cf,16);
@@ -583,7 +587,7 @@ static PetscErrorCode TSMPRKSetSplits(TS ts)
   PetscFunctionBegin;
   ierr = TSRHSSplitGetSubTS(ts,"slow",&mprk->subts_slow);CHKERRQ(ierr);
   ierr = TSRHSSplitGetSubTS(ts,"fast",&mprk->subts_fast);CHKERRQ(ierr);
-  if (!mprk->subts_slow || !mprk->subts_fast) SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up the RHSFunctions for 'slow' and 'fast' components using TSRHSSplitSetRHSFunction() or calling TSSetRHSFunction() for each sub-TS");
+  PetscCheck(mprk->subts_slow && mprk->subts_fast,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up the RHSFunctions for 'slow' and 'fast' components using TSRHSSplitSetRHSFunction() or calling TSSetRHSFunction() for each sub-TS");
 
   /* Only copy the DM */
   ierr = TSGetDM(ts,&dm);CHKERRQ(ierr);
@@ -1088,11 +1092,11 @@ static PetscErrorCode TSSetUp_MPRK(TS ts)
   PetscFunctionBegin;
   ierr = TSRHSSplitGetIS(ts,"slow",&mprk->is_slow);CHKERRQ(ierr);
   ierr = TSRHSSplitGetIS(ts,"fast",&mprk->is_fast);CHKERRQ(ierr);
-  if (!mprk->is_slow || !mprk->is_fast) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up RHSSplits with TSRHSSplitSetIS() using split names 'slow' and 'fast' respectively in order to use the method '%s'",tab->name);
+  PetscCheck(mprk->is_slow && mprk->is_fast,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up RHSSplits with TSRHSSplitSetIS() using split names 'slow' and 'fast' respectively in order to use the method '%s'",tab->name);
 
   if (tab->np == 3) {
     ierr = TSRHSSplitGetIS(ts,"medium",&mprk->is_medium);CHKERRQ(ierr);
-    if (!mprk->is_medium) SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up RHSSplits with TSRHSSplitSetIS() using split names 'slow' and 'medium' and 'fast' respectively in order to use the method '%s'",tab->name);
+    PetscCheck(mprk->is_medium,PetscObjectComm((PetscObject)ts),PETSC_ERR_USER,"Must set up RHSSplits with TSRHSSplitSetIS() using split names 'slow' and 'medium' and 'fast' respectively in order to use the method '%s'",tab->name);
     ierr = TSRHSSplitGetIS(ts,"mediumbuffer",&mprk->is_mediumbuffer);CHKERRQ(ierr);
     if (!mprk->is_mediumbuffer) { /* let medium buffer cover whole medium region */
       mprk->is_mediumbuffer = mprk->is_medium;
@@ -1215,12 +1219,12 @@ static PetscErrorCode TSLoad_MPRK(TS ts,PetscViewer viewer)
 
   Not collective
 
-  Input Parameter:
+  Input Parameters:
 +  ts - timestepping context
 -  mprktype - type of MPRK-scheme
 
   Options Database:
-.   -ts_mprk_type - <pm2,p2,p3>
+.   -ts_mprk_type - <pm2,p2,p3> - select the specific scheme
 
   Level: intermediate
 
@@ -1292,7 +1296,7 @@ static PetscErrorCode TSMPRKSetType_MPRK(TS ts,TSMPRKType mprktype)
       PetscFunctionReturn(0);
     }
   }
-  SETERRQ1(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_UNKNOWN_TYPE,"Could not find '%s'",mprktype);
+  SETERRQ(PetscObjectComm((PetscObject)ts),PETSC_ERR_ARG_UNKNOWN_TYPE,"Could not find '%s'",mprktype);
 }
 
 static PetscErrorCode TSGetStages_MPRK(TS ts,PetscInt *ns,Vec **Y)

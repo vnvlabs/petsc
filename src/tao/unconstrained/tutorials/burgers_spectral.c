@@ -133,8 +133,7 @@ int main(int argc,char **argv)
   appctx.param.Le = appctx.param.L/appctx.param.E;
 
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
-  if (appctx.param.E % size) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_WRONG,"Number of elements must be divisible by number of processes");
-
+  PetscCheck((appctx.param.E % size) == 0,PETSC_COMM_WORLD,PETSC_ERR_ARG_WRONG,"Number of elements must be divisible by number of processes");
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      Create GLL data structures
@@ -192,7 +191,6 @@ int main(int argc,char **argv)
   }
   ierr = DMDAVecRestoreArray(appctx.da,appctx.SEMop.grid,&wrk_ptr1);CHKERRQ(ierr);
   ierr = DMDAVecRestoreArray(appctx.da,appctx.SEMop.mass,&wrk_ptr2);CHKERRQ(ierr);
-
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Create matrix data structure; set matrix evaluation routine.
@@ -256,9 +254,9 @@ int main(int argc,char **argv)
   ierr = TaoCreate(PETSC_COMM_WORLD,&tao);CHKERRQ(ierr);
   ierr = TaoSetMonitor(tao,MonitorError,&appctx,NULL);CHKERRQ(ierr);
   ierr = TaoSetType(tao,TAOBQNLS);CHKERRQ(ierr);
-  ierr = TaoSetInitialVector(tao,appctx.dat.ic);CHKERRQ(ierr);
+  ierr = TaoSetSolution(tao,appctx.dat.ic);CHKERRQ(ierr);
   /* Set routine for function and gradient evaluation  */
-  ierr = TaoSetObjectiveAndGradientRoutine(tao,FormFunctionGradient,(void *)&appctx);CHKERRQ(ierr);
+  ierr = TaoSetObjectiveAndGradient(tao,NULL,FormFunctionGradient,(void *)&appctx);CHKERRQ(ierr);
   /* Check for any TAO command line options  */
   ierr = TaoSetTolerances(tao,1e-8,PETSC_DEFAULT,PETSC_DEFAULT);CHKERRQ(ierr);
   ierr = TaoSetFromOptions(tao);CHKERRQ(ierr);
@@ -324,7 +322,7 @@ PetscErrorCode InitialConditions(Vec u,AppCtx *appctx)
 /*
    TrueSolution() computes the true solution for the Tao optimization solve which means they are the initial conditions for the objective function.
 
-             InitialConditions() computes the initial conditions for the begining of the Tao iterations
+             InitialConditions() computes the initial conditions for the beginning of the Tao iterations
 
    Input Parameter:
    u - uninitialized solution vector (global)
@@ -458,8 +456,8 @@ PetscErrorCode RHSMatrixLaplaciangllDM(TS ts,PetscReal t,Vec X,Mat A,Mat BB,void
    Creates the element stiffness matrix for the given gll
    */
   ierr = PetscGaussLobattoLegendreElementLaplacianCreate(appctx->SEMop.gll.n,appctx->SEMop.gll.nodes,appctx->SEMop.gll.weights,&temp);CHKERRQ(ierr);
-  /* workarround for clang analyzer warning: Division by zero */
-  if (appctx->param.N <= 1) SETERRQ(PETSC_COMM_WORLD,PETSC_ERR_ARG_WRONG,"Spectral element order should be > 1");
+  /* workaround for clang analyzer warning: Division by zero */
+  PetscCheck(appctx->param.N > 1,PETSC_COMM_WORLD,PETSC_ERR_ARG_WRONG,"Spectral element order should be > 1");
 
   /* scale by the size of the element */
   for (i=0; i<appctx->param.N; i++) {
@@ -554,7 +552,7 @@ PetscErrorCode RHSMatrixAdvectiongllDM(TS ts,PetscReal t,Vec X,Mat A,Mat BB,void
    Input Parameters:
    tao - the Tao context
    IC   - the input vector
-   ctx - optional user-defined context, as set when calling TaoSetObjectiveAndGradientRoutine()
+   ctx - optional user-defined context, as set when calling TaoSetObjectiveAndGradient()
 
    Output Parameters:
    f   - the newly evaluated function
@@ -573,14 +571,13 @@ PetscErrorCode RHSMatrixAdvectiongllDM(TS ts,PetscReal t,Vec X,Mat A,Mat BB,void
           but TSAdjoint does not solve this since it can only solve the transposed system for the
           Jacobian the user provided. Hence TSAdjoint solves
                  w_t = J^T M^{-1} w  (where w = M v)
-          since there is no way to indicate the mass matrix as a separate entitity to TS. Thus one
+          since there is no way to indicate the mass matrix as a separate entity to TS. Thus one
           must be careful in initializing the "adjoint equation" and using the result. This is
           why
               G = -2 M(u(T) - u_d)
           below (instead of -2(u(T) - u_d) and why the result is
               G = G/appctx->SEMop.mass (that is G = M^{-1}w)
           below (instead of just the result of the "adjoint solve").
-
 
 */
 PetscErrorCode FormFunctionGradient(Tao tao,Vec IC,PetscReal *f,Vec G,void *ctx)
@@ -648,7 +645,6 @@ PetscErrorCode MonitorError(Tao tao,void *ctx)
   ierr = PetscPrintf(PETSC_COMM_WORLD,"Error for initial conditions %g\n",(double)nrm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
-
 
 /*TEST
 

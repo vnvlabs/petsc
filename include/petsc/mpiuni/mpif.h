@@ -18,6 +18,8 @@
        parameter (MPI_KEYVAL_INVALID = 0)
        MPIUNI_FInt MPI_SUCCESS
        parameter (MPI_SUCCESS = 0)
+       MPIUNI_FInt MPI_ERR_COUNT
+       parameter (MPI_ERR_COUNT = 2)
        MPIUNI_FInt MPI_ERR_OTHER
        parameter (MPI_ERR_OTHER = 17)
        MPIUNI_FInt MPI_ERR_UNKNOWN
@@ -35,7 +37,6 @@
        parameter (MPI_UNDEFINED=-32766)
        MPIUNI_FInt MPI_INFO_NULL
        PARAMETER (MPI_INFO_NULL=0)
-
 
        MPIUNI_FInt MPI_REQUEST_NULL
        parameter (MPI_REQUEST_NULL=0)
@@ -93,5 +94,4 @@
 
        MPIUNI_FInt MPI_MAX_PROCESSOR_NAME
        parameter (MPI_MAX_PROCESSOR_NAME=128-1)
-
 

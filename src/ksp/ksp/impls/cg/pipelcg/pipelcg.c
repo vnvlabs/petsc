@@ -27,12 +27,12 @@ struct KSP_CG_PIPE_L_s {
   PetscBool   show_rstrt; /* flag to show restart information in output (default: not shown) */
 };
 
-/**
- * KSPSetUp_PIPELCG - Sets up the workspace needed by the PIPELCG method.
- *
- * This is called once, usually automatically by KSPSolve() or KSPSetUp()
- * but can be called directly by KSPSetUp()
- */
+/*
+  KSPSetUp_PIPELCG - Sets up the workspace needed by the PIPELCG method.
+
+  This is called once, usually automatically by KSPSolve() or KSPSetUp()
+  but can be called directly by KSPSetUp()
+*/
 static PetscErrorCode KSPSetUp_PIPELCG(KSP ksp)
 {
   PetscErrorCode ierr;
@@ -42,9 +42,9 @@ static PetscErrorCode KSPSetUp_PIPELCG(KSP ksp)
 
   PetscFunctionBegin;
   comm = PetscObjectComm((PetscObject)ksp);
-  if (max_it < 1) SETERRQ1(comm,PETSC_ERR_ARG_OUTOFRANGE,"%s: max_it argument must be positive.",((PetscObject)ksp)->type_name);
-  if (l < 1) SETERRQ1(comm,PETSC_ERR_ARG_OUTOFRANGE,"%s: pipel argument must be positive.",((PetscObject)ksp)->type_name);
-  if (l > max_it) SETERRQ1(comm,PETSC_ERR_ARG_OUTOFRANGE,"%s: pipel argument must be less than max_it.",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(max_it < 1,comm,PETSC_ERR_ARG_OUTOFRANGE,"%s: max_it argument must be positive.",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(l < 1,comm,PETSC_ERR_ARG_OUTOFRANGE,"%s: pipel argument must be positive.",((PetscObject)ksp)->type_name);
+  PetscCheckFalse(l > max_it,comm,PETSC_ERR_ARG_OUTOFRANGE,"%s: pipel argument must be less than max_it.",((PetscObject)ksp)->type_name);
 
   ierr = KSPSetWorkVecs(ksp,1);CHKERRQ(ierr); /* get work vectors needed by PIPELCG */
   plcg->p = ksp->work[0];
@@ -61,8 +61,9 @@ static PetscErrorCode KSPSetUp_PIPELCG(KSP ksp)
 
 static PetscErrorCode KSPReset_PIPELCG(KSP ksp)
 {
-  KSP_CG_PIPE_L *plcg = (KSP_CG_PIPE_L*)ksp->data;
-  PetscInt      ierr=0,l=plcg->l;
+  KSP_CG_PIPE_L  *plcg = (KSP_CG_PIPE_L*)ksp->data;
+  PetscInt       l=plcg->l;
+  PetscErrorCode ierr;
 
   PetscFunctionBegin;
   ierr = PetscFree(plcg->sigma);CHKERRQ(ierr);
@@ -76,7 +77,7 @@ static PetscErrorCode KSPReset_PIPELCG(KSP ksp)
 
 static PetscErrorCode KSPDestroy_PIPELCG(KSP ksp)
 {
-  PetscInt ierr=0;
+  PetscErrorCode ierr;
 
   PetscFunctionBegin;
   ierr = KSPReset_PIPELCG(ksp);CHKERRQ(ierr);
@@ -86,9 +87,9 @@ static PetscErrorCode KSPDestroy_PIPELCG(KSP ksp)
 
 static PetscErrorCode KSPSetFromOptions_PIPELCG(PetscOptionItems *PetscOptionsObject,KSP ksp)
 {
-  PetscInt      ierr=0;
-  KSP_CG_PIPE_L *plcg = (KSP_CG_PIPE_L*)ksp->data;
-  PetscBool     flag=PETSC_FALSE;
+  PetscErrorCode ierr;
+  KSP_CG_PIPE_L  *plcg = (KSP_CG_PIPE_L*)ksp->data;
+  PetscBool      flag=PETSC_FALSE;
 
   PetscFunctionBegin;
   ierr = PetscOptionsHead(PetscOptionsObject,"KSP PIPELCG options");CHKERRQ(ierr);
@@ -106,10 +107,10 @@ static PetscErrorCode KSPSetFromOptions_PIPELCG(PetscOptionItems *PetscOptionsOb
 
 static PetscErrorCode MPIPetsc_Iallreduce(void *sendbuf,void *recvbuf,PetscMPIInt count,MPI_Datatype datatype,MPI_Op op,MPI_Comm comm,MPI_Request *request)
 {
-  PetscErrorCode ierr=0;
+  PetscErrorCode ierr;
 
   PetscFunctionBegin;
-#if defined(PETSC_HAVE_MPI_IALLREDUCE)
+#if defined(PETSC_HAVE_MPI_NONBLOCKING_COLLECTIVES)
   ierr = MPI_Iallreduce(sendbuf,recvbuf,count,datatype,op,comm,request);CHKERRMPI(ierr);
 #else
   ierr = MPIU_Allreduce(sendbuf,recvbuf,count,datatype,op,comm);CHKERRMPI(ierr);
@@ -121,7 +122,7 @@ static PetscErrorCode MPIPetsc_Iallreduce(void *sendbuf,void *recvbuf,PetscMPIIn
 static PetscErrorCode KSPView_PIPELCG(KSP ksp,PetscViewer viewer)
 {
   KSP_CG_PIPE_L  *plcg = (KSP_CG_PIPE_L*)ksp->data;
-  PetscErrorCode ierr=0;
+  PetscErrorCode ierr;
   PetscBool      iascii=PETSC_FALSE,isstring=PETSC_FALSE;
 
   PetscFunctionBegin;
@@ -141,15 +142,16 @@ static PetscErrorCode KSPView_PIPELCG(KSP ksp,PetscViewer viewer)
 
 static PetscErrorCode KSPSolve_InnerLoop_PIPELCG(KSP ksp)
 {
-  KSP_CG_PIPE_L *plcg = (KSP_CG_PIPE_L*)ksp->data;
-  Mat           A=NULL,Pmat=NULL;
-  PetscInt      it=0,max_it=ksp->max_it,ierr=0,l=plcg->l,i=0,j=0,k=0;
-  PetscInt      start=0,middle=0,end=0;
-  Vec           *Z=plcg->Z,*U=plcg->U,*V=plcg->V,*Q=plcg->Q;
-  Vec           x=NULL,p=NULL,temp=NULL;
-  PetscScalar   sum_dummy=0.0,eta=0.0,zeta=0.0,lambda=0.0;
-  PetscReal     dp=0.0,tmp=0.0,beta=0.0,invbeta2=0.0;
-  MPI_Comm      comm;
+  KSP_CG_PIPE_L  *plcg = (KSP_CG_PIPE_L*)ksp->data;
+  Mat            A=NULL,Pmat=NULL;
+  PetscInt       it=0,max_it=ksp->max_it,l=plcg->l,i=0,j=0,k=0;
+  PetscInt       start=0,middle=0,end=0;
+  Vec            *Z=plcg->Z,*U=plcg->U,*V=plcg->V,*Q=plcg->Q;
+  Vec            x=NULL,p=NULL,temp=NULL;
+  PetscScalar    sum_dummy=0.0,eta=0.0,zeta=0.0,lambda=0.0;
+  PetscReal      dp=0.0,tmp=0.0,beta=0.0,invbeta2=0.0;
+  MPI_Comm       comm;
+  PetscErrorCode ierr;
 
   PetscFunctionBegin;
   x   = ksp->vec_sol;
@@ -303,12 +305,12 @@ static PetscErrorCode KSPSolve_InnerLoop_PIPELCG(KSP ksp)
         }
         Q[3*j] = temp;
 
-        if (j < l-2){
+        if (j < l-2) {
           ierr = VecCopy(Q[3*(j+1)],Q[3*j]);CHKERRQ(ierr);
         } else {
           ierr = VecCopy(Z[1],Q[3*j]);CHKERRQ(ierr);
         }
-        if (it == l){
+        if (it == l) {
           ierr = VecAXPY(Q[3*j],sigma(j+1)-gamma(it-l),Q[3*j+1]);CHKERRQ(ierr);
         } else {
           alpha(0) = sigma(j+1)-gamma(it-l);
@@ -397,8 +399,9 @@ static PetscErrorCode KSPSolve_InnerLoop_PIPELCG(KSP ksp)
 
 static PetscErrorCode KSPSolve_ReInitData_PIPELCG(KSP ksp)
 {
-  KSP_CG_PIPE_L *plcg = (KSP_CG_PIPE_L*)ksp->data;
-  PetscInt      ierr=0,i=0,j=0,l=plcg->l,max_it=ksp->max_it;
+  KSP_CG_PIPE_L  *plcg = (KSP_CG_PIPE_L*)ksp->data;
+  PetscInt       i=0,j=0,l=plcg->l,max_it=ksp->max_it;
+  PetscErrorCode ierr;
 
   PetscFunctionBegin;
   for (i = 0; i < PetscMax(3,l+1); ++i) {
@@ -423,12 +426,12 @@ static PetscErrorCode KSPSolve_ReInitData_PIPELCG(KSP ksp)
   PetscFunctionReturn(0);
 }
 
-/**
- * KSPSolve_PIPELCG - This routine actually applies the pipelined(l) conjugate gradient method
- */
+/*
+  KSPSolve_PIPELCG - This routine actually applies the pipelined(l) conjugate gradient method
+*/
 static PetscErrorCode KSPSolve_PIPELCG(KSP ksp)
 {
-  PetscErrorCode ierr=0;
+  PetscErrorCode ierr;
   KSP_CG_PIPE_L  *plcg = (KSP_CG_PIPE_L*)ksp->data;
   Mat            A=NULL,Pmat=NULL;
   Vec            b=NULL,x=NULL,p=NULL;
@@ -442,7 +445,7 @@ static PetscErrorCode KSPSolve_PIPELCG(KSP ksp)
   comm = PetscObjectComm((PetscObject)ksp);
   ierr = PCGetDiagonalScale(ksp->pc,&diagonalscale);CHKERRQ(ierr);
   if (diagonalscale) {
-    SETERRQ1(comm,PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
+    SETERRQ(comm,PETSC_ERR_SUP,"Krylov method %s does not support diagonal scaling",((PetscObject)ksp)->type_name);
   }
 
   x = ksp->vec_sol;
@@ -508,8 +511,9 @@ static PetscErrorCode KSPSolve_PIPELCG(KSP ksp)
 +   -ksp_pipelcg_pipel - pipelined length
 .   -ksp_pipelcg_lmin - approximation to the smallest eigenvalue of the preconditioned operator (default: 0.0)
 .   -ksp_pipelcg_lmax - approximation to the largest eigenvalue of the preconditioned operator (default: 0.0)
-.   -ksp_pipelcg_monitor - output where/why the method restarts when a sqrt breakdown occurs
--   see KSPSolve() for additional options
+-   -ksp_pipelcg_monitor - output where/why the method restarts when a sqrt breakdown occurs
+
+   see KSPSolve() for additional options
 
     Level: advanced
 
@@ -530,10 +534,10 @@ static PetscErrorCode KSPSolve_PIPELCG(KSP ksp)
         -ksp_pipelcg_lmin 0.0 -ksp_pipelcg_lmax 2.0 -ksp_pipelcg_monitor -log_view
 
     References:
-    [*] J. Cornelis, S. Cools and W. Vanroose,
++   * - J. Cornelis, S. Cools and W. Vanroose,
         "The Communication-Hiding Conjugate Gradient Method with Deep Pipelines"
         Submitted to SIAM Journal on Scientific Computing (SISC), 2018.
-    [*] S. Cools, J. Cornelis and W. Vanroose,
+-   * - S. Cools, J. Cornelis and W. Vanroose,
         "Numerically Stable Recurrence Relations for the Communication Hiding Pipelined Conjugate Gradient Method"
         Submitted to IEEE Transactions on Parallel and Distributed Systems, 2019.
 
