@@ -231,8 +231,12 @@ Changes: Development
     - Add ``DMPlexMetricNoSwapping()`` to determine whether facet swapping is turned off for (Par)Mmg
     - Add ``DMPlexMetricSetNoMovement()`` to turn off node movement for (Par)Mmg
     - Add ``DMPlexMetricNoMovement()`` to determine whether node movement is turned off for (Par)Mmg
+    - Add ``DMPlexMetricSetNoSurf()`` to turn off surface modification for (Par)Mmg
+    - Add ``DMPlexMetricNoSurf()`` to determine whether surface modification is turned off for (Par)Mmg
     - Add ``DMPlexMetricSetGradationFactor()`` to set the metric gradation factor
     - Add ``DMPlexMetricGetGradationFactor()`` to get the metric gradation factor
+    - Add ``DMPlexMetricSetHausdorffNumber()`` to set the metric Hausdorff number
+    - Add ``DMPlexMetricGetHausdorffNumber()`` to get the metric Hausdorff number
     - Add ``DMPlexMetricSetNumIterations()`` to set the number of ParMmg adaptation iterations
     - Add ``DMPlexMetricGetNumIterations()`` to get the number of ParMmg adaptation iterations
 - Change ``DMPlexCoordinatesLoad()`` to take a ``PetscSF`` as argument
@@ -251,6 +255,8 @@ Changes: Development
 - Remove deprecated ``DMPlexCreateFromCellList()`` and ``DMPlexCreateFromCellListParallel()``
 - Add ``DMSetMatrixPreallocateSkip()`` to save initialization time when ``MatSetPreallocationCOO()`` will be used.
 - Improve loading performance related to coordinate projection in common cases.
+- Add ``DMPlexGetOrdering1D()`` for 1D Plex problems
+- Add ``DMPlexComputeClementInterpolant()`` averaging operator
 
 .. rubric:: DMPlexLandau:
 
