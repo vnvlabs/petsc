@@ -1,7 +1,7 @@
 #include <stddef.h>
 #include "VnV.h"
 
-INJECTION_EXECUTABLE(PETSC) 
+INJECTION_LIBRARY(PETSC) 
 
 static const char* petsc_vnv_schema = "{\"type\": \"object\", \"required\":[]}";
 
