@@ -4,7 +4,6 @@ FROM ${FROM_IMAGE}:latest
 ARG COMMIT_HASH=unknown
 LABEL vnv.version.petsc=${COMMIT_HASH}
 
-ENV VNV_CONFIG=${VNV_CONFIG}:${SOURCE_DIR}/petsc/.vnv-config.json
 
 #Install PETSC VNV
 COPY . ${SOURCE_DIR}/petsc
@@ -38,7 +37,12 @@ RUN  cd ${SOURCE_DIR}/petsc \
      && make \
      && make install
 
+#Make the VnV Petsc Examples (all the same for now. )
+RUN cd ${SOURCE_DIR}/petsc/src/ksp/ksp/tutorials/ && make ex200 && make ex201 && make ex202 
+
 ENV PETSC_DIR=${SOFTWARE_DIR}/petsc
 ENV PETSC_ARCH=
+ENV VNV_CONFIG=${VNV_CONFIG}:${SOURCE_DIR}/petsc/vnv.__registration__
+ENV VNV_CONFIG=${VNV_CONFIG}:${SOURCE_DIR}/petsc/docker/config/vnv.__registration__
 
 
