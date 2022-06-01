@@ -20,20 +20,3 @@ INJECTION_OPTIONS(PETSC, petsc_vnv_schema) {
 
 INJECTION_SUBPACKAGE(PETSC,VnVHypre)
 
-
-
-/** For testing purposes only -- if you are seeing this, i forgot to remove it
- *
- */
-
-int petsc_vnv_test_function(int x) {
-   
-  INJECTION_LOOP_BEGIN("PETSC", VWORLD, "SanityCheck", x)
-  for (int i = 0; i < 10; i++) {
-    x += i;
-    INJECTION_LOOP_ITER("PETSC","SanityCheck", "inner");
-  }
-
-  INJECTION_LOOP_END("PETSC","SanityCheck");
-  return x;
-}
