@@ -14,7 +14,7 @@ static const char* petsc_vnv_schema = "{\"type\": \"object\", \"required\":[]}";
  *
  * TODO: Add options to the schema and parse them in this function.
  */ 
-INJECTION_OPTIONS(PETSC, petsc_vnv_schema) {
+INJECTION_OPTIONS(PETSC, petsc_vnv_schema, void) {
 
 }
 
