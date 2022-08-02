@@ -35,10 +35,8 @@ RUN  cd ${SOURCE_DIR}/petsc \
                         --fix-omp \
 			compile_commands.json \
      && make \
-     && make install
-
-#Make the VnV Petsc Examples (all the same for now. )
-RUN cd ${SOURCE_DIR}/petsc/src/ksp/ksp/tutorials/ && make ex200 && make ex201 && make ex202 
+     && make install \
+     && cd ${SOURCE_DIR}/petsc/src/ksp/ksp/tutorials/ && make ex200 && make ex201 && make ex202 
 
 ENV PETSC_DIR=${SOFTWARE_DIR}/petsc
 ENV PETSC_ARCH=
