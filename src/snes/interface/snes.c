@@ -5,6 +5,8 @@
 #include <petscdmadaptor.h>
 #include <petscconvest.h>
 
+#include "VnV.h"
+
 PetscBool         SNESRegisterAllCalled = PETSC_FALSE;
 PetscFunctionList SNESList              = NULL;
 
@@ -2819,7 +2821,7 @@ PetscErrorCode  SNESComputeJacobian(SNES snes,Vec X,Mat A,Mat B)
   DMSNES         sdm;
   KSP            ksp;
 
-  PetscFunctionBegin;
+  PetscFunctionBegin; 
   PetscValidHeaderSpecific(snes,SNES_CLASSID,1);
   PetscValidHeaderSpecific(X,VEC_CLASSID,2);
   PetscCheckSameComm(snes,1,X,2);
@@ -4659,6 +4661,8 @@ PetscErrorCode SNESConvergedReasonViewFromOptions(SNES snes)
   PetscFunctionReturn(0);
 }
 
+
+
 /*@
    SNESSolve - Solves a nonlinear system F(x) = b.
    Call SNESSolve() after calling SNESCreate() and optional routines of the form SNESSetXXX().
@@ -4690,6 +4694,14 @@ PetscErrorCode  SNESSolve(SNES snes,Vec b,Vec x)
   Vec               xcreated = NULL;
   DM                dm;
 
+  /**
+   * @title SNES Solve
+   * 
+   * description goes here. 
+  */
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD,SNESSolve, snes, x, b);
+
+
   PetscFunctionBegin;
   PetscValidHeaderSpecific(snes,SNES_CLASSID,1);
   if (x) PetscValidHeaderSpecific(x,VEC_CLASSID,3);
@@ -4699,7 +4711,7 @@ PetscErrorCode  SNESSolve(SNES snes,Vec b,Vec x)
 
   /* High level operations using the nonlinear solver */
   {
-    PetscViewer       viewer;
+    PetscViewer       viewer;  
     PetscViewerFormat format;
     PetscInt          num;
     PetscBool         flg;
@@ -4850,6 +4862,8 @@ PetscErrorCode  SNESSolve(SNES snes,Vec b,Vec x)
 
   ierr = VecDestroy(&xcreated);CHKERRQ(ierr);
   ierr = PetscObjectSAWsBlock((PetscObject)snes);CHKERRQ(ierr);
+
+  INJECTION_LOOP_END(PETSC, SNESSolve);
   PetscFunctionReturn(0);
 }
 

@@ -1,6 +1,8 @@
 
 #include <../src/snes/impls/ls/lsimpl.h>
 
+#include "VnV.h"
+
 /*
      Checks if J^T F = 0 which implies we've found a local minimum of the norm of the function,
     || F(u) ||_2 but not a zero, F(u) = 0. In the case when one cannot compute J^T F we use the fact that
@@ -141,7 +143,13 @@ PetscErrorCode SNESSolve_NEWTONLS(SNES snes)
   SNESLineSearch       linesearch;
   SNESConvergedReason  reason;
 
-  PetscFunctionBegin;
+  PetscFunctionBegin; 
+
+  /**
+   * @title Perform the newton solve. 
+  */
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD,NewtonSolver, snes);
+
   PetscCheckFalse(snes->xl || snes->xu || snes->ops->computevariablebounds,PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
 
   snes->numFailures            = 0;
@@ -188,7 +196,8 @@ PetscErrorCode SNESSolve_NEWTONLS(SNES snes)
   ierr = (*snes->ops->converged)(snes,0,0.0,0.0,fnorm,&snes->reason,snes->cnvP);CHKERRQ(ierr);
   if (snes->reason) PetscFunctionReturn(0);
 
-  for (i=0; i<maxits; i++) {
+  for (i=0; i<maxits; i++) { 
+    INJECTION_LOOP_ITER(PETSC,NewtonSolver, NonlinearIteration);
 
     /* Call general purpose update function */
     if (snes->ops->update) {
@@ -219,10 +228,10 @@ PetscErrorCode SNESSolve_NEWTONLS(SNES snes)
     }
 
     /* Solve J Y = F, where J is Jacobian matrix */
-    ierr = SNESComputeJacobian(snes,X,snes->jacobian,snes->jacobian_pre);CHKERRQ(ierr);
+    ierr = SNESComputeJacobian(snes,X,snes->jacobian,snes->jacobian_pre);CHKERRQ(ierr); 
     SNESCheckJacobianDomainerror(snes);
     ierr = KSPSetOperators(snes->ksp,snes->jacobian,snes->jacobian_pre);CHKERRQ(ierr);
-    ierr = KSPSolve(snes->ksp,F,Y);CHKERRQ(ierr);
+    ierr = KSPSolve(snes->ksp,F,Y);CHKERRQ(ierr); 
     SNESCheckKSPSolve(snes);
     ierr = KSPGetIterationNumber(snes->ksp,&lits);CHKERRQ(ierr);
     ierr = PetscInfo(snes,"iter=%D, linear solve iterations=%D\n",snes->iter,lits);CHKERRQ(ierr);
@@ -278,6 +287,9 @@ PetscErrorCode SNESSolve_NEWTONLS(SNES snes)
     ierr = PetscInfo(snes,"Maximum number of iterations has been reached: %D\n",maxits);CHKERRQ(ierr);
     if (!snes->reason) snes->reason = SNES_DIVERGED_MAX_IT;
   }
+
+  INJECTION_LOOP_END(PETSC,NewtonSolver);
+
   PetscFunctionReturn(0);
 }
 /* -------------------------------------------------------------------------- */

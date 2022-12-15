@@ -6,6 +6,8 @@
 #include <petsc/private/matimpl.h>   /*I "petscmat.h" I*/
 #include <petscdm.h>
 
+#include "VnV.h"
+
 /* number of nested levels of KSPSetUp/Solve(). This is used to determine if KSP_DIVERGED_ITS should be fatal. */
 static PetscInt level = 0;
 
@@ -1094,12 +1096,22 @@ PetscErrorCode KSPSolve(KSP ksp,Vec b,Vec x)
 {
   PetscErrorCode ierr;
 
+  /**
+   * @title KSP Solver
+   * 
+   * sdfsdf
+  */
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD,KSPSolve,ksp,b,x);
+
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ksp,KSP_CLASSID,1);
   if (b) PetscValidHeaderSpecific(b,VEC_CLASSID,2);
   if (x) PetscValidHeaderSpecific(x,VEC_CLASSID,3);
   ksp->transpose_solve = PETSC_FALSE;
   ierr = KSPSolve_Private(ksp,b,x);CHKERRQ(ierr);
+
+  INJECTION_LOOP_END(PETSC,KSPSolve);
+
   PetscFunctionReturn(0);
 }
 

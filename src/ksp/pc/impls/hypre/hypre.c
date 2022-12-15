@@ -17,6 +17,8 @@
 #include <petsc/private/deviceimpl.h>
 #endif
 
+#include "VnV.h"
+
 static PetscBool cite = PETSC_FALSE;
 static const char hypreCitation[] = "@manual{hypre-web-page,\n  title  = {{\\sl hypre}: High Performance Preconditioners},\n  organization = {Lawrence Livermore National Laboratory},\n  note  = {\\url{https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods}}\n}\n";
 
@@ -28,7 +30,7 @@ typedef struct {
   Mat            hpmat; /* MatHYPRE */
 
   HYPRE_Int (*destroy)(HYPRE_Solver);
-  HYPRE_Int (*solve)(HYPRE_Solver,HYPRE_ParCSRMatrix,HYPRE_ParVector,HYPRE_ParVector);
+  HYPRE_Int (*solve)(HYPRE_Solver,HYPRE_ParCSRMatrix,HYPRE_ParVector,HYPRE_ParVector); 
   HYPRE_Int (*setup)(HYPRE_Solver,HYPRE_ParCSRMatrix,HYPRE_ParVector,HYPRE_ParVector);
 
   MPI_Comm comm_hypre;
@@ -434,7 +436,15 @@ static PetscErrorCode PCApply_HYPRE(PC pc,Vec b,Vec x)
   HYPRE_ParVector    jbv,jxv;
   PetscInt           hierr;
 
-  PetscFunctionBegin;
+  /**
+   * @title Apply the Hypre Preconditioner. 
+   * 
+   * description goes here. 
+  */
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD,PreconditionWithHypre, pc, b, x);
+
+
+  PetscFunctionBegin; 
   ierr = PetscCitationsRegister(hypreCitation,&cite);CHKERRQ(ierr);
   if (!jac->applyrichardson) {ierr = VecSet(x,0.0);CHKERRQ(ierr);}
   ierr = VecHYPRE_IJVectorPushVecRead(hjac->b,b);CHKERRQ(ierr);
@@ -452,6 +462,10 @@ static PetscErrorCode PCApply_HYPRE(PC pc,Vec b,Vec x)
   }
   ierr = VecHYPRE_IJVectorPopVec(hjac->x);CHKERRQ(ierr);
   ierr = VecHYPRE_IJVectorPopVec(hjac->b);CHKERRQ(ierr);
+  
+  INJECTION_LOOP_END(PETSC,PreconditionWithHypre);
+  
+  
   PetscFunctionReturn(0);
 }
 

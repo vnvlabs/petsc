@@ -28,6 +28,9 @@
  */
 
 #include <../src/ksp/ksp/impls/gmres/gmresimpl.h>       /*I  "petscksp.h"  I*/
+
+#include "VnV.h"
+
 #define GMRES_DELTA_DIRECTIONS 10
 #define GMRES_DEFAULT_MAXK     30
 static PetscErrorCode KSPGMRESUpdateHessenberg(KSP,PetscInt,PetscBool,PetscReal*);
@@ -118,7 +121,7 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
   PetscInt       it     = 0, max_k = gmres->max_k;
   PetscBool      hapend = PETSC_FALSE;
 
-  PetscFunctionBegin;
+  PetscFunctionBegin;  
   if (itcount) *itcount = 0;
   ierr = VecNormalize(VEC_VV(0),&res);CHKERRQ(ierr);
   KSPCheckNorm(ksp,res);
@@ -148,8 +151,18 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
     PetscFunctionReturn(0);
   }
 
-  ierr = (*ksp->converged)(ksp,ksp->its,res,&ksp->reason,ksp->cnvP);CHKERRQ(ierr);
+  ierr = (*ksp->converged)(ksp,ksp->its,res,&ksp->reason,ksp->cnvP);CHKERRQ(ierr); 
+
+  /**
+   * @title GMRES Cycling
+   * 
+   * description goes here. 
+  */
+  INJECTION_LOOP_BEGIN(PETSC, VWORLD, GMRESCycle, ksp);
   while (!ksp->reason && it < max_k && ksp->its < ksp->max_it) {
+    
+    INJECTION_LOOP_ITER(PETSC,GMRESCycle, Iteration);
+
     if (it) {
       ierr = KSPLogResidualHistory(ksp,res);CHKERRQ(ierr);
       ierr = KSPLogErrorHistory(ksp);CHKERRQ(ierr);
@@ -203,6 +216,7 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
       }
     }
   }
+  INJECTION_LOOP_END(PETSC,GMRESCycle);
 
   /* Monitor if we know that we will not return for a restart */
   if (it && (ksp->reason || ksp->its >= ksp->max_it)) {
@@ -231,7 +245,10 @@ PetscErrorCode KSPSolve_GMRES(KSP ksp)
   PetscBool      guess_zero = ksp->guess_zero;
   PetscInt       N = gmres->max_k + 1;
 
-  PetscFunctionBegin;
+  INJECTION_LOOP_BEGIN(PETSC, VWORLD, GMRESSolve, ksp);
+
+
+  PetscFunctionBegin; 
   PetscCheckFalse(ksp->calc_sings && !gmres->Rsvd,PetscObjectComm((PetscObject)ksp),PETSC_ERR_ORDER,"Must call KSPSetComputeSingularValues() before KSPSetUp() is called");
 
   ierr     = PetscObjectSAWsTakeAccess((PetscObject)ksp);CHKERRQ(ierr);
@@ -268,6 +285,8 @@ PetscErrorCode KSPSolve_GMRES(KSP ksp)
     ksp->guess_zero = PETSC_FALSE; /* every future call to KSPInitialResidual() will have nonzero guess */
   }
   ksp->guess_zero = guess_zero; /* restore if user provided nonzero initial guess */
+  
+  INJECTION_LOOP_END(PETSC,GMRESSolve);
   PetscFunctionReturn(0);
 }
 

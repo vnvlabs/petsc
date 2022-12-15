@@ -5,6 +5,8 @@
 #include <petsc/private/pcimpl.h>            /*I "petscksp.h" I*/
 #include <petscdm.h>
 
+#include "VnV.h"
+
 /* Logging support */
 PetscClassId  PC_CLASSID;
 PetscLogEvent PC_SetUp, PC_SetUpOnBlocks, PC_Apply, PC_MatApply, PC_ApplyCoarse, PC_ApplyMultiple, PC_ApplySymmetricLeft;
@@ -423,6 +425,13 @@ PetscErrorCode  PCApply(PC pc,Vec x,Vec y)
   PetscErrorCode ierr;
   PetscInt       m,n,mv,nv;
 
+  /**
+   * @title Apply Preconditioner
+   * 
+   * description
+  */
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD, ApplyPC, pc, x, y);
+
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
   PetscValidHeaderSpecific(x,VEC_CLASSID,2);
@@ -446,6 +455,9 @@ PetscErrorCode  PCApply(PC pc,Vec x,Vec y)
   ierr = PetscLogEventEnd(PC_Apply,pc,x,y,0);CHKERRQ(ierr);
   if (pc->erroriffailure) {ierr = VecValidValues(y,3,PETSC_FALSE);CHKERRQ(ierr);}
   ierr = VecLockReadPop(x);CHKERRQ(ierr);
+  
+  INJECTION_LOOP_END(PETSC,ApplyPC);
+  
   PetscFunctionReturn(0);
 }
 
@@ -686,6 +698,13 @@ PetscErrorCode  PCApplyBAorAB(PC pc,PCSide side,Vec x,Vec y,Vec work)
 {
   PetscErrorCode ierr;
 
+  /**
+   * @title Apply the preconditioning
+   * 
+   * description. 
+  */
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD, Precondition, pc, x, y, work, side);
+
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
   PetscValidLogicalCollectiveEnum(pc,side,2);
@@ -738,6 +757,8 @@ PetscErrorCode  PCApplyBAorAB(PC pc,PCSide side,Vec x,Vec y,Vec work)
     }
   }
   if (pc->erroriffailure) {ierr = VecValidValues(y,4,PETSC_FALSE);CHKERRQ(ierr);}
+  
+  INJECTION_LOOP_END(PETSC,Precondition);
   PetscFunctionReturn(0);
 }
 
