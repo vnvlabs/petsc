@@ -148,7 +148,7 @@ PetscErrorCode SNESSolve_NEWTONLS(SNES snes)
   /**
    * @title Perform the newton solve. 
   */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD,NewtonSolver, snes);
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD,NewtonSolver, VNV_NOCALLBACK, snes);
 
   PetscCheckFalse(snes->xl || snes->xu || snes->ops->computevariablebounds,PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
 
@@ -197,7 +197,7 @@ PetscErrorCode SNESSolve_NEWTONLS(SNES snes)
   if (snes->reason) PetscFunctionReturn(0);
 
   for (i=0; i<maxits; i++) { 
-    INJECTION_LOOP_ITER(PETSC,NewtonSolver, NonlinearIteration);
+    INJECTION_LOOP_ITER(PETSC,NewtonSolver, "NonlinearIteration",VNV_NOCALLBACK);
 
     /* Call general purpose update function */
     if (snes->ops->update) {
@@ -288,7 +288,7 @@ PetscErrorCode SNESSolve_NEWTONLS(SNES snes)
     if (!snes->reason) snes->reason = SNES_DIVERGED_MAX_IT;
   }
 
-  INJECTION_LOOP_END(PETSC,NewtonSolver);
+  INJECTION_LOOP_END(PETSC,NewtonSolver,VNV_NOCALLBACK);
 
   PetscFunctionReturn(0);
 }

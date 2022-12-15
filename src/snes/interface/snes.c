@@ -4699,7 +4699,7 @@ PetscErrorCode  SNESSolve(SNES snes,Vec b,Vec x)
    * 
    * description goes here. 
   */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD,SNESSolve, snes, x, b);
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD,SNESSolve, VNV_NOCALLBACK, snes, x, b);
 
 
   PetscFunctionBegin;
@@ -4863,7 +4863,7 @@ PetscErrorCode  SNESSolve(SNES snes,Vec b,Vec x)
   ierr = VecDestroy(&xcreated);CHKERRQ(ierr);
   ierr = PetscObjectSAWsBlock((PetscObject)snes);CHKERRQ(ierr);
 
-  INJECTION_LOOP_END(PETSC, SNESSolve);
+  INJECTION_LOOP_END(PETSC, SNESSolve,VNV_NOCALLBACK);
   PetscFunctionReturn(0);
 }
 

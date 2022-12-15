@@ -430,7 +430,7 @@ PetscErrorCode  PCApply(PC pc,Vec x,Vec y)
    * 
    * description
   */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD, ApplyPC, pc, x, y);
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD, ApplyPC,VNV_NOCALLBACK, pc, x, y);
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
@@ -456,7 +456,7 @@ PetscErrorCode  PCApply(PC pc,Vec x,Vec y)
   if (pc->erroriffailure) {ierr = VecValidValues(y,3,PETSC_FALSE);CHKERRQ(ierr);}
   ierr = VecLockReadPop(x);CHKERRQ(ierr);
   
-  INJECTION_LOOP_END(PETSC,ApplyPC);
+  INJECTION_LOOP_END(PETSC,ApplyPC,VNV_NOCALLBACK);
   
   PetscFunctionReturn(0);
 }
@@ -703,7 +703,7 @@ PetscErrorCode  PCApplyBAorAB(PC pc,PCSide side,Vec x,Vec y,Vec work)
    * 
    * description. 
   */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD, Precondition, pc, x, y, work, side);
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD, Precondition, VNV_NOCALLBACK, pc, x, y, work, side);
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
@@ -758,7 +758,7 @@ PetscErrorCode  PCApplyBAorAB(PC pc,PCSide side,Vec x,Vec y,Vec work)
   }
   if (pc->erroriffailure) {ierr = VecValidValues(y,4,PETSC_FALSE);CHKERRQ(ierr);}
   
-  INJECTION_LOOP_END(PETSC,Precondition);
+  INJECTION_LOOP_END(PETSC,Precondition,VNV_NOCALLBACK);
   PetscFunctionReturn(0);
 }
 

@@ -1101,7 +1101,7 @@ PetscErrorCode KSPSolve(KSP ksp,Vec b,Vec x)
    * 
    * sdfsdf
   */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD,KSPSolve,ksp,b,x);
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD,KSPSolve,VNV_NOCALLBACK,ksp,b,x);
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ksp,KSP_CLASSID,1);
@@ -1110,7 +1110,7 @@ PetscErrorCode KSPSolve(KSP ksp,Vec b,Vec x)
   ksp->transpose_solve = PETSC_FALSE;
   ierr = KSPSolve_Private(ksp,b,x);CHKERRQ(ierr);
 
-  INJECTION_LOOP_END(PETSC,KSPSolve);
+  INJECTION_LOOP_END(PETSC,KSPSolve,VNV_NOCALLBACK);
 
   PetscFunctionReturn(0);
 }

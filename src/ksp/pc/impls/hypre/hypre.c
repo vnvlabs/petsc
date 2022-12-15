@@ -441,7 +441,7 @@ static PetscErrorCode PCApply_HYPRE(PC pc,Vec b,Vec x)
    * 
    * description goes here. 
   */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD,PreconditionWithHypre, pc, b, x);
+  INJECTION_LOOP_BEGIN(PETSC,VWORLD,PreconditionWithHypre, VNV_NOCALLBACK,pc, b, x);
 
 
   PetscFunctionBegin; 
@@ -463,7 +463,7 @@ static PetscErrorCode PCApply_HYPRE(PC pc,Vec b,Vec x)
   ierr = VecHYPRE_IJVectorPopVec(hjac->x);CHKERRQ(ierr);
   ierr = VecHYPRE_IJVectorPopVec(hjac->b);CHKERRQ(ierr);
   
-  INJECTION_LOOP_END(PETSC,PreconditionWithHypre);
+  INJECTION_LOOP_END(PETSC,PreconditionWithHypre,VNV_NOCALLBACK);
   
   
   PetscFunctionReturn(0);

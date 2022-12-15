@@ -158,10 +158,10 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
    * 
    * description goes here. 
   */
-  INJECTION_LOOP_BEGIN(PETSC, VWORLD, GMRESCycle, ksp);
+  INJECTION_LOOP_BEGIN(PETSC, VWORLD, GMRESCycle, VNV_NOCALLBACK, ksp);
   while (!ksp->reason && it < max_k && ksp->its < ksp->max_it) {
     
-    INJECTION_LOOP_ITER(PETSC,GMRESCycle, Iteration);
+    INJECTION_LOOP_ITER(PETSC,GMRESCycle,"Iteration",VNV_NOCALLBACK);
 
     if (it) {
       ierr = KSPLogResidualHistory(ksp,res);CHKERRQ(ierr);
@@ -216,7 +216,7 @@ PetscErrorCode KSPGMRESCycle(PetscInt *itcount,KSP ksp)
       }
     }
   }
-  INJECTION_LOOP_END(PETSC,GMRESCycle);
+  INJECTION_LOOP_END(PETSC,GMRESCycle,VNV_NOCALLBACK);
 
   /* Monitor if we know that we will not return for a restart */
   if (it && (ksp->reason || ksp->its >= ksp->max_it)) {
@@ -245,7 +245,7 @@ PetscErrorCode KSPSolve_GMRES(KSP ksp)
   PetscBool      guess_zero = ksp->guess_zero;
   PetscInt       N = gmres->max_k + 1;
 
-  INJECTION_LOOP_BEGIN(PETSC, VWORLD, GMRESSolve, ksp);
+  INJECTION_LOOP_BEGIN(PETSC, VWORLD, GMRESSolve, VNV_NOCALLBACK, ksp);
 
 
   PetscFunctionBegin; 
@@ -286,7 +286,7 @@ PetscErrorCode KSPSolve_GMRES(KSP ksp)
   }
   ksp->guess_zero = guess_zero; /* restore if user provided nonzero initial guess */
   
-  INJECTION_LOOP_END(PETSC,GMRESSolve);
+  INJECTION_LOOP_END(PETSC,GMRESSolve,VNV_NOCALLBACK);
   PetscFunctionReturn(0);
 }
 
