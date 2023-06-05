@@ -36,8 +36,10 @@ RUN  cd ${SOURCE_DIR}/petsc \
 			compile_commands.json \
      && make \
      && make install \
-     && cd ${SOURCE_DIR}/petsc/src/ksp/ksp/tutorials/ && make ex200 && make ex201 && make ex202 
-
+     && cp -r ${SOURCE_DIR}/petsc/vnv ${SOFTWARE_DIR}/petsc/examples  \
+     && cp ${SOFTWARE_DIR}/petsc/examples && make ex200 && make ex201 && make ex202 \
+     && rm -r ${SOURCE_DIR}/petsc
+     
 ENV PETSC_DIR=${SOFTWARE_DIR}/petsc
 ENV PETSC_ARCH=
 ENV VNV_CONFIG=${VNV_CONFIG}:${SOURCE_DIR}/petsc/vnv.__registration__
