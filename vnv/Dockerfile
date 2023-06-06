@@ -33,18 +33,17 @@ RUN  cd ${SOURCE_DIR}/petsc \
      && make \
      && make install 
 
+ENV PETSC_DIR=${SOFTWARE_DIR}/petsc
+ENV PETSC_ARCH=
 RUN  cp -r ${SOURCE_DIR}/petsc/vnv/examples ${SOFTWARE_DIR}/petsc/examples  \
      && cd ${SOFTWARE_DIR}/petsc/examples \
      && make ex200 \
      && make ex201 \
      && make ex202
 
-RUN  cp ${SOURCE_DIR}/petsc/vnv/gui ${SOFTWARE_DIR}/petsc/gui 
-RUN  echo ${SOFTWARE_DIR}/petsc/gui/vnv.__registration__ >> ${HOME}/.vnv
-
+RUN  cp -r ${SOURCE_DIR}/petsc/vnv/gui ${SOFTWARE_DIR}/petsc/gui 
+RUN  python3 ${VNV_DIR}/scripts/register.py register  ${SOFTWARE_DIR}/petsc/gui/vnv.__registration__ 
 RUN  rm -r ${SOURCE_DIR}/petsc
 
-ENV PETSC_DIR=${SOFTWARE_DIR}/petsc
-ENV PETSC_ARCH=
 
 
