@@ -42,7 +42,7 @@ RUN  cp -r ${SOURCE_DIR}/petsc/vnv/examples ${SOFTWARE_DIR}/petsc/examples  \
      && make ex202
 
 RUN  cp -r ${SOURCE_DIR}/petsc/vnv/gui ${SOFTWARE_DIR}/petsc/gui 
-RUN  python3 ${VNV_DIR}/scripts/register.py register  ${SOFTWARE_DIR}/petsc/gui/vnv.__registration__ 
+ENV  VNV_CONFIG=${VNV_CONFIG}:${SOFTWARE_DIR}/petsc/gui/vnv.__registration__ 
 RUN  rm -r ${SOURCE_DIR}/petsc
 
 
