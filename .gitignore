@@ -1,3 +1,4 @@
+*.__cache__
 *.bkp
 *.info
 *.gcov
@@ -6,6 +7,7 @@
 *.gcda
 *.swp
 *.log
+*.mod
 *.vt[ksu]
 *.pvt[ksu]
 *.h5m
