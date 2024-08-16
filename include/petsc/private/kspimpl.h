@@ -5,6 +5,7 @@
 #include <petscksp.h>
 #include <petscds.h>
 #include <petsc/private/petscimpl.h>
+#include <petscvnv.h>
 
 PETSC_EXTERN PetscBool KSPRegisterAllCalled;
 PETSC_EXTERN PetscBool KSPMonitorRegisterAllCalled;
@@ -197,6 +198,9 @@ typedef struct {
   Vec        work;
 } KSPConvergedDefaultCtx;
 
+//Forward declaration of this function so we can use it below.
+INJECTION_EXT_CALLBACK_FWD(PETSC,KSPSolve);
+
 static inline PetscErrorCode KSPLogResidualHistory(KSP ksp,PetscReal norm)
 {
   PetscErrorCode ierr;
@@ -206,6 +210,11 @@ static inline PetscErrorCode KSPLogResidualHistory(KSP ksp,PetscReal norm)
   if (ksp->res_hist && ksp->res_hist_max > ksp->res_hist_len) {
     ksp->res_hist[ksp->res_hist_len++] = norm;
   }
+
+  void* d[] = {(void*)ksp, (void*)&norm};
+  INJECTION_LOOP_ITER_WITH_EXT_CALLBACK(PETSC,KSPSolve,"LogResidual",d);
+
+
   ierr = PetscObjectSAWsGrantAccess((PetscObject)ksp);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

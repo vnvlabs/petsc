@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include "VnV.h"
+#include <petscvnv.h>
 
 INJECTION_LIBRARY(PETSC) 
 
@@ -15,7 +15,7 @@ static const char* petsc_vnv_schema = "{\"type\": \"object\", \"required\":[]}";
  * TODO: Add options to the schema and parse them in this function.
  */ 
 INJECTION_OPTIONS(PETSC, petsc_vnv_schema, void) {
-
+	return NULL;
 }
 
 INJECTION_SUBPACKAGE(PETSC,VnVHypre)

@@ -5,8 +5,7 @@
 #include <petsc/private/kspimpl.h>   /*I "petscksp.h" I*/
 #include <petsc/private/matimpl.h>   /*I "petscmat.h" I*/
 #include <petscdm.h>
-
-#include "VnV.h"
+#include <petscvnv.h>
 
 /* number of nested levels of KSPSetUp/Solve(). This is used to determine if KSP_DIVERGED_ITS should be fatal. */
 static PetscInt level = 0;
@@ -1021,6 +1020,56 @@ static PetscErrorCode KSPSolve_Private(KSP ksp,Vec b,Vec x)
   PetscFunctionReturn(0);
 }
 
+/**
+ * @title Iterative KSP Solve
+ *
+ * .. vnv-chart::
+ *
+ *    {
+ *       "type" : "line",
+ *       "data" : {
+ *          "labels" : {{iota(norm)}},
+ *          "datasets" : [{
+ *             "label": "Residual Norm",
+ *             "backgroundColor": "rgb(57, 105, 160)",
+ *             "borderColor": "rgb(57, 105, 160)",
+ *             "data": {{as_json(norm)}}
+ *           }]
+ *       },
+ *       "options" : {
+ *           "animation" : false,
+ *           "responsive" : true,
+ *           "title" : { "display" : true,
+ *                       "text" : "Residual Norm After Each Iteration."
+ *                     },
+ *          "scales": {
+ *             "yAxes": [{
+ *               "scaleLabel": {
+ *                 "display": true,
+ *                 "labelString": "Residual Norm"
+ *               }
+ *            }],
+ *            "xAxes": [{
+ *              "scaleLabel": {
+ *                 "display":true,
+ *                 "labelString": "Iteration"
+ *               }
+ *            }]
+ *          }
+ *       }
+ *    }
+ *
+ *
+ */
+INJECTION_EXT_CALLBACK(PETSC,KSPSolve) {
+   if (injectionPointType == InjectionPointType_Iter) {
+    void** d = (void**) data;
+    KSP ksp = (KSP) d[0];
+    PetscReal* norm = (PetscReal*)(d[1]);
+    VnV_Output_Put_double(engine, "norm", norm);
+   }
+}
+
 /*@
    KSPSolve - Solves linear system.
 
@@ -1096,12 +1145,37 @@ PetscErrorCode KSPSolve(KSP ksp,Vec b,Vec x)
 {
   PetscErrorCode ierr;
 
-  /**
-   * @title KSP Solver
+
+  void* d[2] = {(void*)ksp,NULL};
+  
+  
+  
+   /** 
+   * Calling KSPSolve to solve the linear system
+   * -------------------------------------------
    * 
-   * sdfsdf
-  */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD,KSPSolve,VNV_NOCALLBACK,ksp,b,x);
+   * This text is a VnV placeholder. It plots a random graph. This should be
+   * updated with a description of what is happening inside this injection point
+   * and/or test. 
+   * 
+   * .. vnv-chart::
+   * 
+   *    {
+   *       "type" : "line",
+   *       "data" : {
+   *          "labels" : {{as_json(rand_nums(`100`))}},
+   *          "datasets" : [{
+   *             "label": "Random Data",
+   *             "backgroundColor": "rgb(57, 105, 160)",
+   *             "borderColor": "rgb(57, 105, 160)",
+   *             "data": {{as_json(rand_nums(`100`))}}
+   *           }]
+   *       }
+   *       
+   *    }
+   * 
+   **/
+  INJECTION_LOOP_BEGIN_WITH_EXT_CALLBACK(PETSC,VPETSC(ksp),KSPSolve,d,ksp,b,x);
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ksp,KSP_CLASSID,1);
@@ -1110,7 +1184,7 @@ PetscErrorCode KSPSolve(KSP ksp,Vec b,Vec x)
   ksp->transpose_solve = PETSC_FALSE;
   ierr = KSPSolve_Private(ksp,b,x);CHKERRQ(ierr);
 
-  INJECTION_LOOP_END(PETSC,KSPSolve,VNV_NOCALLBACK);
+  INJECTION_LOOP_END_WITH_EXT_CALLBACK(PETSC,KSPSolve,d);
 
   PetscFunctionReturn(0);
 }

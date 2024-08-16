@@ -4,8 +4,7 @@
 #include <petscds.h>
 #include <petscdmadaptor.h>
 #include <petscconvest.h>
-
-#include "VnV.h"
+#include <petscvnv.h>
 
 PetscBool         SNESRegisterAllCalled = PETSC_FALSE;
 PetscFunctionList SNESList              = NULL;
@@ -4662,6 +4661,57 @@ PetscErrorCode SNESConvergedReasonViewFromOptions(SNES snes)
 }
 
 
+/**
+ * @title Iterative Nonlinear Solve
+ *
+ * .. vnv-chart::
+ *
+ *    {
+ *       "type" : "line",
+ *       "data" : {
+ *          "datasets" : [{
+ *             "label": "Nonlinear Residual Norm",
+ *             "backgroundColor": "rgb(57, 105, 160)",
+ *             "borderColor": "rgb(57, 105, 160)",
+ *             "data": {{as_json(norm)}}
+ *           }]
+ *       },
+ *       "options" : {
+ *           "animation" : false,
+ *           "responsive" : true,
+ *           "title" : { "display" : true,
+ *                       "text" : "Residual Norm After Iteration."
+ *                     },
+ *          "scales": {
+ *             "yAxes": [{
+ *               "scaleLabel": {
+ *                 "display": true,
+ *                 "labelString": "Residual Norm"
+ *               }
+ *            }],
+ *            "xAxes": [{
+ *              "scaleLabel": {
+ *                 "display":true,
+ *                 "labelString": "Iteration"
+ *               }
+ *            }]
+ *          }
+ *       }
+ *    }
+ *
+ *
+ */
+INJECTION_EXT_CALLBACK(PETSC,SNESSolve) {
+   if (injectionPointType == InjectionPointType_Iter) {
+      void** d = (void**) data;
+      //SNES snes = (SNES) d[0];
+      PetscReal* res = (PetscReal*)d[1];
+      PetscInt* its = (PetscInt*)d[2];      
+      VnV_Output_Put_double(engine, "res", res);
+      VnV_Output_Put_long(engine, "its", its);
+   }
+}
+
 
 /*@
    SNESSolve - Solves a nonlinear system F(x) = b.
@@ -4694,13 +4744,37 @@ PetscErrorCode  SNESSolve(SNES snes,Vec b,Vec x)
   Vec               xcreated = NULL;
   DM                dm;
 
-  /**
-   * @title SNES Solve
-   * 
-   * description goes here. 
-  */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD,SNESSolve, VNV_NOCALLBACK, snes, x, b);
 
+  void* d[] = {(void*)snes};
+
+
+
+   /** 
+   * Called SNES Solve
+   * -----------------
+   * 
+   * This text is a VnV placeholder. It plots a random graph. This should be
+   * updated with a description of what is happening inside this injection point
+   * and/or test. 
+   * 
+   * .. vnv-chart::
+   * 
+   *    {
+   *       "type" : "line",
+   *       "data" : {
+   *          "labels" : {{as_json(rand_nums(`100`))}},
+   *          "datasets" : [{
+   *             "label": "Random Data",
+   *             "backgroundColor": "rgb(57, 105, 160)",
+   *             "borderColor": "rgb(57, 105, 160)",
+   *             "data": {{as_json(rand_nums(`100`))}}
+   *           }]
+   *       }
+   *       
+   *    }
+   * 
+   **/
+  INJECTION_LOOP_BEGIN_WITH_EXT_CALLBACK(PETSC,VPETSC(snes),SNESSolve,d,snes,b,x);
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(snes,SNES_CLASSID,1);
@@ -4863,7 +4937,8 @@ PetscErrorCode  SNESSolve(SNES snes,Vec b,Vec x)
   ierr = VecDestroy(&xcreated);CHKERRQ(ierr);
   ierr = PetscObjectSAWsBlock((PetscObject)snes);CHKERRQ(ierr);
 
-  INJECTION_LOOP_END(PETSC, SNESSolve,VNV_NOCALLBACK);
+  INJECTION_LOOP_END_WITH_EXT_CALLBACK(PETSC,SNESSolve,d);
+
   PetscFunctionReturn(0);
 }
 

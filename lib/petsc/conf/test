@@ -53,6 +53,7 @@ LDLIBS += $(PETSC_LIB)
 	@cd vnv_tmp_$@ && printf "[{\"file\" : \"${PWD}/$^\" , \"directory\" : \"${PWD}\", \"command\" : \"${PETSC_MPICCOMPILE_SINGLE} ${PETSC_INCLUDES} -DPETSC_VNV_NAME=petsc_$@  ${PWD}/$< \"}]" > compile_commands.json
 	@cd vnv_tmp_$@ && ${VNV_DIR}/bin/vnv-matcher --cache vnv.__cache__ --targetFile ${PWD}/$@ --package petsc_$@ --output vnv_$@.c compile_commands.json
 	${LINK.c} -DPETSC_VNV_NAME=petsc_$@ $^ vnv_tmp_$@/vnv_$@.c -o $@ ${PETSC_LIB}
+	${VNV_DIR}/bin/register executable "PETSc Example $@" ${PWD}/$@ `./$@ -help intro | head -n1`
 	@rm -r vnv_tmp_$@
 
 % : %.vnv.cxx
@@ -60,6 +61,7 @@ LDLIBS += $(PETSC_LIB)
 	@cd vnv_tmp_$@ && printf "[{\"file\" : \"${PWD}/$^\" , \"directory\" : \"${PWD}\", \"command\" : \"${PETSC_MPICXXCOMPILE_SINGLE} -DPETSC_VNV_NAME=petsc_$@  ${PWD}/$< \"}]" > compile_commands.json
 	@cd vnv_tmp_$@ && ${VNV_DIR}/bin/vnv-matcher --cache vnv.__cache__  --targetFile ${PWD}/$@ --package petsc_$@ --output vnv_$@.cpp compile_commands.json
 	${LINK.cc} -DPETSC_VNV_NAME=petsc_$@ $^ vnv_tmp_$@/vnv_$@.cpp -o $@ ${PETSC_LIB}
+	${VNV_DIR}/bin/register executable "PETSc Example $@" ${PWD}/$@ `./$@ -help intro | head -n1`
 	@rm -r vnv_tmp_$@
 
 

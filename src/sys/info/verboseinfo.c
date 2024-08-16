@@ -3,7 +3,7 @@
    allow it to be replaced at link time by an alternative routine.
 */
 #include <petsc/private/petscimpl.h>        /*I    "petscsys.h"   I*/
-
+#include <petscvnv.h>
 /*
   The next set of variables determine which, if any, PetscInfo() calls are used.
   If PetscLogPrintInfo is false, no info messages are printed.
@@ -578,6 +578,11 @@ PetscErrorCode  PetscInfo_Private(const char func[],PetscObject obj, const char 
   int            err;
 
   PetscFunctionBegin;
+
+  va_start(Argp, message);
+  VnV_Info_MPI_V(PETSC,VPETSC(obj), message, Argp );
+  va_end(Argp);
+
   if (obj) PetscValidHeader(obj,2);
   classid = obj ? obj->classid : PETSC_SMALLEST_CLASSID;
   ierr = PetscInfoEnabled(classid, &enabled);CHKERRQ(ierr);
@@ -587,6 +592,9 @@ PetscErrorCode  PetscInfo_Private(const char func[],PetscObject obj, const char 
     ierr = MPI_Comm_rank(obj->comm, &rank);CHKERRMPI(ierr);
     ierr = MPI_Comm_size(obj->comm, &size);CHKERRMPI(ierr);
   }
+  
+
+
   /* rank > 0 always jumps out */
   if (rank) PetscFunctionReturn(0);
   if (!PetscInfoCommFilter && (size < 2)) {

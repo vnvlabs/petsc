@@ -7,6 +7,8 @@
 */
 #include <petsc/private/logimpl.h>  /*I    "petscsys.h"   I*/
 
+#include <petsc/private/vnv.h>
+
 PetscBool PetscLogSyncOn = PETSC_FALSE;
 PetscBool PetscLogMemory = PETSC_FALSE;
 #if defined(PETSC_HAVE_DEVICE)
@@ -696,6 +698,8 @@ PetscErrorCode PetscLogEventSynchronize(PetscLogEvent event,MPI_Comm comm)
   PetscFunctionReturn(0);
 }
 
+
+
 PetscErrorCode PetscLogEventBeginDefault(PetscLogEvent event,int t,PetscObject o1,PetscObject o2,PetscObject o3,PetscObject o4)
 {
   PetscStageLog     stageLog;
@@ -709,9 +713,15 @@ PetscErrorCode PetscLogEventBeginDefault(PetscLogEvent event,int t,PetscObject o
   ierr = PetscStageLogGetEventPerfLog(stageLog,stage,&eventLog);CHKERRQ(ierr);
   /* Synchronization */
   ierr = PetscLogEventSynchronize(event,PetscObjectComm(o1));CHKERRQ(ierr);
+  
+  
   /* Check for double counting */
   eventLog->eventInfo[event].depth++;
   if (eventLog->eventInfo[event].depth > 1) PetscFunctionReturn(0);
+  
+
+
+  
   /* Log the performance info */
   eventLog->eventInfo[event].count++;
   eventLog->eventInfo[event].timeTmp = 0.0;
@@ -730,6 +740,9 @@ PetscErrorCode PetscLogEventBeginDefault(PetscLogEvent event,int t,PetscObject o
     eventLog->eventInfo[event].mallocIncrease -= usage;
     ierr = PetscMallocPushMaximumUsage((int)event);CHKERRQ(ierr);
   }
+
+  
+  
   #if defined(PETSC_HAVE_DEVICE)
   eventLog->eventInfo[event].CpuToGpuCount -= petsc_ctog_ct;
   eventLog->eventInfo[event].GpuToCpuCount -= petsc_gtoc_ct;
@@ -777,6 +790,7 @@ PetscErrorCode PetscLogEventEndDefault(PetscLogEvent event,int t,PetscObject o1,
     ierr = PetscMallocGetMaximumUsage(&usage);CHKERRQ(ierr);
     eventLog->eventInfo[event].mallocIncrease += usage;
   }
+
   #if defined(PETSC_HAVE_DEVICE)
   eventLog->eventInfo[event].CpuToGpuCount += petsc_ctog_ct;
   eventLog->eventInfo[event].GpuToCpuCount += petsc_gtoc_ct;

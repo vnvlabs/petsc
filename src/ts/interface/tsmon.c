@@ -3,6 +3,9 @@
 #include <petscds.h>
 #include <petscdmswarm.h>
 #include <petscdraw.h>
+#include <petscvnv.h>
+
+INJECTION_EXT_CALLBACK_FWD(PETSC,TSSolve);
 
 /*@C
    TSMonitor - Runs all user-provided monitor routines set using TSMonitorSet()
@@ -33,6 +36,9 @@ PetscErrorCode TSMonitor(TS ts,PetscInt step,PetscReal ptime,Vec u)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   PetscValidHeaderSpecific(u,VEC_CLASSID,4);
+
+   void* a[] = {(void*)ts,(void*)u, (void*)&step, (void*)&ptime};
+  INJECTION_LOOP_ITER_WITH_EXT_CALLBACK(PETSC,TSSolve,"Monitor",a);
 
   ierr = TSGetDM(ts,&dm);CHKERRQ(ierr);
   ierr = DMSetOutputSequenceNumber(dm,step,ptime);CHKERRQ(ierr);

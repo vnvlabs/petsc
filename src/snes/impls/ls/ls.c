@@ -1,7 +1,7 @@
 
 #include <../src/snes/impls/ls/lsimpl.h>
 
-#include "VnV.h"
+#include <petscvnv.h>
 
 /*
      Checks if J^T F = 0 which implies we've found a local minimum of the norm of the function,
@@ -145,10 +145,33 @@ PetscErrorCode SNESSolve_NEWTONLS(SNES snes)
 
   PetscFunctionBegin; 
 
-  /**
-   * @title Perform the newton solve. 
-  */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD,NewtonSolver, VNV_NOCALLBACK, snes);
+  
+   /** 
+   * Performing a Newton Solve
+   * -------------------------------
+   * 
+   * This text is a VnV placeholder. It plots a random graph. This should be
+   * updated with a description of what is happening inside this injection point
+   * and/or test. 
+   * 
+   * .. vnv-chart::
+   * 
+   *    {
+   *       "type" : "line",
+   *       "data" : {
+   *          "labels" : {{as_json(rand_nums(`100`))}},
+   *          "datasets" : [{
+   *             "label": "Random Data",
+   *             "backgroundColor": "rgb(57, 105, 160)",
+   *             "borderColor": "rgb(57, 105, 160)",
+   *             "data": {{as_json(rand_nums(`100`))}}
+   *           }]
+   *       }
+   *       
+   *    }
+   * 
+   **/
+  INJECTION_LOOP_BEGIN(PETSC,VPETSC(snes),NewtonSolver, VNV_NOCALLBACK, snes);
 
   PetscCheckFalse(snes->xl || snes->xu || snes->ops->computevariablebounds,PetscObjectComm((PetscObject)snes),PETSC_ERR_ARG_WRONGSTATE, "SNES solver %s does not support bounds", ((PetscObject)snes)->type_name);
 

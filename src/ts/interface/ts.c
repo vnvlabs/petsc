@@ -4,6 +4,7 @@
 #include <petscviewer.h>
 #include <petscdraw.h>
 #include <petscconvest.h>
+#include <petscvnv.h>
 
 #define SkipSmallValue(a,b,tol) if (PetscAbsScalar(a)< tol || PetscAbsScalar(b)< tol) continue;
 
@@ -3877,6 +3878,60 @@ PetscErrorCode TSComputeExactError(TS ts, Vec u, Vec e)
   PetscFunctionReturn(0);
 }
 
+/**
+ * @title Iterative Nonlinear Solve
+ *
+ * .. vnv-chart::
+ *
+ *    {
+ *       "type" : "line",
+ *       "data" : {
+ *          "datasets" : [{
+ *             "label": "Time at time step",
+ *             "backgroundColor": "rgb(57, 105, 160)",
+ *             "borderColor": "rgb(57, 105, 160)",
+ *             "data": {{as_json(ptime)}}
+ *           }]
+ *       },
+ *       "options" : {
+ *           "animation" : false,
+ *           "responsive" : true,
+ *           "title" : { "display" : true,
+ *                       "text" : "Time against iteration"
+ *                     },
+ *          "scales": {
+ *             "yAxes": [{
+ *               "scaleLabel": {
+ *                 "display": true,
+ *                 "labelString": "Time"
+ *               }
+ *            }],
+ *            "xAxes": [{
+ *              "scaleLabel": {
+ *                 "display":true,
+ *                 "labelString": "Iteration"
+ *               }
+ *            }]
+ *          }
+ *       }
+ *    }
+ *
+ *
+ */
+INJECTION_EXT_CALLBACK(PETSC,TSSolve) {
+   if (injectionPointType == InjectionPointType_Iter) {
+      void** d = (void**) data;
+      //TS ts = ((TS)d[0]);
+      //Vec u = (Vec)d[1]);
+      PetscInt* step = (PetscInt*)d[2];      
+      PetscReal* ptime = (PetscReal*)d[3];
+      VnV_Output_Put_long(engine, "step", step);
+      VnV_Output_Put_double(engine, "ptime", ptime);
+   }
+}
+
+
+
 /*@
    TSSolve - Steps the requested number of timesteps.
 
@@ -3904,6 +3959,9 @@ PetscErrorCode TSSolve(TS ts,Vec u)
   PetscFunctionBegin;
   PetscValidHeaderSpecific(ts,TS_CLASSID,1);
   if (u) PetscValidHeaderSpecific(u,VEC_CLASSID,2);
+
+  void* a[] = {(void*)ts, (void*)u, NULL,NULL};
+  INJECTION_LOOP_BEGIN_WITH_EXT_CALLBACK(PETSC,VPETSC(ts),TSSolve,a, ts, u);
 
   ierr = TSSetExactFinalTimeDefault(ts);CHKERRQ(ierr);
   if (ts->exact_final_time == TS_EXACTFINALTIME_INTERPOLATE && u) {   /* Need ts->vec_sol to be distinct so it is not overwritten when we interpolate at the end */
@@ -4058,6 +4116,8 @@ PetscErrorCode TSSolve(TS ts,Vec u)
   if (ts->adjoint_solve) {
     ierr = TSAdjointSolve(ts);CHKERRQ(ierr);
   }
+
+  INJECTION_LOOP_END_WITH_EXT_CALLBACK(PETSC,TSSolve,a);
   PetscFunctionReturn(0);
 }
 

@@ -17,7 +17,7 @@
 #include <petsc/private/deviceimpl.h>
 #endif
 
-#include "VnV.h"
+#include <petscvnv.h>
 
 static PetscBool cite = PETSC_FALSE;
 static const char hypreCitation[] = "@manual{hypre-web-page,\n  title  = {{\\sl hypre}: High Performance Preconditioners},\n  organization = {Lawrence Livermore National Laboratory},\n  note  = {\\url{https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods}}\n}\n";
@@ -436,12 +436,33 @@ static PetscErrorCode PCApply_HYPRE(PC pc,Vec b,Vec x)
   HYPRE_ParVector    jbv,jxv;
   PetscInt           hierr;
 
-  /**
-   * @title Apply the Hypre Preconditioner. 
+  
+   /** 
+   * Applying the Hypre Preconditioner
+   * ---------------------------------
    * 
-   * description goes here. 
-  */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD,PreconditionWithHypre, VNV_NOCALLBACK,pc, b, x);
+   * This text is a VnV placeholder. It plots a random graph. This should be
+   * updated with a description of what is happening inside this injection point
+   * and/or test. 
+   * 
+   * .. vnv-chart::
+   * 
+   *    {
+   *       "type" : "line",
+   *       "data" : {
+   *          "labels" : {{as_json(rand_nums(`100`))}},
+   *          "datasets" : [{
+   *             "label": "Random Data",
+   *             "backgroundColor": "rgb(57, 105, 160)",
+   *             "borderColor": "rgb(57, 105, 160)",
+   *             "data": {{as_json(rand_nums(`100`))}}
+   *           }]
+   *       }
+   *       
+   *    }
+   * 
+   **/
+  INJECTION_LOOP_BEGIN(PETSC,VPETSC(pc),PreconditionWithHypre, VNV_NOCALLBACK,pc, b, x);
 
 
   PetscFunctionBegin; 

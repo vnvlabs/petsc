@@ -5,7 +5,7 @@
 #include <petsc/private/pcimpl.h>            /*I "petscksp.h" I*/
 #include <petscdm.h>
 
-#include "VnV.h"
+#include <petscvnv.h>
 
 /* Logging support */
 PetscClassId  PC_CLASSID;
@@ -425,12 +425,33 @@ PetscErrorCode  PCApply(PC pc,Vec x,Vec y)
   PetscErrorCode ierr;
   PetscInt       m,n,mv,nv;
 
-  /**
-   * @title Apply Preconditioner
+  
+   /** 
+   * Applying the Preconditioner
+   * -------------------------------
    * 
-   * description
-  */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD, ApplyPC,VNV_NOCALLBACK, pc, x, y);
+   * This text is a VnV placeholder. It plots a random graph. This should be
+   * updated with a description of what is happening inside this injection point
+   * and/or test. 
+   * 
+   * .. vnv-chart::
+   * 
+   *    {
+   *       "type" : "line",
+   *       "data" : {
+   *          "labels" : {{as_json(rand_nums(`100`))}},
+   *          "datasets" : [{
+   *             "label": "Random Data",
+   *             "backgroundColor": "rgb(57, 105, 160)",
+   *             "borderColor": "rgb(57, 105, 160)",
+   *             "data": {{as_json(rand_nums(`100`))}}
+   *           }]
+   *       }
+   *       
+   *    }
+   * 
+   **/
+  INJECTION_LOOP_BEGIN(PETSC,VPETSC(pc), ApplyPC,VNV_NOCALLBACK, pc, x, y);
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);
@@ -703,7 +724,7 @@ PetscErrorCode  PCApplyBAorAB(PC pc,PCSide side,Vec x,Vec y,Vec work)
    * 
    * description. 
   */
-  INJECTION_LOOP_BEGIN(PETSC,VWORLD, Precondition, VNV_NOCALLBACK, pc, x, y, work, side);
+  INJECTION_LOOP_BEGIN(PETSC,VPETSC(pc), Precondition, VNV_NOCALLBACK, pc, x, y, work, side);
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(pc,PC_CLASSID,1);

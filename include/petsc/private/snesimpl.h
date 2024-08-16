@@ -3,6 +3,7 @@
 
 #include <petscsnes.h>
 #include <petsc/private/petscimpl.h>
+#include <petscvnv.h>
 
 PETSC_EXTERN PetscBool SNESRegisterAllCalled;
 PETSC_EXTERN PetscErrorCode SNESRegisterAll(void);
@@ -235,6 +236,8 @@ typedef struct {
   PetscReal norm_first;          /* function norm from the beginning of the first iteration. */
 } SNESKSPEW;
 
+INJECTION_EXT_CALLBACK_FWD(PETSC,SNESSolve);
+
 static inline PetscErrorCode SNESLogConvergenceHistory(SNES snes,PetscReal res,PetscInt its)
 {
   PetscErrorCode ierr;
@@ -246,6 +249,11 @@ static inline PetscErrorCode SNESLogConvergenceHistory(SNES snes,PetscReal res,P
     if (snes->conv_hist_its) snes->conv_hist_its[snes->conv_hist_len] = its;
     snes->conv_hist_len++;
   }
+  
+  void* a[] = {(void*)snes, (void*)&res, (void*) &its};
+  INJECTION_LOOP_ITER_WITH_EXT_CALLBACK(PETSC,SNESSolve,"LogConvergence",a);
+
+
   ierr = PetscObjectSAWsGrantAccess((PetscObject)snes);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

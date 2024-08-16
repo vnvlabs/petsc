@@ -6,6 +6,7 @@
 
 */
 #include <petsc/private/logimpl.h> /*I    "petscsys.h"   I*/
+#include <petscvnv.h>
 
 PetscStageLog petsc_stageLog = NULL;
 
@@ -208,6 +209,8 @@ PetscErrorCode  PetscStageLogRegister(PetscStageLog stageLog, const char sname[]
   PetscFunctionReturn(0);
 }
 
+
+
 /*@C
   PetscStageLogPush - This function pushes a stage on the stack.
 
@@ -267,6 +270,8 @@ PetscErrorCode  PetscStageLogPush(PetscStageLog stageLog, int stage)
   /* Activate the stage */
   ierr = PetscIntStackPush(stageLog->stack, stage);CHKERRQ(ierr);
 
+
+
   stageLog->stageInfo[stage].used = PETSC_TRUE;
   stageLog->stageInfo[stage].perfInfo.count++;
   stageLog->curStage = stage;
@@ -277,6 +282,7 @@ PetscErrorCode  PetscStageLogPush(PetscStageLog stageLog, int stage)
     stageLog->stageInfo[stage].perfInfo.numMessages   -= petsc_irecv_ct  + petsc_isend_ct  + petsc_recv_ct  + petsc_send_ct;
     stageLog->stageInfo[stage].perfInfo.messageLength -= petsc_irecv_len + petsc_isend_len + petsc_recv_len + petsc_send_len;
     stageLog->stageInfo[stage].perfInfo.numReductions -= petsc_allreduce_ct + petsc_gather_ct + petsc_scatter_ct;
+
   }
   PetscFunctionReturn(0);
 }
@@ -326,7 +332,10 @@ PetscErrorCode  PetscStageLogPop(PetscStageLog stageLog)
     stageLog->stageInfo[curStage].perfInfo.numMessages   += petsc_irecv_ct  + petsc_isend_ct  + petsc_recv_ct  + petsc_send_ct;
     stageLog->stageInfo[curStage].perfInfo.messageLength += petsc_irecv_len + petsc_isend_len + petsc_recv_len + petsc_send_len;
     stageLog->stageInfo[curStage].perfInfo.numReductions += petsc_allreduce_ct + petsc_gather_ct + petsc_scatter_ct;
+  
   }
+  
+  
   ierr = PetscIntStackEmpty(stageLog->stack, &empty);CHKERRQ(ierr);
   if (!empty) {
     /* Subtract current quantities so that we obtain the difference when we pop */

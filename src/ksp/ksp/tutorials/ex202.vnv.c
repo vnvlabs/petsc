@@ -18,7 +18,7 @@ T*/
 */
 #include <petscksp.h>
 
-#include "VnV.h"
+#include <petscvnv.h>
 
 /**
  * @title Petsc KSP  Example Number 1
@@ -45,7 +45,7 @@ int main(int argc,char **args)
 
   ierr = PetscInitialize(&argc,&args,(char*)0,help);if (ierr) return ierr;
 
-  INJECTION_INITIALIZE(PETSC_VNV_NAME,&argc, &args, "vnv-input.json");
+  INJECTION_INITIALIZE(PETSC_VNV_NAME,&argc, &args);
 
   ierr = MPI_Comm_size(PETSC_COMM_WORLD,&size);CHKERRMPI(ierr);
   PetscCheckFalse(size != 1,PETSC_COMM_WORLD,PETSC_ERR_WRONG_MPI_SIZE,"This is a uniprocessor example only!");
